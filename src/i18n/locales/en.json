@@ -1,0 +1,112 @@
+{
+  "app": {
+    "title": "NFI CMDWS"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "cases": "Cases",
+    "newCase": "New Case",
+    "reports": "Reports",
+    "financeInputs": "Finance Inputs",
+    "admin": "Admin",
+    "users": "Users",
+    "hospitals": "Hospitals",
+    "hospitalProcessMap": "Hospital Process Map",
+    "templates": "Templates",
+    "exports": "Exports",
+    "reportingAdmin": "Reporting Admin"
+  },
+  "login": {
+    "title": "Login",
+    "selectUser": "Select user",
+    "role": "Role",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "common": {
+    "language": "Language",
+    "english": "English",
+    "hindi": "Hindi",
+    "search": "Search",
+    "filter": "Filter",
+    "status": "Status",
+    "actions": "Actions",
+    "notes": "Notes",
+    "comments": "Comments",
+    "amount": "Amount",
+    "date": "Date",
+    "yes": "Yes",
+    "no": "No",
+    "na": "N/A",
+    "save": "Save",
+    "saveDraft": "Save Draft",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "edit": "Edit",
+    "update": "Update",
+    "delete": "Delete",
+    "upload": "Upload",
+    "verify": "Verify",
+    "reject": "Reject",
+    "requiredFields": "Fill the required fields"
+  },
+  "case": {
+    "status": {
+      "Draft": "Draft",
+      "Submitted": "Submitted",
+      "Under_Verification": "Under Verification",
+      "Under_Review": "Under Review",
+      "Approved": "Approved",
+      "Rejected": "Rejected",
+      "Returned": "Returned",
+      "Closed": "Closed"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "documents": "Documents",
+      "verification": "Verification",
+      "approval": "Approval",
+      "installments": "Installments",
+      "monitoring": "Monitoring",
+      "followups": "Follow-ups"
+    }
+  },
+  "doc": {
+    "status": {
+      "Missing": "Missing",
+      "Uploaded": "Uploaded",
+      "Verified": "Verified",
+      "Rejected": "Rejected",
+      "Not_Applicable": "Not Applicable"
+    }
+  },
+  "installment": {
+    "status": {
+      "Scheduled": "Scheduled",
+      "Requested": "Requested",
+      "Disbursed": "Disbursed",
+      "Delayed": "Delayed",
+      "Cancelled": "Cancelled"
+    }
+  },
+  "roles": {
+    "admin": "Admin",
+    "hospital_spoc": "Hospital SPOC",
+    "hospital_doctor": "Hospital Doctor",
+    "verifier": "Verifier",
+    "committee_member": "Committee Member",
+    "accounts": "Accounts",
+    "beni_volunteer": "BENI Volunteer",
+    "intake_reviewer": "Intake Reviewer",
+    "leadership": "Leadership"
+  },
+  "messages": {
+    "dbFallback": "Database unavailable. Switched to Demo Mode.",
+    "saved": "Saved",
+    "updated": "Updated",
+    "uploaded": "Uploaded"
+  }
+}

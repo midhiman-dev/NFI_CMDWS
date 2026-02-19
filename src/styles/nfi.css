@@ -1,0 +1,69 @@
+:root {
+  --nfi-primary: #156C78;
+  --nfi-primary-dark: #204A49;
+  --nfi-accent: #F08225;
+  --nfi-bg: #F9FAFB;
+  --nfi-surface: #FFFFFF;
+  --nfi-text: #111827;
+  --nfi-border: #E5E7EB;
+  --nfi-text-secondary: #6B7280;
+  --nfi-success: #10B981;
+  --nfi-warning: #F59E0B;
+  --nfi-error: #EF4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--nfi-bg);
+  color: var(--nfi-text);
+}
+
+.nfi-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 transparent;
+}
+
+.nfi-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.nfi-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nfi-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 3px;
+}
+
+.nfi-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
+}
+
+.nfi-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--nfi-border);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-size: 0.875rem;
+  color: var(--nfi-text);
+  background: var(--nfi-surface);
+}
+
+.nfi-input:focus {
+  border-color: var(--nfi-primary);
+  box-shadow: 0 0 0 2px rgba(21, 108, 120, 0.15);
+}

@@ -1,0 +1,112 @@
+{
+  "app": {
+    "title": "NFI CMDWS"
+  },
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "cases": "केस",
+    "newCase": "नया केस",
+    "reports": "रिपोर्ट",
+    "financeInputs": "वित्त इनपुट",
+    "admin": "एडमिन",
+    "users": "उपयोगकर्ता",
+    "hospitals": "अस्पताल",
+    "hospitalProcessMap": "अस्पताल प्रक्रिया मानचित्र",
+    "templates": "टेम्पलेट",
+    "exports": "एक्सपोर्ट",
+    "reportingAdmin": "रिपोर्टिंग एडमिन"
+  },
+  "login": {
+    "title": "लॉगिन",
+    "selectUser": "उपयोगकर्ता चुनें",
+    "role": "भूमिका",
+    "login": "लॉगिन",
+    "logout": "लॉगआउट"
+  },
+  "common": {
+    "language": "भाषा",
+    "english": "English",
+    "hindi": "हिंदी",
+    "search": "खोजें",
+    "filter": "फ़िल्टर",
+    "status": "स्थिति",
+    "actions": "क्रियाएँ",
+    "notes": "टिप्पणी",
+    "comments": "टिप्पणियाँ",
+    "amount": "राशि",
+    "date": "तारीख",
+    "yes": "हाँ",
+    "no": "नहीं",
+    "na": "लागू नहीं",
+    "save": "सहेजें",
+    "saveDraft": "ड्राफ्ट सहेजें",
+    "submit": "जमा करें",
+    "cancel": "रद्द करें",
+    "close": "बंद करें",
+    "back": "वापस",
+    "next": "अगला",
+    "edit": "संपादित करें",
+    "update": "अपडेट करें",
+    "delete": "हटाएँ",
+    "upload": "अपलोड",
+    "verify": "सत्यापित करें",
+    "reject": "अस्वीकार करें",
+    "requiredFields": "आवश्यक फ़ील्ड भरें"
+  },
+  "case": {
+    "status": {
+      "Draft": "ड्राफ्ट",
+      "Submitted": "जमा किया गया",
+      "Under_Verification": "सत्यापन में",
+      "Under_Review": "समिति समीक्षा में",
+      "Approved": "स्वीकृत",
+      "Rejected": "अस्वीकृत",
+      "Returned": "वापस भेजा गया",
+      "Closed": "बंद"
+    },
+    "tabs": {
+      "overview": "सारांश",
+      "documents": "दस्तावेज़",
+      "verification": "सत्यापन",
+      "approval": "अनुमोदन",
+      "installments": "किस्तें",
+      "monitoring": "निगरानी",
+      "followups": "फॉलो-अप"
+    }
+  },
+  "doc": {
+    "status": {
+      "Missing": "अनुपलब्ध",
+      "Uploaded": "अपलोड किया गया",
+      "Verified": "सत्यापित",
+      "Rejected": "अस्वीकृत",
+      "Not_Applicable": "लागू नहीं"
+    }
+  },
+  "installment": {
+    "status": {
+      "Scheduled": "निर्धारित",
+      "Requested": "अनुरोधित",
+      "Disbursed": "जारी",
+      "Delayed": "विलंबित",
+      "Cancelled": "रद्द"
+    }
+  },
+  "roles": {
+    "admin": "एडमिन",
+    "hospital_spoc": "अस्पताल SPOC",
+    "hospital_doctor": "अस्पताल डॉक्टर",
+    "verifier": "सत्यापक",
+    "committee_member": "समिति सदस्य",
+    "accounts": "लेखा",
+    "beni_volunteer": "BENI स्वयंसेवक",
+    "intake_reviewer": "इंटेक रिव्यूअर",
+    "leadership": "नेतृत्व"
+  },
+  "messages": {
+    "dbFallback": "डेटाबेस उपलब्ध नहीं है। डेमो मोड में स्विच किया गया।",
+    "saved": "सहेजा गया",
+    "updated": "अपडेट किया गया",
+    "uploaded": "अपलोड किया गया"
+  }
+}
