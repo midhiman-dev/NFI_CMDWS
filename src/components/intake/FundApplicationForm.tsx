@@ -95,39 +95,57 @@ export function FundApplicationForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="Father's Date of Birth"
-            type="date"
-            value={formData.parentsFamilySection?.fatherDob || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'fatherDob', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.parentsFamilySection?.fatherDob || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'fatherDob', e.target.value),
+            }}
           />
           <NfiField
             label="Father's Education"
-            type="text"
-            value={formData.parentsFamilySection?.fatherEducation || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'fatherEducation', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.parentsFamilySection?.fatherEducation || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'fatherEducation', e.target.value),
+            }}
           />
           <NfiField
             label="Mother's Date of Birth"
-            type="date"
-            value={formData.parentsFamilySection?.motherDob || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'motherDob', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.parentsFamilySection?.motherDob || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'motherDob', e.target.value),
+            }}
           />
           <NfiField
             label="Mother's Education"
-            type="text"
-            value={formData.parentsFamilySection?.motherEducation || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'motherEducation', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.parentsFamilySection?.motherEducation || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'motherEducation', e.target.value),
+            }}
           />
           <NfiField
             label="Marriage Date"
-            type="date"
-            value={formData.parentsFamilySection?.marriageDate || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'marriageDate', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.parentsFamilySection?.marriageDate || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'marriageDate', e.target.value),
+            }}
           />
           <NfiField
             label="Number of Dependents"
-            type="number"
-            value={formData.parentsFamilySection?.dependents || ''}
-            onChange={e => handleFieldChange('parentsFamilySection', 'dependents', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.parentsFamilySection?.dependents || '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'dependents', e.target.value),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -144,45 +162,66 @@ export function FundApplicationForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="Father's Occupation"
-            type="text"
-            value={formData.occupationIncomeSection?.fatherOccupation || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'fatherOccupation', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.occupationIncomeSection?.fatherOccupation || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'fatherOccupation', e.target.value),
+            }}
           />
           <NfiField
             label="Father's Employer"
-            type="text"
-            value={formData.occupationIncomeSection?.fatherEmployer || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'fatherEmployer', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.occupationIncomeSection?.fatherEmployer || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'fatherEmployer', e.target.value),
+            }}
           />
           <NfiField
             label="Father's Monthly Income (₹)"
-            type="number"
-            value={formData.occupationIncomeSection?.fatherMonthlyIncome || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.occupationIncomeSection?.fatherMonthlyIncome || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Mother's Occupation"
-            type="text"
-            value={formData.occupationIncomeSection?.motherOccupation || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'motherOccupation', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.occupationIncomeSection?.motherOccupation || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'motherOccupation', e.target.value),
+            }}
           />
           <NfiField
             label="Mother's Employer"
-            type="text"
-            value={formData.occupationIncomeSection?.motherEmployer || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'motherEmployer', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.occupationIncomeSection?.motherEmployer || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'motherEmployer', e.target.value),
+            }}
           />
           <NfiField
             label="Mother's Monthly Income (₹)"
-            type="number"
-            value={formData.occupationIncomeSection?.motherMonthlyIncome || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.occupationIncomeSection?.motherMonthlyIncome || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Income Proof Type"
-            type="text"
-            value={formData.occupationIncomeSection?.incomeProofType || ''}
-            onChange={e => handleFieldChange('occupationIncomeSection', 'incomeProofType', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.occupationIncomeSection?.incomeProofType || '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'incomeProofType', e.target.value),
+            }}
             hint="e.g., ITR, Salary Slip, Bank Statement"
           />
         </div>
@@ -215,35 +254,50 @@ export function FundApplicationForm({
           </div>
           <NfiField
             label="Conception Type"
-            type="text"
-            value={formData.birthDetailsSection?.conceptionType || ''}
-            onChange={e => handleFieldChange('birthDetailsSection', 'conceptionType', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.birthDetailsSection?.conceptionType || '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'conceptionType', e.target.value),
+            }}
             hint="e.g., Natural, IVF"
           />
           <NfiField
             label="Gestational Age (weeks)"
-            type="number"
-            value={formData.birthDetailsSection?.gestationalAgeWeeks || ''}
-            onChange={e => handleFieldChange('birthDetailsSection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.birthDetailsSection?.gestationalAgeWeeks || '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Delivery Type"
-            type="text"
-            value={formData.birthDetailsSection?.deliveryType || ''}
-            onChange={e => handleFieldChange('birthDetailsSection', 'deliveryType', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.birthDetailsSection?.deliveryType || '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'deliveryType', e.target.value),
+            }}
             hint="e.g., Vaginal, Cesarean"
           />
           <NfiField
             label="Gravida"
-            type="number"
-            value={formData.birthDetailsSection?.gravida || ''}
-            onChange={e => handleFieldChange('birthDetailsSection', 'gravida', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.birthDetailsSection?.gravida || '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'gravida', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Parity"
-            type="number"
-            value={formData.birthDetailsSection?.parity || ''}
-            onChange={e => handleFieldChange('birthDetailsSection', 'parity', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.birthDetailsSection?.parity || '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'parity', parseInt(e.target.value) || undefined),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -260,33 +314,48 @@ export function FundApplicationForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="NICU Admission Date"
-            type="date"
-            value={formData.nicuFinancialSection?.nicuAdmissionDate || ''}
-            onChange={e => handleFieldChange('nicuFinancialSection', 'nicuAdmissionDate', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.nicuFinancialSection?.nicuAdmissionDate || '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'nicuAdmissionDate', e.target.value),
+            }}
           />
           <NfiField
             label="Estimated NICU Days"
-            type="number"
-            value={formData.nicuFinancialSection?.estimatedNicuDays || ''}
-            onChange={e => handleFieldChange('nicuFinancialSection', 'estimatedNicuDays', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.nicuFinancialSection?.estimatedNicuDays || '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimatedNicuDays', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="NFI Requested Amount (₹)"
-            type="number"
-            value={formData.nicuFinancialSection?.nfiRequestedAmount || ''}
-            onChange={e => handleFieldChange('nicuFinancialSection', 'nfiRequestedAmount', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.nicuFinancialSection?.nfiRequestedAmount || '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'nfiRequestedAmount', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Estimate Billed Amount (₹)"
-            type="number"
-            value={formData.nicuFinancialSection?.estimateBilled || ''}
-            onChange={e => handleFieldChange('nicuFinancialSection', 'estimateBilled', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.nicuFinancialSection?.estimateBilled || '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateBilled', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Estimate After Discount (₹)"
-            type="number"
-            value={formData.nicuFinancialSection?.estimateAfterDiscount || ''}
-            onChange={e => handleFieldChange('nicuFinancialSection', 'estimateAfterDiscount', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.nicuFinancialSection?.estimateAfterDiscount || '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateAfterDiscount', parseInt(e.target.value) || undefined),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -313,8 +382,10 @@ export function FundApplicationForm({
           <NfiField
             label="Notes"
             type="textarea"
-            value={formData.otherSupportSection?.otherSupportNotes || ''}
-            onChange={e => handleFieldChange('otherSupportSection', 'otherSupportNotes', e.target.value)}
+            textareaProps={{
+              value: formData.otherSupportSection?.otherSupportNotes || '',
+              onChange: e => handleFieldChange('otherSupportSection', 'otherSupportNotes', e.target.value),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -360,22 +431,30 @@ export function FundApplicationForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="Approved By (Name)"
-            type="text"
-            value={formData.hospitalApprovalSection?.approvedByName || ''}
-            onChange={e => handleFieldChange('hospitalApprovalSection', 'approvedByName', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.hospitalApprovalSection?.approvedByName || '',
+              onChange: e => handleFieldChange('hospitalApprovalSection', 'approvedByName', e.target.value),
+            }}
           />
           <NfiField
             label="Approval Date"
-            type="date"
-            value={formData.hospitalApprovalSection?.approvalDate || ''}
-            onChange={e => handleFieldChange('hospitalApprovalSection', 'approvalDate', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.hospitalApprovalSection?.approvalDate || '',
+              onChange: e => handleFieldChange('hospitalApprovalSection', 'approvalDate', e.target.value),
+            }}
           />
           <div className="col-span-2">
             <NfiField
               label="Approval Remarks"
               type="textarea"
-              value={formData.hospitalApprovalSection?.approvalRemarks || ''}
-              onChange={e => handleFieldChange('hospitalApprovalSection', 'approvalRemarks', e.target.value)}
+              textareaProps={{
+                value: formData.hospitalApprovalSection?.approvalRemarks || '',
+                onChange: e => handleFieldChange('hospitalApprovalSection', 'approvalRemarks', e.target.value),
+              }}
             />
           </div>
         </div>

@@ -97,28 +97,40 @@ export function InterimSummaryForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="APGAR Score"
-            type="number"
-            value={formData.birthSummarySection?.apgarScore || ''}
-            onChange={e => handleFieldChange('birthSummarySection', 'apgarScore', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.birthSummarySection?.apgarScore || '',
+              onChange: e => handleFieldChange('birthSummarySection', 'apgarScore', parseInt(e.target.value) || undefined),
+            }}
             hint="Out of 10"
           />
           <NfiField
             label="Time of Birth"
-            type="time"
-            value={formData.birthSummarySection?.timeOfBirth || ''}
-            onChange={e => handleFieldChange('birthSummarySection', 'timeOfBirth', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'time',
+              value: formData.birthSummarySection?.timeOfBirth || '',
+              onChange: e => handleFieldChange('birthSummarySection', 'timeOfBirth', e.target.value),
+            }}
           />
           <NfiField
             label="Place of Birth"
-            type="text"
-            value={formData.birthSummarySection?.placeOfBirth || ''}
-            onChange={e => handleFieldChange('birthSummarySection', 'placeOfBirth', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.birthSummarySection?.placeOfBirth || '',
+              onChange: e => handleFieldChange('birthSummarySection', 'placeOfBirth', e.target.value),
+            }}
           />
           <NfiField
             label="Gestational Age (weeks)"
-            type="number"
-            value={formData.birthSummarySection?.gestationalAgeWeeks || ''}
-            onChange={e => handleFieldChange('birthSummarySection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.birthSummarySection?.gestationalAgeWeeks || '',
+              onChange: e => handleFieldChange('birthSummarySection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -135,45 +147,66 @@ export function InterimSummaryForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="Marital Status"
-            type="text"
-            value={formData.maternalDetailsSection?.maritalStatus || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'maritalStatus', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.maternalDetailsSection?.maritalStatus || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'maritalStatus', e.target.value),
+            }}
           />
           <NfiField
             label="Years Married"
-            type="number"
-            value={formData.maternalDetailsSection?.yearsMarried || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'yearsMarried', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.yearsMarried || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'yearsMarried', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Mother's Age"
-            type="number"
-            value={formData.maternalDetailsSection?.motherAge || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'motherAge', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.motherAge || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'motherAge', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Gravida (G)"
-            type="number"
-            value={formData.maternalDetailsSection?.gravida || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'gravida', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.gravida || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'gravida', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Parity (P)"
-            type="number"
-            value={formData.maternalDetailsSection?.parity || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'parity', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.parity || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'parity', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Abortions (A)"
-            type="number"
-            value={formData.maternalDetailsSection?.abortions || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'abortions', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.abortions || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'abortions', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Live Children Before"
-            type="number"
-            value={formData.maternalDetailsSection?.liveChildrenBefore || ''}
-            onChange={e => handleFieldChange('maternalDetailsSection', 'liveChildrenBefore', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.maternalDetailsSection?.liveChildrenBefore || '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'liveChildrenBefore', parseInt(e.target.value) || undefined),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -227,9 +260,12 @@ export function InterimSummaryForm({
           </div>
           <NfiField
             label="Other Diagnosis"
-            type="text"
-            value={formData.diagnosisSection?.otherDiagnosis || ''}
-            onChange={e => handleFieldChange('diagnosisSection', 'otherDiagnosis', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.diagnosisSection?.otherDiagnosis || '',
+              onChange: e => handleFieldChange('diagnosisSection', 'otherDiagnosis', e.target.value),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -283,8 +319,10 @@ export function InterimSummaryForm({
           <NfiField
             label="Treatment Notes"
             type="textarea"
-            value={formData.treatmentGivenSection?.treatmentNotes || ''}
-            onChange={e => handleFieldChange('treatmentGivenSection', 'treatmentNotes', e.target.value)}
+            textareaProps={{
+              value: formData.treatmentGivenSection?.treatmentNotes || '',
+              onChange: e => handleFieldChange('treatmentGivenSection', 'treatmentNotes', e.target.value),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -301,22 +339,31 @@ export function InterimSummaryForm({
         <div className="grid grid-cols-3 gap-4">
           <NfiField
             label="Day of Life"
-            type="number"
-            value={formData.currentStatusSection?.dayOfLife || ''}
-            onChange={e => handleFieldChange('currentStatusSection', 'dayOfLife', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.currentStatusSection?.dayOfLife || '',
+              onChange: e => handleFieldChange('currentStatusSection', 'dayOfLife', parseInt(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Current Weight (kg)"
-            type="number"
-            value={formData.currentStatusSection?.currentWeight || ''}
-            onChange={e => handleFieldChange('currentStatusSection', 'currentWeight', parseFloat(e.target.value) || undefined)}
-            step="0.1"
+            type="input"
+            inputProps={{
+              type: 'number',
+              step: '0.1',
+              value: formData.currentStatusSection?.currentWeight || '',
+              onChange: e => handleFieldChange('currentStatusSection', 'currentWeight', parseFloat(e.target.value) || undefined),
+            }}
           />
           <NfiField
             label="Corrected GA (weeks)"
-            type="number"
-            value={formData.currentStatusSection?.correctedGestationalAge || ''}
-            onChange={e => handleFieldChange('currentStatusSection', 'correctedGestationalAge', parseInt(e.target.value) || undefined)}
+            type="input"
+            inputProps={{
+              type: 'number',
+              value: formData.currentStatusSection?.correctedGestationalAge || '',
+              onChange: e => handleFieldChange('currentStatusSection', 'correctedGestationalAge', parseInt(e.target.value) || undefined),
+            }}
           />
         </div>
       </IntakeSectionAccordion>
@@ -333,16 +380,22 @@ export function InterimSummaryForm({
         <div className="grid grid-cols-2 gap-4">
           <NfiField
             label="Feeding Mode"
-            type="text"
-            value={formData.feedingRespirationSection?.feedingMode || ''}
-            onChange={e => handleFieldChange('feedingRespirationSection', 'feedingMode', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.feedingRespirationSection?.feedingMode || '',
+              onChange: e => handleFieldChange('feedingRespirationSection', 'feedingMode', e.target.value),
+            }}
             hint="e.g., Breast, Bottle, Tube Feed"
           />
           <NfiField
             label="Respiration Status"
-            type="text"
-            value={formData.feedingRespirationSection?.respirationStatus || ''}
-            onChange={e => handleFieldChange('feedingRespirationSection', 'respirationStatus', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.feedingRespirationSection?.respirationStatus || '',
+              onChange: e => handleFieldChange('feedingRespirationSection', 'respirationStatus', e.target.value),
+            }}
             hint="e.g., Room Air, Oxygen, Ventilator"
           />
         </div>
@@ -360,15 +413,21 @@ export function InterimSummaryForm({
         <div className="space-y-4">
           <NfiField
             label="Discharge Date"
-            type="date"
-            value={formData.dischargePlanInvestigationsSection?.dischargeDate || ''}
-            onChange={e => handleFieldChange('dischargePlanInvestigationsSection', 'dischargeDate', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.dischargePlanInvestigationsSection?.dischargeDate || '',
+              onChange: e => handleFieldChange('dischargePlanInvestigationsSection', 'dischargeDate', e.target.value),
+            }}
           />
           <NfiField
             label="Investigations Planned"
-            type="text"
-            value={formData.dischargePlanInvestigationsSection?.investigationsPlanned || ''}
-            onChange={e => handleFieldChange('dischargePlanInvestigationsSection', 'investigationsPlanned', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.dischargePlanInvestigationsSection?.investigationsPlanned || '',
+              onChange: e => handleFieldChange('dischargePlanInvestigationsSection', 'investigationsPlanned', e.target.value),
+            }}
             hint="e.g., Follow-up ultrasound, Hearing test, etc."
           />
           <label className="flex items-center gap-2">
@@ -396,20 +455,28 @@ export function InterimSummaryForm({
           <NfiField
             label="Remarks"
             type="textarea"
-            value={formData.remarksSignatureSection?.remarks || ''}
-            onChange={e => handleFieldChange('remarksSignatureSection', 'remarks', e.target.value)}
+            textareaProps={{
+              value: formData.remarksSignatureSection?.remarks || '',
+              onChange: e => handleFieldChange('remarksSignatureSection', 'remarks', e.target.value),
+            }}
           />
           <NfiField
             label="Doctor Name"
-            type="text"
-            value={formData.remarksSignatureSection?.doctorName || ''}
-            onChange={e => handleFieldChange('remarksSignatureSection', 'doctorName', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'text',
+              value: formData.remarksSignatureSection?.doctorName || '',
+              onChange: e => handleFieldChange('remarksSignatureSection', 'doctorName', e.target.value),
+            }}
           />
           <NfiField
             label="Signed At"
-            type="date"
-            value={formData.remarksSignatureSection?.signedAt || ''}
-            onChange={e => handleFieldChange('remarksSignatureSection', 'signedAt', e.target.value)}
+            type="input"
+            inputProps={{
+              type: 'date',
+              value: formData.remarksSignatureSection?.signedAt || '',
+              onChange: e => handleFieldChange('remarksSignatureSection', 'signedAt', e.target.value),
+            }}
           />
         </div>
       </IntakeSectionAccordion>

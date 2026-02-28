@@ -58,9 +58,15 @@ export function IntakeSectionAccordion({
               <CheckCircle2 size={20} style={{ color: 'var(--nfi-success)' }} />
               <span className="text-sm font-medium text-[var(--nfi-success)]">Complete</span>
             </div>
+          ) : completionPercent > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <span className="text-sm font-semibold text-amber-800">{completionPercent}%</span>
+              </div>
+            </div>
           ) : (
             <div className="w-12 h-12 rounded-full bg-[var(--nfi-bg-light)] flex items-center justify-center">
-              <span className="text-sm font-semibold text-[var(--nfi-text)]">{completionPercent}%</span>
+              <span className="text-sm font-semibold text-[var(--nfi-text-light)]">{completionPercent}%</span>
             </div>
           )}
         </div>
