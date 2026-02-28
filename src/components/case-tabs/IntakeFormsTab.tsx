@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { intakeService } from '../../services/intakeService';
 import { IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness } from '../../types';
@@ -6,6 +6,8 @@ import { FundApplicationForm } from '../intake/FundApplicationForm';
 import { InterimSummaryForm } from '../intake/InterimSummaryForm';
 import { useToast } from '../design-system/Toast';
 import { getAuthState } from '../../utils/auth';
+import { providerFactory } from '../../data/providers/ProviderFactory';
+import { deriveMaternalFields, isEmptyDerivedValue, parseDateFlexible } from '../../utils/derivedFields';
 
 interface IntakeFormsTabProps {
   caseId: string;
@@ -19,15 +21,23 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
   const [interimSummary, setInterimSummary] = useState<IntakeInterimSummary | undefined>();
   const [completeness, setCompleteness] = useState<IntakeCompleteness | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [asOfDate, setAsOfDate] = useState<Date>(new Date());
 
   const canEdit = authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc' || authState.activeRole === 'admin' || authState.activeRole === 'leadership';
 
   const loadIntakeData = async () => {
     try {
       setIsLoading(true);
-      const data = await intakeService.loadIntakeForCase(caseId);
+      const provider = providerFactory.getProvider();
+      const [data, caseData] = await Promise.all([
+        intakeService.loadIntakeForCase(caseId),
+        provider.getCaseById(caseId),
+      ]);
+
       setFundApplication(data.fundApplication);
       setInterimSummary(data.interimSummary);
+      const intakeAsOfDate = parseDateFlexible(caseData?.intakeDate) || new Date();
+      setAsOfDate(intakeAsOfDate);
 
       const completenessData = await intakeService.getCompleteness(caseId);
       setCompleteness(completenessData);
@@ -42,6 +52,71 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
   useEffect(() => {
     loadIntakeData();
   }, [caseId]);
+
+  const motherDob = fundApplication?.parentsFamilySection?.motherDob;
+  const marriageDate = fundApplication?.parentsFamilySection?.marriageDate;
+
+  const derivedMaternalFields = useMemo(
+    () => deriveMaternalFields(motherDob, marriageDate, asOfDate),
+    [motherDob, marriageDate, asOfDate]
+  );
+
+  useEffect(() => {
+    if (!canEdit) return;
+    if (!interimSummary) return;
+
+    const maternalDetails = interimSummary.maternalDetailsSection || {};
+    const canOverwriteDerived = maternalDetails._autoDerived === true;
+
+    let hasChanges = false;
+    const updatedMaternalDetails = { ...maternalDetails };
+
+    const shouldSetMotherAge = canOverwriteDerived || isEmptyDerivedValue(maternalDetails.motherAge);
+    if (shouldSetMotherAge && derivedMaternalFields.motherAge !== undefined && maternalDetails.motherAge !== derivedMaternalFields.motherAge) {
+      updatedMaternalDetails.motherAge = derivedMaternalFields.motherAge;
+      hasChanges = true;
+    }
+
+    const shouldSetYearsMarried = canOverwriteDerived || isEmptyDerivedValue(maternalDetails.yearsMarried);
+    const shouldSetMaritalStatus = canOverwriteDerived || isEmptyDerivedValue(maternalDetails.maritalStatus);
+
+    if (marriageDate && parseDateFlexible(marriageDate)) {
+      if (shouldSetYearsMarried && derivedMaternalFields.yearsMarried !== undefined && maternalDetails.yearsMarried !== derivedMaternalFields.yearsMarried) {
+        updatedMaternalDetails.yearsMarried = derivedMaternalFields.yearsMarried;
+        hasChanges = true;
+      }
+      if (shouldSetMaritalStatus && maternalDetails.maritalStatus !== 'Married') {
+        updatedMaternalDetails.maritalStatus = 'Married';
+        hasChanges = true;
+      }
+    } else {
+      if (shouldSetYearsMarried && maternalDetails.yearsMarried !== undefined) {
+        updatedMaternalDetails.yearsMarried = undefined;
+        hasChanges = true;
+      }
+      if (shouldSetMaritalStatus && maternalDetails.maritalStatus !== '') {
+        updatedMaternalDetails.maritalStatus = '';
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) return;
+
+    updatedMaternalDetails._autoDerived = true;
+
+    const updatedInterimSummary: IntakeInterimSummary = {
+      ...interimSummary,
+      maternalDetailsSection: updatedMaternalDetails,
+    };
+
+    setInterimSummary(updatedInterimSummary);
+    void intakeService.saveIntakeSection(caseId, 'interimSummary', updatedInterimSummary)
+      .then(() => intakeService.getCompleteness(caseId))
+      .then(setCompleteness)
+      .catch(error => {
+        console.error('Failed to persist derived maternal details:', error);
+      });
+  }, [canEdit, caseId, marriageDate, derivedMaternalFields, interimSummary]);
 
   const handleFundAppSectionSave = async (section: string, data: any) => {
     try {
@@ -181,6 +256,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
             caseId={caseId}
             initialData={fundApplication}
             onSectionSave={handleFundAppSectionSave}
+            onFormDataChange={setFundApplication}
             isLoading={isLoading}
             readOnly={!canEdit}
           />
@@ -192,6 +268,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
             caseId={caseId}
             initialData={interimSummary}
             onSectionSave={handleInterimSummarySectionSave}
+            onFormDataChange={setInterimSummary}
             readOnly={!canEdit}
             isLoading={isLoading}
           />

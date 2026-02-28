@@ -489,6 +489,7 @@ export interface IntakeInterimSummary {
     parity?: number;
     abortions?: number;
     liveChildrenBefore?: number;
+    _autoDerived?: boolean;
   };
   antenatalRiskFactorsSection: {
     riskFactors?: string[];

@@ -1,21 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IntakeInterimSummary } from '../../types';
 import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
-import { validateInterimSummarySection } from '../../utils/intakeValidation';
+import { parseNumberInput } from '../../utils/fieldValue';
+import {
+  INTERIM_SUMMARY_FIELDS,
+  getInterimSummarySectionProgress,
+  getSectionStatus,
+  validateInterimSummarySection,
+} from '../../utils/intakeValidation';
 
 interface InterimSummaryFormProps {
   caseId: string;
   initialData?: IntakeInterimSummary;
   onSectionSave: (section: string, data: any) => Promise<void>;
+  onFormDataChange?: (data: IntakeInterimSummary) => void;
   isLoading?: boolean;
 }
 
 export function InterimSummaryForm({
-  caseId,
   initialData,
   onSectionSave,
-  isLoading = false,
+  onFormDataChange,
 }: InterimSummaryFormProps) {
   const [formData, setFormData] = useState<IntakeInterimSummary>(
     initialData || {
@@ -34,14 +40,35 @@ export function InterimSummaryForm({
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [sectionErrors, setSectionErrors] = useState<Record<string, Record<string, string>>>({});
 
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
+
   const handleFieldChange = (section: string, field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof IntakeInterimSummary],
+    setFormData(prev => {
+      const currentSection = prev[section as keyof IntakeInterimSummary] as Record<string, unknown> | undefined;
+      const nextSection = {
+        ...(currentSection || {}),
         [field]: value,
-      },
-    }));
+      } as Record<string, unknown>;
+
+      if (
+        section === 'maternalDetailsSection' &&
+        (field === 'maritalStatus' || field === 'motherAge' || field === 'yearsMarried')
+      ) {
+        nextSection._autoDerived = false;
+      }
+
+      const nextData = {
+        ...prev,
+        [section]: nextSection,
+      };
+
+      onFormDataChange?.(nextData);
+      return nextData;
+    });
     setDirtyFields(prev => new Set([...prev, section]));
   };
 
@@ -71,16 +98,11 @@ export function InterimSummaryForm({
     });
   };
 
-  const calculateSectionCompletion = (section: any): number => {
-    if (!section) return 0;
-    const values = Object.values(section);
-    const filled = values.filter(v => v !== undefined && v !== null && v !== '').length;
-    return Math.round((filled / Math.max(values.length, 1)) * 100);
-  };
-
-  const isSectionComplete = (section: any): boolean => {
-    if (!section) return false;
-    return Object.values(section).every(v => v !== undefined && v !== null && v !== '');
+  const getSectionMetrics = (sectionKey: keyof typeof INTERIM_SUMMARY_FIELDS) => {
+    const section = formData[sectionKey];
+    const progress = getInterimSummarySectionProgress(sectionKey, section);
+    const status = getSectionStatus(progress);
+    return { progress, status };
   };
 
   return (
@@ -88,8 +110,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Birth Summary"
         sectionId="birthSummarySection"
-        isComplete={isSectionComplete(formData.birthSummarySection)}
-        completionPercent={calculateSectionCompletion(formData.birthSummarySection)}
+        status={getSectionMetrics('birthSummarySection').status}
+        completionPercent={getSectionMetrics('birthSummarySection').progress.pct}
         onSave={() => handleSectionSave('birthSummarySection')}
         errors={sectionErrors['birthSummarySection'] || {}}
         isDirty={dirtyFields.has('birthSummarySection')}
@@ -100,8 +122,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.birthSummarySection?.apgarScore || '',
-              onChange: e => handleFieldChange('birthSummarySection', 'apgarScore', parseInt(e.target.value) || undefined),
+              value: formData.birthSummarySection?.apgarScore ?? '',
+              onChange: e => handleFieldChange('birthSummarySection', 'apgarScore', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
             hint="Out of 10"
           />
@@ -128,8 +150,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.birthSummarySection?.gestationalAgeWeeks || '',
-              onChange: e => handleFieldChange('birthSummarySection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined),
+              value: formData.birthSummarySection?.gestationalAgeWeeks ?? '',
+              onChange: e => handleFieldChange('birthSummarySection', 'gestationalAgeWeeks', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
@@ -138,8 +160,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Maternal Details"
         sectionId="maternalDetailsSection"
-        isComplete={isSectionComplete(formData.maternalDetailsSection)}
-        completionPercent={calculateSectionCompletion(formData.maternalDetailsSection)}
+        status={getSectionMetrics('maternalDetailsSection').status}
+        completionPercent={getSectionMetrics('maternalDetailsSection').progress.pct}
         onSave={() => handleSectionSave('maternalDetailsSection')}
         errors={sectionErrors['maternalDetailsSection'] || {}}
         isDirty={dirtyFields.has('maternalDetailsSection')}
@@ -159,8 +181,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.yearsMarried || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'yearsMarried', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.yearsMarried ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'yearsMarried', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -168,8 +190,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.motherAge || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'motherAge', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.motherAge ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'motherAge', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -177,8 +199,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.gravida || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'gravida', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.gravida ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'gravida', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -186,8 +208,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.parity || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'parity', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.parity ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'parity', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -195,8 +217,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.abortions || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'abortions', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.abortions ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'abortions', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -204,8 +226,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.maternalDetailsSection?.liveChildrenBefore || '',
-              onChange: e => handleFieldChange('maternalDetailsSection', 'liveChildrenBefore', parseInt(e.target.value) || undefined),
+              value: formData.maternalDetailsSection?.liveChildrenBefore ?? '',
+              onChange: e => handleFieldChange('maternalDetailsSection', 'liveChildrenBefore', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
@@ -214,8 +236,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Antenatal Risk Factors"
         sectionId="antenatalRiskFactorsSection"
-        isComplete={isSectionComplete(formData.antenatalRiskFactorsSection)}
-        completionPercent={calculateSectionCompletion(formData.antenatalRiskFactorsSection)}
+        status={getSectionMetrics('antenatalRiskFactorsSection').status}
+        completionPercent={getSectionMetrics('antenatalRiskFactorsSection').progress.pct}
         onSave={() => handleSectionSave('antenatalRiskFactorsSection')}
         errors={sectionErrors['antenatalRiskFactorsSection'] || {}}
         isDirty={dirtyFields.has('antenatalRiskFactorsSection')}
@@ -242,8 +264,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Diagnosis"
         sectionId="diagnosisSection"
-        isComplete={isSectionComplete(formData.diagnosisSection)}
-        completionPercent={calculateSectionCompletion(formData.diagnosisSection)}
+        status={getSectionMetrics('diagnosisSection').status}
+        completionPercent={getSectionMetrics('diagnosisSection').progress.pct}
         onSave={() => handleSectionSave('diagnosisSection')}
         errors={sectionErrors['diagnosisSection'] || {}}
         isDirty={dirtyFields.has('diagnosisSection')}
@@ -273,8 +295,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Treatment Given"
         sectionId="treatmentGivenSection"
-        isComplete={isSectionComplete(formData.treatmentGivenSection)}
-        completionPercent={calculateSectionCompletion(formData.treatmentGivenSection)}
+        status={getSectionMetrics('treatmentGivenSection').status}
+        completionPercent={getSectionMetrics('treatmentGivenSection').progress.pct}
         onSave={() => handleSectionSave('treatmentGivenSection')}
         errors={sectionErrors['treatmentGivenSection'] || {}}
         isDirty={dirtyFields.has('treatmentGivenSection')}
@@ -330,8 +352,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Current Status"
         sectionId="currentStatusSection"
-        isComplete={isSectionComplete(formData.currentStatusSection)}
-        completionPercent={calculateSectionCompletion(formData.currentStatusSection)}
+        status={getSectionMetrics('currentStatusSection').status}
+        completionPercent={getSectionMetrics('currentStatusSection').progress.pct}
         onSave={() => handleSectionSave('currentStatusSection')}
         errors={sectionErrors['currentStatusSection'] || {}}
         isDirty={dirtyFields.has('currentStatusSection')}
@@ -342,8 +364,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.currentStatusSection?.dayOfLife || '',
-              onChange: e => handleFieldChange('currentStatusSection', 'dayOfLife', parseInt(e.target.value) || undefined),
+              value: formData.currentStatusSection?.dayOfLife ?? '',
+              onChange: e => handleFieldChange('currentStatusSection', 'dayOfLife', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -352,8 +374,8 @@ export function InterimSummaryForm({
             inputProps={{
               type: 'number',
               step: '0.1',
-              value: formData.currentStatusSection?.currentWeight || '',
-              onChange: e => handleFieldChange('currentStatusSection', 'currentWeight', parseFloat(e.target.value) || undefined),
+              value: formData.currentStatusSection?.currentWeight ?? '',
+              onChange: e => handleFieldChange('currentStatusSection', 'currentWeight', parseNumberInput(e.target.value, parseFloat)),
             }}
           />
           <NfiField
@@ -361,8 +383,8 @@ export function InterimSummaryForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.currentStatusSection?.correctedGestationalAge || '',
-              onChange: e => handleFieldChange('currentStatusSection', 'correctedGestationalAge', parseInt(e.target.value) || undefined),
+              value: formData.currentStatusSection?.correctedGestationalAge ?? '',
+              onChange: e => handleFieldChange('currentStatusSection', 'correctedGestationalAge', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
@@ -371,8 +393,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Feeding & Respiration"
         sectionId="feedingRespirationSection"
-        isComplete={isSectionComplete(formData.feedingRespirationSection)}
-        completionPercent={calculateSectionCompletion(formData.feedingRespirationSection)}
+        status={getSectionMetrics('feedingRespirationSection').status}
+        completionPercent={getSectionMetrics('feedingRespirationSection').progress.pct}
         onSave={() => handleSectionSave('feedingRespirationSection')}
         errors={sectionErrors['feedingRespirationSection'] || {}}
         isDirty={dirtyFields.has('feedingRespirationSection')}
@@ -404,8 +426,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Discharge Plan & Investigations"
         sectionId="dischargePlanInvestigationsSection"
-        isComplete={isSectionComplete(formData.dischargePlanInvestigationsSection)}
-        completionPercent={calculateSectionCompletion(formData.dischargePlanInvestigationsSection)}
+        status={getSectionMetrics('dischargePlanInvestigationsSection').status}
+        completionPercent={getSectionMetrics('dischargePlanInvestigationsSection').progress.pct}
         onSave={() => handleSectionSave('dischargePlanInvestigationsSection')}
         errors={sectionErrors['dischargePlanInvestigationsSection'] || {}}
         isDirty={dirtyFields.has('dischargePlanInvestigationsSection')}
@@ -445,8 +467,8 @@ export function InterimSummaryForm({
       <IntakeSectionAccordion
         title="Remarks & Signature"
         sectionId="remarksSignatureSection"
-        isComplete={isSectionComplete(formData.remarksSignatureSection)}
-        completionPercent={calculateSectionCompletion(formData.remarksSignatureSection)}
+        status={getSectionMetrics('remarksSignatureSection').status}
+        completionPercent={getSectionMetrics('remarksSignatureSection').progress.pct}
         onSave={() => handleSectionSave('remarksSignatureSection')}
         errors={sectionErrors['remarksSignatureSection'] || {}}
         isDirty={dirtyFields.has('remarksSignatureSection')}

@@ -1,9 +1,18 @@
 import { IntakeFundApplication, IntakeInterimSummary } from '../types';
+import { isPresentFieldValue } from './fieldValue';
 
 export interface ValidationResult {
   isValid: boolean;
   missingFields: string[];
   errors: Record<string, string>;
+}
+
+export type SectionStatus = 'not_started' | 'in_progress' | 'complete';
+
+export interface SectionProgress {
+  pct: number;
+  filled: number;
+  total: number;
 }
 
 export const FUND_APPLICATION_FIELDS = {
@@ -90,7 +99,7 @@ export function validateFundApplicationSection(
 
   config.requiredFields.forEach(fieldName => {
     const value = data?.[fieldName];
-    if (value === undefined || value === null || value === '') {
+    if (!isPresentFieldValue(value)) {
       missingFields.push(fieldName);
       errors[fieldName] = `${fieldName} is required`;
     }
@@ -117,7 +126,7 @@ export function validateInterimSummarySection(
 
   config.requiredFields.forEach(fieldName => {
     const value = data?.[fieldName];
-    if (value === undefined || value === null || value === '') {
+    if (!isPresentFieldValue(value)) {
       missingFields.push(fieldName);
       errors[fieldName] = `${fieldName} is required`;
     }
@@ -139,7 +148,7 @@ export function validateFundApplicationForm(data: IntakeFundApplication): Valida
     config.requiredFields.forEach(fieldName => {
       if (section) {
         const value = section[fieldName as keyof any];
-        if (value === undefined || value === null || value === '') {
+        if (!isPresentFieldValue(value)) {
           const fullFieldName = `${config.label}.${fieldName}`;
           missingFields.push(fullFieldName);
           errors[fullFieldName] = `${fieldName} is required in ${config.label}`;
@@ -164,7 +173,7 @@ export function validateInterimSummaryForm(data: IntakeInterimSummary): Validati
     config.requiredFields.forEach(fieldName => {
       if (section) {
         const value = section[fieldName as keyof any];
-        if (value === undefined || value === null || value === '') {
+        if (!isPresentFieldValue(value)) {
           const fullFieldName = `${config.label}.${fieldName}`;
           missingFields.push(fullFieldName);
           errors[fullFieldName] = `${fieldName} is required in ${config.label}`;
@@ -191,6 +200,78 @@ export function isSectionComplete(section: any, requiredFields: string[]): boole
   if (!section) return false;
   return requiredFields.every(field => {
     const value = section[field];
-    return value !== undefined && value !== null && value !== '';
+    return isPresentFieldValue(value);
   });
+}
+
+function isFilledValue(value: unknown): boolean {
+  return isPresentFieldValue(value);
+}
+
+export function getSectionProgress(section: any, requiredFields: string[]): SectionProgress {
+  const total = requiredFields.length;
+  if (total === 0) {
+    return { pct: 0, filled: 0, total: 0 };
+  }
+
+  const filled = requiredFields.filter(field => isFilledValue(section?.[field])).length;
+  const pct = Math.round((filled / total) * 100);
+
+  return { pct, filled, total };
+}
+
+export function getSectionStatus(progress: SectionProgress): SectionStatus {
+  if (progress.total === 0 || progress.pct === 0) return 'not_started';
+  if (progress.pct === 100) return 'complete';
+  return 'in_progress';
+}
+
+function hasTextContent(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasArrayContent(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasRiskFactorsContent(value: unknown): boolean {
+  return hasArrayContent(value) || hasTextContent(value);
+}
+
+export function getInterimSummarySectionProgress(
+  sectionKey: keyof typeof INTERIM_SUMMARY_FIELDS,
+  section: any
+): SectionProgress {
+  if (sectionKey === 'antenatalRiskFactorsSection') {
+    const hasRiskFactors = hasRiskFactorsContent(section?.riskFactors);
+    return hasRiskFactors
+      ? { pct: 100, filled: 1, total: 1 }
+      : { pct: 0, filled: 0, total: 1 };
+  }
+
+  if (sectionKey === 'diagnosisSection') {
+    const hasDiagnoses = hasRiskFactorsContent(section?.diagnoses);
+    const hasOtherDiagnosis = hasTextContent(section?.otherDiagnosis);
+    const hasAnyDiagnosis = hasDiagnoses || hasOtherDiagnosis;
+    return hasAnyDiagnosis
+      ? { pct: 100, filled: 1, total: 1 }
+      : { pct: 0, filled: 0, total: 1 };
+  }
+
+  if (sectionKey === 'treatmentGivenSection') {
+    const hasAnyFlag = Boolean(
+      section?.respiratorySupportRequired === true ||
+      section?.phototherapyRequired === true ||
+      section?.antibioticsRequired === true ||
+      section?.nutritionalSupportRequired === true
+    );
+    const hasNotes = hasTextContent(section?.treatmentNotes);
+    const hasTreatmentData = hasAnyFlag || hasNotes;
+    return hasTreatmentData
+      ? { pct: 100, filled: 1, total: 1 }
+      : { pct: 0, filled: 0, total: 1 };
+  }
+
+  const requiredFields = INTERIM_SUMMARY_FIELDS[sectionKey].requiredFields;
+  return getSectionProgress(section, requiredFields);
 }

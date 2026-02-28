@@ -1,21 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { IntakeFundApplication } from '../../types';
 import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
-import { validateFundApplicationSection, FUND_APPLICATION_FIELDS } from '../../utils/intakeValidation';
+import { parseNumberInput } from '../../utils/fieldValue';
+import {
+  validateFundApplicationSection,
+  FUND_APPLICATION_FIELDS,
+  getSectionProgress,
+  getSectionStatus,
+} from '../../utils/intakeValidation';
 
 interface FundApplicationFormProps {
   caseId: string;
   initialData?: IntakeFundApplication;
   onSectionSave: (section: string, data: any) => Promise<void>;
+  onFormDataChange?: (data: IntakeFundApplication) => void;
   isLoading?: boolean;
 }
 
 export function FundApplicationForm({
-  caseId,
   initialData,
   onSectionSave,
-  isLoading = false,
+  onFormDataChange,
 }: FundApplicationFormProps) {
   const [formData, setFormData] = useState<IntakeFundApplication>(
     initialData || {
@@ -32,14 +38,25 @@ export function FundApplicationForm({
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [sectionErrors, setSectionErrors] = useState<Record<string, Record<string, string>>>({});
 
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
+
   const handleFieldChange = (section: string, field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof IntakeFundApplication],
-        [field]: value,
-      },
-    }));
+    setFormData(prev => {
+      const nextData = {
+        ...prev,
+        [section]: {
+          ...prev[section as keyof IntakeFundApplication],
+          [field]: value,
+        },
+      };
+
+      onFormDataChange?.(nextData);
+      return nextData;
+    });
     setDirtyFields(prev => new Set([...prev, section]));
   };
 
@@ -69,25 +86,24 @@ export function FundApplicationForm({
     });
   };
 
-  const calculateSectionCompletion = (section: any): number => {
-    if (!section) return 0;
-    const values = Object.values(section);
-    const filled = values.filter(v => v !== undefined && v !== null && v !== '').length;
-    return Math.round((filled / Math.max(values.length, 1)) * 100);
-  };
-
-  const isSectionComplete = (section: any): boolean => {
-    if (!section) return false;
-    return Object.values(section).every(v => v !== undefined && v !== null && v !== '');
+  const getSectionMetrics = (sectionKey: keyof typeof FUND_APPLICATION_FIELDS) => {
+    const section = formData[sectionKey];
+    const requiredFields = FUND_APPLICATION_FIELDS[sectionKey].requiredFields;
+    const progress = getSectionProgress(section, requiredFields);
+    const status = getSectionStatus(progress);
+    return { progress, status };
   };
 
   return (
     <div className="space-y-4">
+      {(() => {
+        const { progress, status } = getSectionMetrics('parentsFamilySection');
+        return (
       <IntakeSectionAccordion
         title="Parents & Family"
         sectionId="parentsFamilySection"
-        isComplete={isSectionComplete(formData.parentsFamilySection)}
-        completionPercent={calculateSectionCompletion(formData.parentsFamilySection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('parentsFamilySection')}
         errors={sectionErrors['parentsFamilySection'] || {}}
         isDirty={dirtyFields.has('parentsFamilySection')}
@@ -143,18 +159,23 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.parentsFamilySection?.dependents || '',
-              onChange: e => handleFieldChange('parentsFamilySection', 'dependents', e.target.value),
+              value: formData.parentsFamilySection?.dependents ?? '',
+              onChange: e => handleFieldChange('parentsFamilySection', 'dependents', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('occupationIncomeSection');
+        return (
       <IntakeSectionAccordion
         title="Occupation & Income"
         sectionId="occupationIncomeSection"
-        isComplete={isSectionComplete(formData.occupationIncomeSection)}
-        completionPercent={calculateSectionCompletion(formData.occupationIncomeSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('occupationIncomeSection')}
         errors={sectionErrors['occupationIncomeSection'] || {}}
         isDirty={dirtyFields.has('occupationIncomeSection')}
@@ -183,8 +204,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.occupationIncomeSection?.fatherMonthlyIncome || '',
-              onChange: e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseInt(e.target.value) || undefined),
+              value: formData.occupationIncomeSection?.fatherMonthlyIncome ?? '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -210,8 +231,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.occupationIncomeSection?.motherMonthlyIncome || '',
-              onChange: e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseInt(e.target.value) || undefined),
+              value: formData.occupationIncomeSection?.motherMonthlyIncome ?? '',
+              onChange: e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -226,12 +247,17 @@ export function FundApplicationForm({
           />
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('birthDetailsSection');
+        return (
       <IntakeSectionAccordion
         title="Birth Details"
         sectionId="birthDetailsSection"
-        isComplete={isSectionComplete(formData.birthDetailsSection)}
-        completionPercent={calculateSectionCompletion(formData.birthDetailsSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('birthDetailsSection')}
         errors={sectionErrors['birthDetailsSection'] || {}}
         isDirty={dirtyFields.has('birthDetailsSection')}
@@ -267,8 +293,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.birthDetailsSection?.gestationalAgeWeeks || '',
-              onChange: e => handleFieldChange('birthDetailsSection', 'gestationalAgeWeeks', parseInt(e.target.value) || undefined),
+              value: formData.birthDetailsSection?.gestationalAgeWeeks ?? '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'gestationalAgeWeeks', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -286,8 +312,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.birthDetailsSection?.gravida || '',
-              onChange: e => handleFieldChange('birthDetailsSection', 'gravida', parseInt(e.target.value) || undefined),
+              value: formData.birthDetailsSection?.gravida ?? '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'gravida', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -295,18 +321,23 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.birthDetailsSection?.parity || '',
-              onChange: e => handleFieldChange('birthDetailsSection', 'parity', parseInt(e.target.value) || undefined),
+              value: formData.birthDetailsSection?.parity ?? '',
+              onChange: e => handleFieldChange('birthDetailsSection', 'parity', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('nicuFinancialSection');
+        return (
       <IntakeSectionAccordion
         title="NICU & Financial"
         sectionId="nicuFinancialSection"
-        isComplete={isSectionComplete(formData.nicuFinancialSection)}
-        completionPercent={calculateSectionCompletion(formData.nicuFinancialSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('nicuFinancialSection')}
         errors={sectionErrors['nicuFinancialSection'] || {}}
         isDirty={dirtyFields.has('nicuFinancialSection')}
@@ -326,8 +357,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.nicuFinancialSection?.estimatedNicuDays || '',
-              onChange: e => handleFieldChange('nicuFinancialSection', 'estimatedNicuDays', parseInt(e.target.value) || undefined),
+              value: formData.nicuFinancialSection?.estimatedNicuDays ?? '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimatedNicuDays', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -335,8 +366,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.nicuFinancialSection?.nfiRequestedAmount || '',
-              onChange: e => handleFieldChange('nicuFinancialSection', 'nfiRequestedAmount', parseInt(e.target.value) || undefined),
+              value: formData.nicuFinancialSection?.nfiRequestedAmount ?? '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'nfiRequestedAmount', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -344,8 +375,8 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.nicuFinancialSection?.estimateBilled || '',
-              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateBilled', parseInt(e.target.value) || undefined),
+              value: formData.nicuFinancialSection?.estimateBilled ?? '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateBilled', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
           <NfiField
@@ -353,18 +384,23 @@ export function FundApplicationForm({
             type="input"
             inputProps={{
               type: 'number',
-              value: formData.nicuFinancialSection?.estimateAfterDiscount || '',
-              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateAfterDiscount', parseInt(e.target.value) || undefined),
+              value: formData.nicuFinancialSection?.estimateAfterDiscount ?? '',
+              onChange: e => handleFieldChange('nicuFinancialSection', 'estimateAfterDiscount', parseNumberInput(e.target.value, value => parseInt(value, 10))),
             }}
           />
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('otherSupportSection');
+        return (
       <IntakeSectionAccordion
         title="Other Support"
         sectionId="otherSupportSection"
-        isComplete={isSectionComplete(formData.otherSupportSection)}
-        completionPercent={calculateSectionCompletion(formData.otherSupportSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('otherSupportSection')}
         errors={sectionErrors['otherSupportSection'] || {}}
         isDirty={dirtyFields.has('otherSupportSection')}
@@ -389,12 +425,17 @@ export function FundApplicationForm({
           />
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('declarationsSection');
+        return (
       <IntakeSectionAccordion
         title="Declarations"
         sectionId="declarationsSection"
-        isComplete={isSectionComplete(formData.declarationsSection)}
-        completionPercent={calculateSectionCompletion(formData.declarationsSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('declarationsSection')}
         errors={sectionErrors['declarationsSection'] || {}}
         isDirty={dirtyFields.has('declarationsSection')}
@@ -418,12 +459,17 @@ export function FundApplicationForm({
           )}
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
 
+      {(() => {
+        const { progress, status } = getSectionMetrics('hospitalApprovalSection');
+        return (
       <IntakeSectionAccordion
         title="Hospital Approval"
         sectionId="hospitalApprovalSection"
-        isComplete={isSectionComplete(formData.hospitalApprovalSection)}
-        completionPercent={calculateSectionCompletion(formData.hospitalApprovalSection)}
+        status={status}
+        completionPercent={progress.pct}
         onSave={() => handleSectionSave('hospitalApprovalSection')}
         errors={sectionErrors['hospitalApprovalSection'] || {}}
         isDirty={dirtyFields.has('hospitalApprovalSection')}
@@ -459,6 +505,8 @@ export function FundApplicationForm({
           </div>
         </div>
       </IntakeSectionAccordion>
+        );
+      })()}
     </div>
   );
 }

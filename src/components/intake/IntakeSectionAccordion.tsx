@@ -1,11 +1,12 @@
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { NfiButton } from '../design-system/NfiButton';
+import { SectionStatus } from '../../utils/intakeValidation';
 
 interface IntakeSectionAccordionProps {
   title: string;
   sectionId: string;
-  isComplete: boolean;
+  status: SectionStatus;
   completionPercent: number;
   children: React.ReactNode;
   onSave: () => Promise<void>;
@@ -16,7 +17,7 @@ interface IntakeSectionAccordionProps {
 export function IntakeSectionAccordion({
   title,
   sectionId,
-  isComplete,
+  status,
   completionPercent,
   children,
   onSave,
@@ -36,6 +37,8 @@ export function IntakeSectionAccordion({
   };
 
   const hasErrors = Object.keys(errors).length > 0;
+  const isComplete = status === 'complete';
+  const isInProgress = status === 'in_progress';
 
   return (
     <div className="border border-[var(--nfi-border)] rounded-lg overflow-hidden">
@@ -58,15 +61,13 @@ export function IntakeSectionAccordion({
               <CheckCircle2 size={20} style={{ color: 'var(--nfi-success)' }} />
               <span className="text-sm font-medium text-[var(--nfi-success)]">Complete</span>
             </div>
-          ) : completionPercent > 0 ? (
+          ) : isInProgress ? (
             <div className="flex items-center gap-2">
-              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <span className="text-sm font-semibold text-amber-800">{completionPercent}%</span>
-              </div>
+              <span className="text-sm font-medium text-amber-700">In progress</span>
             </div>
           ) : (
-            <div className="w-12 h-12 rounded-full bg-[var(--nfi-bg-light)] flex items-center justify-center">
-              <span className="text-sm font-semibold text-[var(--nfi-text-light)]">{completionPercent}%</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-[var(--nfi-text-light)]">Not started</span>
             </div>
           )}
         </div>
