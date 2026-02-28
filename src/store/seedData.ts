@@ -141,14 +141,14 @@ export function seedData(): AppStore {
     { templateId: 'tmpl_3', processType: 'BRC', category: 'GENERAL', docType: 'Aadhar Card (Parent)', mandatoryFlag: false },
     { templateId: 'tmpl_4', processType: 'BRC', category: 'MEDICAL', docType: 'Discharge Summary', mandatoryFlag: true },
     { templateId: 'tmpl_5', processType: 'BRC', category: 'MEDICAL', docType: 'Medical Reports', mandatoryFlag: true },
-    { templateId: 'tmpl_6', processType: 'BRC', category: 'FINANCIAL', docType: 'Estimate Bill', mandatoryFlag: true },
-    { templateId: 'tmpl_7', processType: 'BRC', category: 'FINANCIAL', docType: 'Income Certificate', mandatoryFlag: false },
+    { templateId: 'tmpl_6', processType: 'BRC', category: 'FINANCE', docType: 'Bank Statement', mandatoryFlag: true },
+    { templateId: 'tmpl_7', processType: 'BRC', category: 'FINANCE', docType: 'Income Certificate', mandatoryFlag: true },
     { templateId: 'tmpl_8', processType: 'BRRC', category: 'MEDICAL', docType: 'Follow-up Report', mandatoryFlag: true },
-    { templateId: 'tmpl_9', processType: 'BRRC', category: 'FINANCIAL', docType: 'Revised Estimate', mandatoryFlag: true },
-    { templateId: 'tmpl_10', processType: 'BGRC', category: 'MEDICAL', docType: 'Growth Assessment', mandatoryFlag: true },
-    { templateId: 'tmpl_11', processType: 'BGRC', category: 'MEDICAL', docType: 'Vaccination Records', mandatoryFlag: true },
-    { templateId: 'tmpl_12', processType: 'BCRC', category: 'FINANCIAL', docType: 'Final Bill', mandatoryFlag: true },
-    { templateId: 'tmpl_13', processType: 'BCRC', category: 'FINANCIAL', docType: 'Payment Receipts', mandatoryFlag: true },
+    { templateId: 'tmpl_9', processType: 'BRRC', category: 'FINANCE', docType: 'BPL Card', mandatoryFlag: true },
+    { templateId: 'tmpl_10', processType: 'BGRC', category: 'MEDICAL', docType: 'Lab Report', mandatoryFlag: true },
+    { templateId: 'tmpl_11', processType: 'BGRC', category: 'MEDICAL', docType: 'Internal Case Papers', mandatoryFlag: true },
+    { templateId: 'tmpl_12', processType: 'BCRC', category: 'FINANCE', docType: 'Talati/Govt Economic Card', mandatoryFlag: true },
+    { templateId: 'tmpl_13', processType: 'BCRC', category: 'MEDICAL', docType: 'Investigation Reports (All)', mandatoryFlag: true },
   ];
 
   const followupMetricDefs: FollowupMetricDef[] = [

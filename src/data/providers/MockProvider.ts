@@ -1,5 +1,6 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
 import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
+import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -571,11 +572,11 @@ export class MockProvider implements DataProvider {
   }
 
   private getBuiltInTemplates(): DocumentRequirementTemplate[] {
-    const categories = ['GENERAL', 'MEDICAL', 'FINANCIAL', 'FINAL'];
+    const categories = ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
     const docTypes: Record<string, string[]> = {
-      GENERAL: ['Aadhar Card', 'Birth Certificate', 'Residence Proof'],
-      MEDICAL: ['Medical Reports', 'Discharge Summary', 'Lab Results'],
-      FINANCIAL: ['Bill Estimate', 'Bank Statement', 'Hospital Invoice'],
+      GENERAL: ['NFI Fund Application Form', 'Aadhaar Card - Mother', 'Aadhaar Card - Father', 'Family Photo'],
+      FINANCE: ['Bank Statement', 'Income Certificate', 'Talati/Govt Economic Card', 'BPL Card'],
+      MEDICAL: ['Interim Summary Document', 'Lab Report', 'Internal Case Papers', 'Investigation Reports (All)'],
       FINAL: ['Final Bill', 'Payment Receipt', 'Discharge Certificate'],
     };
 
@@ -591,7 +592,7 @@ export class MockProvider implements DataProvider {
             processType,
             category: category as any,
             docType,
-            mandatoryFlag: (category === 'GENERAL' || category === 'MEDICAL'),
+            mandatoryFlag: (category === 'GENERAL' || category === 'FINANCE' || category === 'MEDICAL'),
             conditionNotes: undefined,
           });
         }
@@ -738,21 +739,38 @@ export class MockProvider implements DataProvider {
     return this.getBuiltInTemplates().filter(t => t.processType === processType);
   }
 
+  private isDocSatisfied(doc: DocumentWithTemplate): boolean {
+    const latestVersion = doc.versions?.[doc.versions.length - 1];
+    const status = latestVersion?.status || doc.status;
+    return status === 'Verified' || status === 'Not_Applicable' || status === 'Uploaded';
+  }
+
+  private getMandatoryDocIds(): Set<string> {
+    const set = new Set<string>();
+    for (const mandDoc of MANDATORY_DOCUMENTS) {
+      const docId = `${mandDoc.category}-${mandDoc.docType}`;
+      set.add(docId);
+    }
+    return set;
+  }
+
   async getChecklistReadiness(caseId: string): Promise<ChecklistReadiness> {
     const docs = await this.listCaseDocuments(caseId);
-    const mandatoryDocs = docs.filter(d => d.mandatoryFlag);
-    const mandatoryComplete = mandatoryDocs.filter(
-      d => d.status === 'Verified' || d.status === 'Not_Applicable'
-    ).length;
-    const blockingDocs = mandatoryDocs.filter(
-      d => d.status !== 'Verified' && d.status !== 'Not_Applicable'
-    );
+    const mandatoryDocIds = this.getMandatoryDocIds();
+
+    const mandatoryDocs = docs.filter(d => {
+      const docId = `${d.category}-${d.docType}`;
+      return mandatoryDocIds.has(docId);
+    });
+
+    const mandatoryComplete = mandatoryDocs.filter(d => this.isDocSatisfied(d)).length;
+    const blockingDocs = mandatoryDocs.filter(d => !this.isDocSatisfied(d));
 
     return {
-      mandatoryTotal: mandatoryDocs.length,
+      mandatoryTotal: MANDATORY_DOC_COUNT,
       mandatoryComplete,
       blockingDocs,
-      isReady: blockingDocs.length === 0 && mandatoryDocs.length > 0,
+      isReady: blockingDocs.length === 0 && mandatoryDocs.length === MANDATORY_DOC_COUNT,
     };
   }
 

@@ -10,7 +10,7 @@ import { adminService } from '../../services/adminService';
 import { Plus, Edit2, Trash2, FileCheck } from 'lucide-react';
 
 const PROCESS_TYPES = ['New', 'Renewal', 'Revision'];
-const CATEGORIES = ['GENERAL', 'MEDICAL', 'FINANCIAL', 'FINAL', 'COMMUNICATION'];
+const CATEGORIES = ['GENERAL', 'MEDICAL', 'FINANCE', 'FINAL', 'COMMUNICATION'];
 
 export function DocumentRequirements() {
   const { showToast } = useToast();

@@ -16,8 +16,9 @@ import { FinancialTab } from '../components/case-tabs/FinancialTab';
 import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
+import { getLatestVersion, isDocSatisfied } from '../utils/docVersioning';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
@@ -539,8 +540,9 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   const [allDocs, setAllDocs] = useState<DocumentWithTemplate[]>(documents);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
 
-  const categories = ['GENERAL', 'MEDICAL', 'FINANCIAL', 'FINAL', 'COMMUNICATION'];
+  const categories = ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
 
   useEffect(() => {
     setAllDocs(documents);
@@ -619,17 +621,28 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   };
 
   const verifiedCount = allDocs.filter(d => d.status === 'Verified').length;
-  const mandatoryCount = allDocs.filter(d => d.mandatoryFlag).length;
-  const mandatoryVerifiedCount = allDocs.filter(d => d.mandatoryFlag && (d.status === 'Verified' || d.status === 'Not_Applicable')).length;
+  const mandatoryDocs = allDocs.filter(d => d.mandatoryFlag);
+  const mandatoryCount = 12;
+  const mandatoryVerifiedCount = mandatoryDocs.filter(d => d.status === 'Verified' || d.status === 'Not_Applicable').length;
   const totalCount = allDocs.length;
 
   const isDemoMode = mode === 'DEMO';
+  const isCommittee = authState.activeRole === 'committee_member';
   const canSimulate = isDemoMode && (authState.activeRole === 'admin' || authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc');
   const hasMissingMandatory = allDocs.some(d => d.mandatoryFlag && (d.status === 'Missing' || d.status === 'Rejected'));
   const hasUnverifiedMandatory = allDocs.some(d => d.mandatoryFlag && d.status !== 'Verified' && d.status !== 'Not_Applicable');
 
+  const committeeMessage = isCommittee && isDemoMode ? (
+    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <p className="text-sm text-blue-900">
+        In production, this case would be assigned to specific committee members. Demo mode shows all documents to all users.
+      </p>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-6">
+      {committeeMessage}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Checklist Readiness</h3>
@@ -674,6 +687,14 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
         )}
       </div>
 
+      {mandatoryVerifiedCount === mandatoryCount && mandatoryCount > 0 && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            Readiness check: All 12 mandatory documents verified and ready for committee review.
+          </p>
+        </div>
+      )}
+
       {categories.map((category) => {
         const categoryDocs = allDocs.filter((d) => d.category === category);
         if (categoryDocs.length === 0) return null;
@@ -688,7 +709,11 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
               {categoryDocs.map((doc) => {
                 const isVerified = doc.status === 'Verified';
                 const isNA = doc.status === 'Not_Applicable';
+                const isRejected = doc.status === 'Rejected';
                 const canMarkNA = authState.activeRole === 'admin' || !doc.mandatoryFlag;
+                const latestVersion = getLatestVersion(doc);
+                const hasVersions = doc.versions && doc.versions.length > 1;
+                const isExpanded = expandedVersions.has(doc.docId);
 
                 return (
                   <div key={doc.docId} className="border border-[var(--nfi-border)] rounded-lg p-4">
@@ -699,16 +724,19 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                           {doc.mandatoryFlag && (
                             <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Required</span>
                           )}
+                          {hasVersions && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">v{latestVersion?.versionNo || 1}</span>
+                          )}
                           {doc.conditionNotes && (
                             <span className="text-xs text-[var(--nfi-text-secondary)] italic" title={doc.conditionNotes}>
                               ⓘ {doc.conditionNotes}
                             </span>
                           )}
                         </div>
-                        {doc.fileName && (
+                        {latestVersion && (
                           <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
-                            {doc.fileName} ({(doc.size! / 1024).toFixed(1)} KB)
-                            {doc.uploadedAt && ` • ${new Date(doc.uploadedAt).toLocaleDateString()}`}
+                            {latestVersion.fileName} {latestVersion.size ? `(${(latestVersion.size / 1024).toFixed(1)} KB)` : ''}{' '}
+                            {latestVersion.uploadedAt && `• ${new Date(latestVersion.uploadedAt).toLocaleDateString()}`}
                           </p>
                         )}
                       </div>
@@ -727,6 +755,12 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                       </NfiBadge>
                     </div>
 
+                    {isRejected && latestVersion?.rejectionReason && (
+                      <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                        <strong>Rejection reason:</strong> {latestVersion.rejectionReason}
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         {!isVerified && !isNA && (
@@ -743,12 +777,31 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                             />
                             <NfiButton size="sm" variant="secondary" disabled={uploadingDoc === doc.docId}>
                               <Upload size={16} className="mr-2" />
-                              {uploadingDoc === doc.docId ? 'Uploading...' : doc.status === 'Uploaded' ? 'Re-upload' : 'Upload'}
+                              {uploadingDoc === doc.docId ? 'Uploading...' : doc.status === 'Uploaded' ? 'Re-upload' : isRejected ? 'Upload New Version' : 'Upload'}
                             </NfiButton>
                           </label>
                         )}
 
-                        {canMarkNA && !isVerified && (
+                        {isVerified && (
+                          <label className="relative cursor-pointer">
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(doc.docId, file);
+                              }}
+                              className="hidden"
+                              disabled={uploadingDoc === doc.docId}
+                            />
+                            <NfiButton size="sm" variant="secondary" disabled={uploadingDoc === doc.docId}>
+                              <Upload size={16} className="mr-2" />
+                              {uploadingDoc === doc.docId ? 'Uploading...' : 'Upload New Version'}
+                            </NfiButton>
+                          </label>
+                        )}
+
+                        {canMarkNA && !isVerified && !isRejected && (
                           <NfiButton
                             size="sm"
                             variant={isNA ? 'secondary' : 'ghost'}
@@ -765,7 +818,52 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                             Locked (verified)
                           </span>
                         )}
+
+                        {hasVersions && (
+                          <button
+                            onClick={() => setExpandedVersions(prev => {
+                              const next = new Set(prev);
+                              if (next.has(doc.docId)) next.delete(doc.docId);
+                              else next.add(doc.docId);
+                              return next;
+                            })}
+                            className="text-sm text-[var(--nfi-primary)] flex items-center gap-1 hover:underline"
+                          >
+                            <ChevronDown size={14} className={isExpanded ? 'rotate-180' : ''} />
+                            History ({doc.versions!.length} versions)
+                          </button>
+                        )}
                       </div>
+
+                      {hasVersions && isExpanded && doc.versions && (
+                        <div className="mt-3 bg-gray-50 rounded p-3 space-y-2">
+                          <p className="text-xs font-semibold text-[var(--nfi-text)]">Version History</p>
+                          {[...doc.versions].reverse().map((version, idx) => (
+                            <div key={idx} className="text-xs p-2 bg-white border border-gray-200 rounded">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium text-[var(--nfi-text)]">v{version.versionNo}</p>
+                                  <p className="text-[var(--nfi-text-secondary)]">{version.fileName}</p>
+                                  <p className="text-[var(--nfi-text-secondary)]">
+                                    Uploaded by {version.uploadedBy} on {new Date(version.uploadedAt).toLocaleDateString()}
+                                  </p>
+                                  {version.reviewedAt && (
+                                    <p className="text-[var(--nfi-text-secondary)]">
+                                      Reviewed by {version.reviewedBy} on {new Date(version.reviewedAt).toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                                <NfiBadge tone={version.status === 'Verified' ? 'success' : version.status === 'Rejected' ? 'error' : 'warning'}>
+                                  {version.status}
+                                </NfiBadge>
+                              </div>
+                              {version.rejectionReason && (
+                                <p className="mt-2 text-red-700">Rejection: {version.rejectionReason}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <NfiField label="Notes" hint="Internal notes about this document">
                         <textarea

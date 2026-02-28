@@ -23,7 +23,7 @@ export type UserRole =
 export type DocumentCategory =
   | 'GENERAL'
   | 'MEDICAL'
-  | 'FINANCIAL'
+  | 'FINANCE'
   | 'FINAL'
   | 'COMMUNICATION';
 
@@ -219,6 +219,19 @@ export interface FinancialCaseDetails {
   paymentMethod?: string;
 }
 
+export interface DocVersion {
+  versionNo: number;
+  fileName: string;
+  fileType?: string;
+  size?: number;
+  uploadedAt: string;
+  uploadedBy: string;
+  status: DocumentStatus;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectionReason?: string;
+}
+
 export interface DocumentMetadata {
   docId: string;
   caseId: string;
@@ -232,6 +245,7 @@ export interface DocumentMetadata {
   status: DocumentStatus;
   notes?: string;
   fileUrl?: string;
+  versions?: DocVersion[];
 }
 
 export interface DocumentRequirementTemplate {
