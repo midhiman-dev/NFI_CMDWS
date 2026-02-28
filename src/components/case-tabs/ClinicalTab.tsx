@@ -111,6 +111,12 @@ export function ClinicalTab({ caseId, onDatesChanged }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <p className="text-sm text-blue-800">
+          <strong>Note:</strong> Structured intake data has moved to the <strong>Intake Forms</strong> tab.
+          Complete the Fund Application and Interim Summary forms there for comprehensive intake capture.
+        </p>
+      </div>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-[var(--nfi-text)] flex items-center gap-2">
           <Stethoscope size={20} className="text-rose-600" />

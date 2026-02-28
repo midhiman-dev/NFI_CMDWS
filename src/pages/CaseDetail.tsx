@@ -13,6 +13,7 @@ import { BeneficiaryTab } from '../components/case-tabs/BeneficiaryTab';
 import { FamilyTab } from '../components/case-tabs/FamilyTab';
 import { ClinicalTab } from '../components/case-tabs/ClinicalTab';
 import { FinancialTab } from '../components/case-tabs/FinancialTab';
+import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee } from 'lucide-react';
@@ -91,6 +92,7 @@ export function CaseDetail() {
       heading: 'Case Data',
       tabs: [
         { id: 'overview', label: 'Overview', icon: <FileText size={16} /> },
+        { id: 'intake', label: 'Intake Forms', icon: <FileText size={16} /> },
         { id: 'beneficiary', label: 'Beneficiary', icon: <Baby size={16} /> },
         { id: 'family', label: 'Family', icon: <Users size={16} /> },
         { id: 'clinical', label: 'Clinical', icon: <Stethoscope size={16} /> },
@@ -163,6 +165,7 @@ export function CaseDetail() {
                   onUpdate={bumpDocs}
                 />
               )}
+              {activeTab === 'intake' && <IntakeFormsTab caseId={caseId!} />}
               {activeTab === 'beneficiary' && <BeneficiaryTab caseId={caseId!} />}
               {activeTab === 'family' && <FamilyTab caseId={caseId!} />}
               {activeTab === 'clinical' && <ClinicalTab caseId={caseId!} onDatesChanged={bumpDocs} />}
@@ -809,7 +812,7 @@ function VerificationTab({
 
   useEffect(() => {
     const loadReadiness = async () => {
-      const data = await provider.getChecklistReadiness(caseId);
+      const data = await provider.getCaseSubmitReadiness(caseId);
       setReadiness(data);
     };
     loadReadiness();
@@ -899,14 +902,19 @@ function VerificationTab({
   };
 
   const handleSendToCommittee = async () => {
-    if (!readiness?.isReady) {
-      showToast(`Cannot send to committee: ${readiness?.blockingDocs.length || 0} mandatory documents need attention`, 'error');
+    if (!readiness?.canSubmit) {
+      const issues: string[] = [];
+      if (!readiness?.fundAppComplete) issues.push('Fund Application incomplete');
+      if (!readiness?.interimSummaryComplete) issues.push('Interim Summary incomplete');
+      if (!readiness?.documentsReady) issues.push(`${readiness?.missingDocuments?.length || 0} mandatory documents need attention`);
+
+      showToast(`Cannot send to committee: ${issues.join(', ')}`, 'error');
       return;
     }
 
     try {
       await provider.sendToCommittee(caseId, {
-        comment: 'All mandatory documents verified',
+        comment: 'All intake forms and mandatory documents completed',
       });
       onUpdate();
       showToast('Case sent to committee for review', 'success');
@@ -920,7 +928,7 @@ function VerificationTab({
   const verifiedDocs = documents.filter(d => d.status === 'Verified').length;
   const rejectedDocs = documents.filter(d => d.status === 'Rejected').length;
   const naDocs = documents.filter(d => d.status === 'Not_Applicable').length;
-  const canSendToCommittee = readiness?.isReady ?? false;
+  const canSendToCommittee = readiness?.canSubmit ?? false;
 
   return (
     <div className="space-y-6">
@@ -953,17 +961,30 @@ function VerificationTab({
         {canSendToCommittee && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
             <CheckCircle size={20} className="text-green-600" />
-            <p className="text-sm text-green-800">All mandatory documents verified. Ready to send to committee.</p>
+            <p className="text-sm text-green-800">Ready to send to committee. All intake forms, documents, and requirements complete.</p>
           </div>
         )}
-        {readiness?.blockingDocs && readiness.blockingDocs.length > 0 && !canSendToCommittee && (
+        {!canSendToCommittee && (
           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded flex items-start gap-2">
             <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-red-800">Blocking Documents</p>
-              <p className="text-xs text-red-700 mt-1">
-                {readiness.blockingDocs.map((d: any) => d.docType).join(', ')}
-              </p>
+              <p className="text-sm font-medium text-red-800">Cannot Submit - Incomplete</p>
+              <div className="text-xs text-red-700 mt-2 space-y-1">
+                {!readiness?.fundAppComplete && (
+                  <p>• Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
+                )}
+                {!readiness?.interimSummaryComplete && (
+                  <p>• Interim Summary: {readiness?.interimSummaryTotalPercent || 0}% complete</p>
+                )}
+                {readiness?.missingDocuments && readiness.missingDocuments.length > 0 && (
+                  <p>• Missing documents: {readiness.missingDocuments.join(', ')}</p>
+                )}
+              </div>
+              {!readiness?.fundAppComplete || !readiness?.interimSummaryComplete ? (
+                <p className="text-xs text-red-600 mt-2">
+                  Complete the intake forms in the <strong>Intake Forms</strong> tab to proceed.
+                </p>
+              ) : null}
             </div>
           </div>
         )}

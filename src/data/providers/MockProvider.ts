@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -18,6 +18,7 @@ const KPI_CATALOG_STORAGE_KEY = 'nfi_demo_kpi_catalog_v1';
 const DATASET_REGISTRY_STORAGE_KEY = 'nfi_demo_dataset_registry_v1';
 const TEMPLATE_REGISTRY_STORAGE_KEY = 'nfi_demo_template_registry_v1';
 const TEMPLATE_BINDINGS_STORAGE_KEY = 'nfi_demo_template_bindings_v1';
+const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
 
 interface MockData {
   hospitals: Hospital[];
@@ -1612,5 +1613,133 @@ export class MockProvider implements DataProvider {
 
     localStorage.setItem(REPORT_RUNS_STORAGE_KEY, JSON.stringify(runs));
     return runs[idx];
+  }
+
+  async getIntakeData(caseId: string): Promise<{ fundApplication?: IntakeFundApplication; interimSummary?: IntakeInterimSummary }> {
+    try {
+      const stored = localStorage.getItem(INTAKE_STORAGE_KEY);
+      if (!stored) return {};
+      const intakeMap: Record<string, any> = JSON.parse(stored);
+      const intakeRecord = intakeMap[caseId];
+      if (!intakeRecord) return {};
+      return {
+        fundApplication: intakeRecord.fundApplication,
+        interimSummary: intakeRecord.interimSummary,
+      };
+    } catch (e) {
+      console.warn('Failed to load intake data:', e);
+      return {};
+    }
+  }
+
+  async saveIntakeData(caseId: string, fundApplication?: IntakeFundApplication, interimSummary?: IntakeInterimSummary): Promise<void> {
+    try {
+      const stored = localStorage.getItem(INTAKE_STORAGE_KEY);
+      const intakeMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      intakeMap[caseId] = {
+        fundApplication,
+        interimSummary,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(INTAKE_STORAGE_KEY, JSON.stringify(intakeMap));
+    } catch (e) {
+      console.error('Failed to save intake data:', e);
+      throw e;
+    }
+  }
+
+  async getIntakeCompleteness(caseId: string): Promise<IntakeCompleteness> {
+    const intake = await this.getIntakeData(caseId);
+    return this.calculateIntakeCompleteness(intake.fundApplication, intake.interimSummary);
+  }
+
+  async getCaseSubmitReadiness(caseId: string): Promise<CaseSubmitReadiness> {
+    const completeness = await this.getIntakeCompleteness(caseId);
+    const checklistReadiness = await this.getChecklistReadiness(caseId);
+
+    const missingSections: string[] = [];
+    const missingFields: string[] = [];
+
+    if (!completeness.fundAppIsComplete) {
+      Object.entries(completeness.fundAppSections).forEach(([sectionKey, isComplete]) => {
+        if (!isComplete) {
+          missingSections.push(`Fund Application → ${this.formatSectionName(sectionKey)}`);
+        }
+      });
+    }
+
+    if (!completeness.interimSummaryIsComplete) {
+      Object.entries(completeness.interimSummarySections).forEach(([sectionKey, isComplete]) => {
+        if (!isComplete) {
+          missingSections.push(`Interim Summary → ${this.formatSectionName(sectionKey)}`);
+        }
+      });
+    }
+
+    const missingDocs = checklistReadiness.blockingDocs.map(d => d.docType);
+
+    return {
+      canSubmit: completeness.fundAppIsComplete && completeness.interimSummaryIsComplete && checklistReadiness.isReady,
+      fundAppComplete: completeness.fundAppIsComplete,
+      interimSummaryComplete: completeness.interimSummaryIsComplete,
+      documentsReady: checklistReadiness.isReady,
+      missingSections,
+      missingFields,
+      missingDocuments: missingDocs,
+    };
+  }
+
+  private calculateIntakeCompleteness(fundApplication?: IntakeFundApplication, interimSummary?: IntakeInterimSummary): IntakeCompleteness {
+    const isSectionComplete = (section: any): boolean => {
+      if (!section) return false;
+      return Object.values(section).some(v => v !== undefined && v !== null && v !== '');
+    };
+
+    const fundAppSections = {
+      parentsFamilySection: isSectionComplete(fundApplication?.parentsFamilySection),
+      occupationIncomeSection: isSectionComplete(fundApplication?.occupationIncomeSection),
+      birthDetailsSection: isSectionComplete(fundApplication?.birthDetailsSection),
+      nicuFinancialSection: isSectionComplete(fundApplication?.nicuFinancialSection),
+      otherSupportSection: isSectionComplete(fundApplication?.otherSupportSection),
+      declarationsSection: isSectionComplete(fundApplication?.declarationsSection),
+      hospitalApprovalSection: isSectionComplete(fundApplication?.hospitalApprovalSection),
+    };
+
+    const interimSummarySections = {
+      birthSummarySection: isSectionComplete(interimSummary?.birthSummarySection),
+      maternalDetailsSection: isSectionComplete(interimSummary?.maternalDetailsSection),
+      antenatalRiskFactorsSection: isSectionComplete(interimSummary?.antenatalRiskFactorsSection),
+      diagnosisSection: isSectionComplete(interimSummary?.diagnosisSection),
+      treatmentGivenSection: isSectionComplete(interimSummary?.treatmentGivenSection),
+      currentStatusSection: isSectionComplete(interimSummary?.currentStatusSection),
+      feedingRespirationSection: isSectionComplete(interimSummary?.feedingRespirationSection),
+      dischargePlanInvestigationsSection: isSectionComplete(interimSummary?.dischargePlanInvestigationsSection),
+      remarksSignatureSection: isSectionComplete(interimSummary?.remarksSignatureSection),
+    };
+
+    const fundAppComplete = Object.values(fundAppSections).every(v => v === true);
+    const interimSummaryComplete = Object.values(interimSummarySections).every(v => v === true);
+    const fundAppTotalPercent = (Object.values(fundAppSections).filter(v => v).length / Object.keys(fundAppSections).length) * 100;
+    const interimSummaryTotalPercent = (Object.values(interimSummarySections).filter(v => v).length / Object.keys(interimSummarySections).length) * 100;
+    const overallPercent = (fundAppTotalPercent + interimSummaryTotalPercent) / 2;
+
+    return {
+      fundAppSections,
+      fundAppTotalPercent: Math.round(fundAppTotalPercent),
+      fundAppIsComplete: fundAppComplete,
+      interimSummarySections,
+      interimSummaryTotalPercent: Math.round(interimSummaryTotalPercent),
+      interimSummaryIsComplete: interimSummaryComplete,
+      overallPercent: Math.round(overallPercent),
+      allRequiredFieldsComplete: fundAppComplete && interimSummaryComplete,
+    };
+  }
+
+  private formatSectionName(sectionKey: string): string {
+    return sectionKey
+      .replace(/Section$/, '')
+      .split(/(?=[A-Z])/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 }

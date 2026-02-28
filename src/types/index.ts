@@ -357,6 +357,152 @@ export interface AuditEvent {
   changes?: Record<string, unknown>;
 }
 
+export interface IntakeFundApplicationSection {
+  sectionId: string;
+  isComplete: boolean;
+  percentComplete: number;
+}
+
+export interface IntakeFundApplication {
+  parentsFamilySection: {
+    fatherDob?: string;
+    fatherEducation?: string;
+    motherDob?: string;
+    motherEducation?: string;
+    marriageDate?: string;
+    dependents?: string;
+  };
+  occupationIncomeSection: {
+    fatherOccupation?: string;
+    fatherEmployer?: string;
+    fatherMonthlyIncome?: number;
+    motherOccupation?: string;
+    motherEmployer?: string;
+    motherMonthlyIncome?: number;
+    incomeProofType?: string;
+  };
+  birthDetailsSection: {
+    isInborn?: boolean;
+    conceptionType?: string;
+    gestationalAgeWeeks?: number;
+    deliveryType?: string;
+    gravida?: number;
+    parity?: number;
+  };
+  nicuFinancialSection: {
+    nicuAdmissionDate?: string;
+    estimatedNicuDays?: number;
+    nfiRequestedAmount?: number;
+    estimateBilled?: number;
+    estimateAfterDiscount?: number;
+  };
+  otherSupportSection: {
+    otherSupportTypes?: string[];
+    otherSupportNotes?: string;
+  };
+  declarationsSection: {
+    declarationsAccepted?: boolean;
+    declarationTimestamp?: string;
+    declaredByUser?: string;
+  };
+  hospitalApprovalSection: {
+    approvedByName?: string;
+    approvalDate?: string;
+    approvalRemarks?: string;
+  };
+}
+
+export interface IntakeInterimSummary {
+  birthSummarySection: {
+    apgarScore?: number;
+    timeOfBirth?: string;
+    placeOfBirth?: string;
+    gestationalAgeWeeks?: number;
+  };
+  maternalDetailsSection: {
+    maritalStatus?: string;
+    yearsMarried?: number;
+    motherAge?: number;
+    gravida?: number;
+    parity?: number;
+    abortions?: number;
+    liveChildrenBefore?: number;
+  };
+  antenatalRiskFactorsSection: {
+    riskFactors?: string[];
+    riskNotesIfAny?: string;
+  };
+  diagnosisSection: {
+    diagnoses?: string[];
+    otherDiagnosis?: string;
+  };
+  treatmentGivenSection: {
+    respiratorySupportRequired?: boolean;
+    phototherapyRequired?: boolean;
+    antibioticsRequired?: boolean;
+    nutritionalSupportRequired?: boolean;
+    treatmentNotes?: string;
+  };
+  currentStatusSection: {
+    dayOfLife?: number;
+    currentWeight?: number;
+    correctedGestationalAge?: number;
+  };
+  feedingRespirationSection: {
+    feedingMode?: string;
+    respirationStatus?: string;
+  };
+  dischargePlanInvestigationsSection: {
+    dischargeDate?: string;
+    investigationsPlanned?: string;
+    investigationsDone?: boolean;
+  };
+  remarksSignatureSection: {
+    remarks?: string;
+    doctorName?: string;
+    signedAt?: string;
+  };
+}
+
+export interface IntakeCompleteness {
+  fundAppSections: {
+    parentsFamilySection: boolean;
+    occupationIncomeSection: boolean;
+    birthDetailsSection: boolean;
+    nicuFinancialSection: boolean;
+    otherSupportSection: boolean;
+    declarationsSection: boolean;
+    hospitalApprovalSection: boolean;
+  };
+  fundAppTotalPercent: number;
+  fundAppIsComplete: boolean;
+  interimSummarySections: {
+    birthSummarySection: boolean;
+    maternalDetailsSection: boolean;
+    antenatalRiskFactorsSection: boolean;
+    diagnosisSection: boolean;
+    treatmentGivenSection: boolean;
+    currentStatusSection: boolean;
+    feedingRespirationSection: boolean;
+    dischargePlanInvestigationsSection: boolean;
+    remarksSignatureSection: boolean;
+  };
+  interimSummaryTotalPercent: number;
+  interimSummaryIsComplete: boolean;
+  overallPercent: number;
+  allRequiredFieldsComplete: boolean;
+}
+
+export interface CaseSubmitReadiness {
+  canSubmit: boolean;
+  fundAppComplete: boolean;
+  interimSummaryComplete: boolean;
+  documentsReady: boolean;
+  missingSections: string[];
+  missingFields: string[];
+  missingDocuments: string[];
+}
+
 export interface AuthState {
   activeUser: User | null;
   activeRole: UserRole | null;

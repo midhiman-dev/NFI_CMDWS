@@ -1,4 +1,4 @@
-import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding } from '../../types';
+import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
 
 export interface CaseWithDetails extends Case {
   hospitalName?: string;
@@ -207,6 +207,10 @@ export interface DataProvider {
   deleteTemplateBinding(id: string): Promise<void>;
   listReportRunsWithDetails(templateId?: string, limit?: number): Promise<ReportRun[]>;
   updateReportRunWithError(runId: string, status: ReportRunStatus, errorMessage?: string): Promise<ReportRun>;
+  getIntakeData(caseId: string): Promise<{ fundApplication?: IntakeFundApplication; interimSummary?: IntakeInterimSummary }>;
+  saveIntakeData(caseId: string, fundApplication?: IntakeFundApplication, interimSummary?: IntakeInterimSummary): Promise<void>;
+  getIntakeCompleteness(caseId: string): Promise<IntakeCompleteness>;
+  getCaseSubmitReadiness(caseId: string): Promise<CaseSubmitReadiness>;
 }
 
 export type DataMode = 'DB' | 'DEMO';
