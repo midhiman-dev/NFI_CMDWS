@@ -95,12 +95,11 @@
   "roles": {
     "admin": "एडमिन",
     "hospital_spoc": "अस्पताल SPOC",
-    "hospital_doctor": "अस्पताल डॉक्टर",
+    "clinical": "क्लिनिकल समीक्षक",
     "verifier": "सत्यापक",
     "committee_member": "समिति सदस्य",
     "accounts": "लेखा",
     "beni_volunteer": "BENI स्वयंसेवक",
-    "intake_reviewer": "इंटेक रिव्यूअर",
     "leadership": "नेतृत्व"
   },
   "messages": {

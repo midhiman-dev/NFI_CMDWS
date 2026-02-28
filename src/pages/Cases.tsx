@@ -104,8 +104,15 @@ export function Cases() {
           onClick: () => navigate(`/cases/${caseItem.caseId}`),
         };
 
+      case 'clinical':
+        return {
+          label: 'View',
+          icon: <Eye size={16} />,
+          variant: 'secondary' as const,
+          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+        };
+
       case 'verifier':
-      case 'intake_reviewer':
         if (caseItem.caseStatus === 'Submitted' || caseItem.caseStatus === 'Under_Verification') {
           return {
             label: 'Verify',

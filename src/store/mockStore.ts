@@ -1,7 +1,8 @@
 import { AppStore } from '../types';
-import { seedData } from './seedData';
+import { seedData, SEED_VERSION } from './seedData';
 
 const STORAGE_KEY = 'nfi_cmdws_store';
+const VERSION_KEY = 'nfi_cmdws_store_version';
 
 class MockStore {
   private data: AppStore;
@@ -12,6 +13,14 @@ class MockStore {
 
   private loadFromStorage(): AppStore {
     try {
+      const storedVersion = localStorage.getItem(VERSION_KEY);
+
+      if (storedVersion !== SEED_VERSION) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(VERSION_KEY);
+        return seedData();
+      }
+
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         return JSON.parse(stored);
@@ -25,6 +34,7 @@ class MockStore {
   private saveToStorage(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      localStorage.setItem(VERSION_KEY, SEED_VERSION);
     } catch (error) {
       console.error('Error saving to localStorage:', error);
     }

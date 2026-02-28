@@ -18,6 +18,8 @@ import {
   AuditEvent,
 } from '../types';
 
+export const SEED_VERSION = 'rbac_v3';
+
 export function seedData(): AppStore {
   const users: User[] = [
     {
@@ -26,6 +28,22 @@ export function seedData(): AppStore {
       fullName: 'Admin User',
       email: 'admin@nfi.org',
       roles: ['admin'],
+      isActive: true,
+    },
+    {
+      userId: 'usr_leadership',
+      username: 'leadership',
+      fullName: 'Leadership User',
+      email: 'leadership@nfi.org',
+      roles: ['leadership'],
+      isActive: true,
+    },
+    {
+      userId: 'usr_clinical',
+      username: 'clinical',
+      fullName: 'Dr. NFI Clinical Reviewer',
+      email: 'clinical@nfi.org',
+      roles: ['clinical'],
       isActive: true,
     },
     {
@@ -38,18 +56,10 @@ export function seedData(): AppStore {
       isActive: true,
     },
     {
-      userId: 'usr_reviewer',
-      username: 'reviewer1',
-      fullName: 'Priya Sharma',
-      email: 'priya@nfi.org',
-      roles: ['intake_reviewer'],
-      isActive: true,
-    },
-    {
       userId: 'usr_verifier',
       username: 'verifier1',
-      fullName: 'Amit Patel',
-      email: 'amit@nfi.org',
+      fullName: 'Priya Sharma',
+      email: 'priya@nfi.org',
       roles: ['verifier'],
       isActive: true,
     },
@@ -75,14 +85,6 @@ export function seedData(): AppStore {
       fullName: 'Kavita Singh',
       email: 'kavita@nfi.org',
       roles: ['beni_volunteer'],
-      isActive: true,
-    },
-    {
-      userId: 'usr_multi',
-      username: 'multi_role',
-      fullName: 'Ananya Mehta',
-      email: 'ananya@nfi.org',
-      roles: ['intake_reviewer', 'verifier', 'committee_member'],
       isActive: true,
     },
   ];
@@ -430,8 +432,8 @@ export function seedData(): AppStore {
         eventId: `evt_${cd.caseId}_2`,
         caseId: cd.caseId,
         timestamp: new Date(new Date(cd.intakeDate).getTime() + 2 * 60 * 60 * 1000).toISOString(),
-        userId: 'usr_reviewer',
-        userRole: 'intake_reviewer',
+        userId: 'usr_verifier',
+        userRole: 'verifier',
         action: 'Case Submitted',
         notes: 'Case submitted for review',
       });

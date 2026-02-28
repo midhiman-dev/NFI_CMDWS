@@ -18,7 +18,7 @@ import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
-import { getLatestVersion, isDocSatisfied } from '../utils/docVersioning';
+import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
@@ -542,7 +542,7 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   const [simulating, setSimulating] = useState(false);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
 
-  const categories = ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
+  const categories = getVisibleCategories(authState.activeRole);
 
   useEffect(() => {
     setAllDocs(documents);
@@ -692,6 +692,15 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
           <p className="text-sm text-blue-800">
             Readiness check: All 12 mandatory documents verified and ready for committee review.
           </p>
+        </div>
+      )}
+
+      {authState.activeRole === 'clinical' && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+            <p className="text-sm text-blue-700">You have access to Medical documents only.</p>
+          </div>
         </div>
       )}
 

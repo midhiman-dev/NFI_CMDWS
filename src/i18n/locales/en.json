@@ -95,12 +95,11 @@
   "roles": {
     "admin": "Admin",
     "hospital_spoc": "Hospital SPOC",
-    "hospital_doctor": "Hospital Doctor",
+    "clinical": "Clinical Reviewer",
     "verifier": "Verifier",
     "committee_member": "Committee Member",
     "accounts": "Accounts",
     "beni_volunteer": "BENI Volunteer",
-    "intake_reviewer": "Intake Reviewer",
     "leadership": "Leadership"
   },
   "messages": {

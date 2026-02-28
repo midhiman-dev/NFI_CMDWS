@@ -41,20 +41,22 @@ export function Login() {
 
   const roleLabels: Record<UserRole, string> = {
     hospital_spoc: t('roles.hospital_spoc'),
-    intake_reviewer: t('roles.intake_reviewer'),
+    clinical: t('roles.clinical'),
     verifier: t('roles.verifier'),
     committee_member: t('roles.committee_member'),
     accounts: t('roles.accounts'),
     beni_volunteer: t('roles.beni_volunteer'),
     admin: t('roles.admin'),
+    leadership: t('roles.leadership'),
   };
 
   const roleHierarchy: UserRole[] = [
     'admin',
+    'leadership',
     'committee_member',
     'verifier',
+    'clinical',
     'hospital_spoc',
-    'intake_reviewer',
     'accounts',
     'beni_volunteer',
   ];

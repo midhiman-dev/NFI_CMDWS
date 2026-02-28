@@ -12,7 +12,7 @@ export type CaseStatus =
 
 export type UserRole =
   | 'hospital_spoc'
-  | 'intake_reviewer'
+  | 'clinical'
   | 'verifier'
   | 'committee_member'
   | 'accounts'

@@ -5,6 +5,7 @@ import { IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness } from 
 import { FundApplicationForm } from '../intake/FundApplicationForm';
 import { InterimSummaryForm } from '../intake/InterimSummaryForm';
 import { useToast } from '../design-system/Toast';
+import { getAuthState } from '../../utils/auth';
 
 interface IntakeFormsTabProps {
   caseId: string;
@@ -13,10 +14,13 @@ interface IntakeFormsTabProps {
 
 export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabProps) {
   const { showToast } = useToast();
+  const authState = getAuthState();
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
   const [interimSummary, setInterimSummary] = useState<IntakeInterimSummary | undefined>();
   const [completeness, setCompleteness] = useState<IntakeCompleteness | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const canEdit = authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc' || authState.activeRole === 'admin' || authState.activeRole === 'leadership';
 
   const loadIntakeData = async () => {
     try {
@@ -81,6 +85,14 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
 
   return (
     <div className="space-y-6">
+      {!canEdit && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+            <p className="text-sm text-blue-700">You are viewing intake forms in read-only mode.</p>
+          </div>
+        </div>
+      )}
 
       {completeness && (
         <div className="bg-white border border-[var(--nfi-border)] rounded-lg p-6">
@@ -170,6 +182,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
             initialData={fundApplication}
             onSectionSave={handleFundAppSectionSave}
             isLoading={isLoading}
+            readOnly={!canEdit}
           />
         </div>
 
@@ -179,6 +192,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
             caseId={caseId}
             initialData={interimSummary}
             onSectionSave={handleInterimSummarySectionSave}
+            readOnly={!canEdit}
             isLoading={isLoading}
           />
         </div>

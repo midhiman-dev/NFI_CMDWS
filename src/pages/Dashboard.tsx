@@ -214,7 +214,24 @@ function getRoleQueueMetrics(role: UserRole, cases: CaseWithDetails[]) {
         },
       ];
 
-    case 'intake_reviewer':
+    case 'clinical':
+      return [
+        {
+          label: 'Total Cases',
+          value: cases.length,
+          icon: <FileText className="text-blue-600" size={24} />,
+          color: 'bg-blue-50',
+          onClick: '/cases',
+        },
+        {
+          label: 'Active Cases',
+          value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length,
+          icon: <TrendingUp className="text-teal-600" size={24} />,
+          color: 'bg-teal-50',
+          onClick: '/cases',
+        },
+      ];
+
     case 'verifier':
       return [
         {

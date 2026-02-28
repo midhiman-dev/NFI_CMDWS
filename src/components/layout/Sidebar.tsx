@@ -31,13 +31,13 @@ const mainMenuConfig: MenuItemConfig[] = [
     id: 'dashboard',
     to: '/dashboard',
     labelKey: 'nav.dashboard',
-    roles: ['hospital_spoc', 'intake_reviewer', 'verifier', 'committee_member', 'accounts', 'beni_volunteer', 'admin', 'leadership'],
+    roles: ['hospital_spoc', 'clinical', 'verifier', 'committee_member', 'accounts', 'beni_volunteer', 'admin', 'leadership'],
   },
   {
     id: 'cases',
     to: '/cases',
     labelKey: 'nav.cases',
-    roles: ['hospital_spoc', 'intake_reviewer', 'verifier', 'committee_member', 'accounts', 'beni_volunteer', 'admin', 'leadership'],
+    roles: ['hospital_spoc', 'clinical', 'verifier', 'committee_member', 'accounts', 'beni_volunteer', 'admin', 'leadership'],
   },
   {
     id: 'new-case',
