@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
 import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 
@@ -21,6 +21,7 @@ const DATASET_REGISTRY_STORAGE_KEY = 'nfi_demo_dataset_registry_v1';
 const TEMPLATE_REGISTRY_STORAGE_KEY = 'nfi_demo_template_registry_v1';
 const TEMPLATE_BINDINGS_STORAGE_KEY = 'nfi_demo_template_bindings_v1';
 const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
+const SETTLEMENTS_STORAGE_KEY = 'nfi_demo_settlements_v1';
 
 interface MockData {
   hospitals: Hospital[];
@@ -1763,5 +1764,82 @@ export class MockProvider implements DataProvider {
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  async getSettlement(caseId: string): Promise<SettlementRecord | null> {
+    try {
+      const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
+      if (!stored) return null;
+      const settlements: Record<string, SettlementRecord> = JSON.parse(stored);
+      return settlements[caseId] || null;
+    } catch (e) {
+      console.warn('Failed to load settlement data:', e);
+      return null;
+    }
+  }
+
+  async saveSettlement(caseId: string, data: Partial<SettlementRecord>): Promise<void> {
+    try {
+      const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
+      const settlements: Record<string, SettlementRecord> = stored ? JSON.parse(stored) : {};
+      const existing = settlements[caseId] || {};
+      settlements[caseId] = {
+        ...existing,
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(SETTLEMENTS_STORAGE_KEY, JSON.stringify(settlements));
+    } catch (e) {
+      console.error('Failed to save settlement data:', e);
+      throw e;
+    }
+  }
+
+  async submitDirectorReview(caseId: string, decision: 'Approved' | 'Returned', comments: string, decidedBy: string): Promise<void> {
+    try {
+      const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
+      const settlements: Record<string, SettlementRecord> = stored ? JSON.parse(stored) : {};
+      const existing = settlements[caseId] || {};
+      settlements[caseId] = {
+        ...existing,
+        directorReview: {
+          decision,
+          comments,
+          by: decidedBy,
+          at: new Date().toISOString(),
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(SETTLEMENTS_STORAGE_KEY, JSON.stringify(settlements));
+    } catch (e) {
+      console.error('Failed to submit director review:', e);
+      throw e;
+    }
+  }
+
+  async closeCaseWithSettlement(caseId: string, closedBy: string): Promise<void> {
+    try {
+      const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
+      const settlements: Record<string, SettlementRecord> = stored ? JSON.parse(stored) : {};
+      const existing = settlements[caseId] || {};
+      settlements[caseId] = {
+        ...existing,
+        closedAt: new Date().toISOString(),
+        closedBy,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(SETTLEMENTS_STORAGE_KEY, JSON.stringify(settlements));
+
+      const caseItem = this.data.cases.find(c => c.caseId === caseId);
+      if (caseItem) {
+        caseItem.caseStatus = 'Closed';
+        caseItem.closureDate = new Date().toISOString().split('T')[0];
+        caseItem.updatedAt = new Date().toISOString();
+        this.saveData();
+      }
+    } catch (e) {
+      console.error('Failed to close case with settlement:', e);
+      throw e;
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Case, DocumentMetadata, AuditEvent, DoctorReview, SubmitGatingInfo } from '../types';
+import type { Case, DocumentMetadata, AuditEvent, DoctorReview, SubmitGatingInfo, SettlementRecord } from '../types';
 import { getSubmitGatingInfo } from '../utils/submitGating';
 
 export const caseService = {
@@ -831,5 +831,14 @@ export const caseService = {
           decisionAt: c.decision_at,
         };
       });
+  },
+
+  async computeVariance(finalBillAmount?: number, referenceAmount?: number): Promise<{ variancePct: number | null; varianceFlag: boolean }> {
+    if (!referenceAmount || referenceAmount === 0 || finalBillAmount === undefined) {
+      return { variancePct: null, varianceFlag: false };
+    }
+
+    const variancePct = Math.abs((finalBillAmount - referenceAmount) / referenceAmount) * 100;
+    return { variancePct: Math.round(variancePct * 10) / 10, varianceFlag: variancePct > 10 };
   },
 };

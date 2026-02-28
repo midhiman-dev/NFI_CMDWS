@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, ChecklistReadiness, VerificationRecord, CommitteeReviewRecord, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
 import { caseService } from '../../services/caseService';
 import { supabase } from '../../lib/supabase';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
@@ -1582,5 +1582,143 @@ export class DbProvider implements DataProvider {
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  async getSettlement(caseId: string): Promise<SettlementRecord | null> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data?.data?.settlement) {
+        return null;
+      }
+
+      return caseRow.data.data.settlement as SettlementRecord;
+    } catch (e) {
+      console.error('Failed to get settlement:', e);
+      return null;
+    }
+  }
+
+  async saveSettlement(caseId: string, data: Partial<SettlementRecord>): Promise<void> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data) {
+        throw new Error('Case not found');
+      }
+
+      const existing = caseRow.data.data || {};
+      const settlement = existing.settlement || {};
+
+      const updated = {
+        ...existing,
+        settlement: {
+          ...settlement,
+          ...data,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      const { error } = await supabase
+        .from('cases')
+        .update({ data: updated })
+        .eq('id', caseId);
+
+      if (error) throw error;
+    } catch (e) {
+      console.error('Failed to save settlement:', e);
+      throw e;
+    }
+  }
+
+  async submitDirectorReview(caseId: string, decision: 'Approved' | 'Returned', comments: string, decidedBy: string): Promise<void> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data) {
+        throw new Error('Case not found');
+      }
+
+      const existing = caseRow.data.data || {};
+      const settlement = existing.settlement || {};
+
+      const updated = {
+        ...existing,
+        settlement: {
+          ...settlement,
+          directorReview: {
+            decision,
+            comments,
+            by: decidedBy,
+            at: new Date().toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      const { error } = await supabase
+        .from('cases')
+        .update({ data: updated })
+        .eq('id', caseId);
+
+      if (error) throw error;
+    } catch (e) {
+      console.error('Failed to submit director review:', e);
+      throw e;
+    }
+  }
+
+  async closeCaseWithSettlement(caseId: string, closedBy: string): Promise<void> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data) {
+        throw new Error('Case not found');
+      }
+
+      const existing = caseRow.data.data || {};
+      const settlement = existing.settlement || {};
+
+      const updated = {
+        ...existing,
+        settlement: {
+          ...settlement,
+          closedAt: new Date().toISOString(),
+          closedBy,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          data: updated,
+          case_status: 'Closed',
+          closure_date: new Date().toISOString().split('T')[0],
+          last_action_at: new Date().toISOString(),
+        })
+        .eq('id', caseId);
+
+      if (error) throw error;
+    } catch (e) {
+      console.error('Failed to close case with settlement:', e);
+      throw e;
+    }
   }
 }

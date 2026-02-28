@@ -152,6 +152,26 @@ export interface HospitalProcessMap {
   notes?: string;
 }
 
+export interface DirectorSettlementReview {
+  decision?: 'Approved' | 'Returned';
+  comments?: string;
+  by?: string;
+  at?: string;
+}
+
+export interface SettlementRecord {
+  referenceAmount?: number;
+  finalBillAmount?: number;
+  nfiPaidAmount?: number;
+  otherPaidAmount?: number;
+  variancePct?: number;
+  varianceFlag?: boolean;
+  directorReview?: DirectorSettlementReview;
+  closedAt?: string;
+  closedBy?: string;
+  updatedAt?: string;
+}
+
 export interface Case {
   caseId: string;
   caseRef: string;
@@ -163,6 +183,7 @@ export interface Case {
   createdBy: string;
   updatedAt: string;
   lastActionAt: string;
+  settlement?: SettlementRecord;
 }
 
 export interface ChildProfile {

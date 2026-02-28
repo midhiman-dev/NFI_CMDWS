@@ -15,6 +15,7 @@ import { ClinicalTab } from '../components/case-tabs/ClinicalTab';
 import { FinancialTab } from '../components/case-tabs/FinancialTab';
 import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
+import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
@@ -111,6 +112,7 @@ export function CaseDetail() {
         { id: 'verification', label: 'Verification', icon: <CheckCircle size={16} /> },
         { id: 'approval', label: 'Approval', icon: <CheckCircle size={16} /> },
         ...(showPostApproval ? [
+          { id: 'settlement', label: 'Settlement & Closure', icon: <CheckCircle size={16} /> },
           { id: 'installments', label: 'Installments', icon: <Clock size={16} /> },
           { id: 'monitoring', label: 'Monitoring', icon: <Clock size={16} /> },
           { id: 'followups', label: 'Follow-ups', icon: <Clock size={16} /> },
@@ -191,6 +193,7 @@ export function CaseDetail() {
                 />
               )}
               {activeTab === 'approval' && <ApprovalTab caseId={caseId!} />}
+              {activeTab === 'settlement' && <SettlementTab caseId={caseId!} caseData={caseData} onStatusChange={() => {}} />}
               {activeTab === 'installments' && <InstallmentsTab caseId={caseId!} caseData={caseData} onUpdate={() => {}} />}
               {activeTab === 'monitoring' && <MonitoringTab caseId={caseId!} />}
               {activeTab === 'followups' && <FollowupsTab caseId={caseId!} caseData={caseData} />}

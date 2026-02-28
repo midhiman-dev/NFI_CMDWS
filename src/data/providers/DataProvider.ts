@@ -1,4 +1,4 @@
-import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
+import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
 
 export interface CaseWithDetails extends Case {
   hospitalName?: string;
@@ -211,6 +211,10 @@ export interface DataProvider {
   saveIntakeData(caseId: string, fundApplication?: IntakeFundApplication, interimSummary?: IntakeInterimSummary): Promise<void>;
   getIntakeCompleteness(caseId: string): Promise<IntakeCompleteness>;
   getCaseSubmitReadiness(caseId: string): Promise<CaseSubmitReadiness>;
+  getSettlement(caseId: string): Promise<SettlementRecord | null>;
+  saveSettlement(caseId: string, data: Partial<SettlementRecord>): Promise<void>;
+  submitDirectorReview(caseId: string, decision: 'Approved' | 'Returned', comments: string, decidedBy: string): Promise<void>;
+  closeCaseWithSettlement(caseId: string, closedBy: string): Promise<void>;
 }
 
 export type DataMode = 'DB' | 'DEMO';
