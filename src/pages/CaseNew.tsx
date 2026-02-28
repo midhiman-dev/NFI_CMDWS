@@ -4,6 +4,7 @@ import { Layout } from '../components/layout/Layout';
 import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiField } from '../components/design-system/NfiField';
+import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { ProcessType, CaseStatus, Hospital } from '../types';
 import { ArrowLeft, ArrowRight, Save, Send, AlertTriangle, Loader2 } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
@@ -37,6 +38,7 @@ export function CaseNew() {
   const { provider, mode } = useAppContext();
   const authState = getAuthState();
   const [currentStep, setCurrentStep] = useState(1);
+  const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [hospitalsLoading, setHospitalsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -225,6 +227,29 @@ export function CaseNew() {
     }
   };
 
+  const createDraftCase = async () => {
+    if (createdCaseId) {
+      return true;
+    }
+
+    if (!validateStep1()) {
+      return false;
+    }
+
+    setSaving(true);
+    try {
+      const newCase = await saveCase('Draft');
+      setCreatedCaseId(newCase.caseId);
+      return true;
+    } catch (error) {
+      console.error('Failed to create draft case:', error);
+      showToast('Failed to create case. Please try again.', 'error');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveDraft = async () => {
     if (!validateStep1()) return;
 
@@ -251,6 +276,27 @@ export function CaseNew() {
     }
   };
 
+  const handleFinish = () => {
+    if (!createdCaseId) {
+      showToast('Error: Case ID not found', 'error');
+      return;
+    }
+    showToast('Case created. Complete Intake Forms before submission.', 'success');
+    navigate(`/cases/${createdCaseId}`);
+  };
+
+  const handleNext = async () => {
+    if (currentStep === 1) {
+      if (!validateStep1()) return;
+      const success = await createDraftCase();
+      if (success) {
+        setCurrentStep(currentStep + 1);
+      }
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
   const warnings = getTimingWarnings();
   const isHospitalSpoc = authState.activeUser?.roles?.includes('hospital_spoc') && authState.activeUser?.hospitalId;
 
@@ -266,7 +312,7 @@ export function CaseNew() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">New Case</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Step {currentStep} of 3</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Step {currentStep} of 4</p>
           </div>
         </div>
 
@@ -291,7 +337,7 @@ export function CaseNew() {
         )}
 
         <div className="flex gap-2 mb-6">
-          {[1, 2, 3].map((step) => (
+          {[1, 2, 3, 4].map((step) => (
             <div
               key={step}
               className={`flex-1 h-2 rounded-full ${
@@ -533,6 +579,13 @@ export function CaseNew() {
             </div>
           )}
 
+          {currentStep === 4 && createdCaseId && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-4">Intake Forms (Optional)</h2>
+              <IntakeFormsTab caseId={createdCaseId} variant="wizard" />
+            </div>
+          )}
+
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-[var(--nfi-border)]">
             <div>
               {currentStep > 1 && (
@@ -549,13 +602,15 @@ export function CaseNew() {
                 Save Draft
               </NfiButton>
 
-              {currentStep < 3 ? (
-                <NfiButton onClick={() => {
-                  if (currentStep === 1 && !validateStep1()) return;
-                  setCurrentStep(currentStep + 1);
-                }}>
+              {currentStep < 4 ? (
+                <NfiButton onClick={handleNext} disabled={saving}>
+                  {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ArrowRight size={16} className="ml-2" />}
                   Next
-                  <ArrowRight size={16} className="ml-2" />
+                </NfiButton>
+              ) : currentStep === 4 ? (
+                <NfiButton onClick={handleFinish} disabled={saving}>
+                  {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Send size={16} className="mr-2" />}
+                  Continue to Case
                 </NfiButton>
               ) : (
                 <NfiButton onClick={handleSubmit} disabled={saving || processMappingMissing}>

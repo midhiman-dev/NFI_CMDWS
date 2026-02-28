@@ -8,9 +8,10 @@ import { useToast } from '../design-system/Toast';
 
 interface IntakeFormsTabProps {
   caseId: string;
+  variant?: 'detail' | 'wizard';
 }
 
-export function IntakeFormsTab({ caseId }: IntakeFormsTabProps) {
+export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabProps) {
   const { showToast } = useToast();
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
   const [interimSummary, setInterimSummary] = useState<IntakeInterimSummary | undefined>();
@@ -182,6 +183,17 @@ export function IntakeFormsTab({ caseId }: IntakeFormsTabProps) {
           />
         </div>
       </div>
+
+      {variant === 'wizard' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-blue-800">
+              Intake forms are optional during case creation. You can complete them later from Case → Intake Forms. Intake will be required before submission to committee.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
