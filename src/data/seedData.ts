@@ -53,18 +53,25 @@ const cities = ['New Delhi', 'Mumbai', 'Bangalore', 'Hyderabad', 'Chennai', 'Pun
 const states = ['Delhi', 'Maharashtra', 'Karnataka', 'Telangana', 'Tamil Nadu', 'Gujarat', 'West Bengal'];
 
 const docTypes = [
-  { type: 'Birth_Certificate', category: 'GENERAL', mandatory: true },
-  { type: 'Admission_Records', category: 'MEDICAL', mandatory: true },
-  { type: 'Medical_Reports', category: 'MEDICAL', mandatory: true },
-  { type: 'Hospital_Bills', category: 'FINANCE', mandatory: true },
-  { type: 'Pharmacy_Bills', category: 'FINANCE', mandatory: true },
-  { type: 'Proof_of_Income', category: 'FINANCE', mandatory: true },
-  { type: 'Discharge_Summary', category: 'FINAL', mandatory: true },
-  { type: 'Lab_Reports', category: 'MEDICAL', mandatory: false },
-  { type: 'Imaging_Reports', category: 'MEDICAL', mandatory: false },
+  { type: 'NFI Fund Application Form', category: 'GENERAL', mandatory: true },
+  { type: 'Aadhaar Cards (Mother & Father)', category: 'GENERAL', mandatory: true },
+  { type: 'Parents Photo', category: 'GENERAL', mandatory: true },
+  { type: 'Baby Photo', category: 'GENERAL', mandatory: true },
+
+  { type: 'Bank Statement', category: 'FINANCE', mandatory: true },
+  { type: 'Income Certificate', category: 'FINANCE', mandatory: true },
+  { type: 'Talati / Govt Economic Card', category: 'FINANCE', mandatory: true },
+  { type: 'BPL Card', category: 'FINANCE', mandatory: true },
+
+  { type: 'Interim Summary Document', category: 'MEDICAL', mandatory: true },
+  { type: 'Lab Report', category: 'MEDICAL', mandatory: true },
+  { type: 'Internal Case Papers', category: 'MEDICAL', mandatory: true },
+  { type: 'Investigation Reports (All)', category: 'MEDICAL', mandatory: true },
+
+  { type: 'Imaging Reports', category: 'MEDICAL', mandatory: false },
   { type: 'Prescription', category: 'MEDICAL', mandatory: false },
-  { type: 'Insurance_Document', category: 'FINANCE', mandatory: false },
-  { type: 'Photo_ID', category: 'GENERAL', mandatory: false },
+  { type: 'Insurance Document', category: 'FINANCE', mandatory: false },
+  { type: 'Photo ID', category: 'GENERAL', mandatory: false },
 ];
 
 const rejectionReasons = [

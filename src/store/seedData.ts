@@ -18,7 +18,7 @@ import {
   AuditEvent,
 } from '../types';
 
-export const SEED_VERSION = 'rbac_v3';
+export const SEED_VERSION = 'docs_u3_v4';
 
 export function seedData(): AppStore {
   const users: User[] = [

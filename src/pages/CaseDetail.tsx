@@ -19,6 +19,7 @@ import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDe
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
+import { resolveDocTypeAlias } from '../utils/docTypeMapping';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
@@ -545,7 +546,15 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   const categories = getVisibleCategories(authState.activeRole);
 
   useEffect(() => {
-    setAllDocs(documents);
+    const mappedDocs = documents.map(doc => {
+      const resolved = resolveDocTypeAlias(doc.docType, doc.category);
+      return {
+        ...doc,
+        docType: resolved.docType,
+        category: resolved.category,
+      };
+    });
+    setAllDocs(mappedDocs);
   }, [documents]);
 
   const handleFileUpload = async (docId: string, file: File) => {
