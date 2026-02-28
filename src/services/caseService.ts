@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
-import type { Case, DocumentMetadata, AuditEvent } from '../types';
+import type { Case, DocumentMetadata, AuditEvent, DoctorReview, SubmitGatingInfo } from '../types';
+import { getSubmitGatingInfo } from '../utils/submitGating';
 
 export const caseService = {
   async getCases(): Promise<Case[]> {
@@ -663,5 +664,172 @@ export const caseService = {
       fullName: u.full_name,
       email: u.email,
     }));
+  },
+
+  async getDoctorReview(caseId: string): Promise<DoctorReview | null> {
+    const { data, error } = await supabase
+      .from('doctor_reviews')
+      .select(`
+        *,
+        assigned_to:users!doctor_reviews_assigned_to_user_id_fkey(full_name)
+      `)
+      .eq('case_id', caseId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      reviewId: data.id,
+      caseId: data.case_id,
+      assignedToUserId: data.assigned_to_user_id,
+      assignedToName: data.assigned_to?.full_name,
+      submittedAt: data.submitted_at,
+      outcome: data.outcome,
+      comments: data.comments,
+      gatingResult: data.gating_result,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  },
+
+  async getClinicalReviewers(): Promise<Array<{ userId: string; fullName: string; email: string }>> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .eq('role', 'clinical_reviewer')
+      .eq('is_active', true)
+      .order('full_name');
+
+    if (error) throw error;
+
+    return (data || []).map(u => ({
+      userId: u.id,
+      fullName: u.full_name,
+      email: u.email,
+    }));
+  },
+
+  async assignDoctorReview(caseId: string, assignedToUserId: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data: existing } = await supabase
+      .from('doctor_reviews')
+      .select('id')
+      .eq('case_id', caseId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('doctor_reviews')
+        .update({
+          assigned_to_user_id: assignedToUserId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('doctor_reviews')
+        .insert({
+          case_id: caseId,
+          assigned_to_user_id: assignedToUserId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+    }
+
+    await this.addAuditEvent({
+      caseId,
+      userId: user?.id || '',
+      userRole: 'admin',
+      action: 'Doctor Review Assigned',
+      notes: `Assigned to clinical reviewer`,
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  async submitDoctorReview(
+    caseId: string,
+    outcome: 'Approved' | 'Approved_With_Comments' | 'Returned',
+    comments?: string,
+    gatingInfo?: SubmitGatingInfo
+  ): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase
+      .from('doctor_reviews')
+      .update({
+        submitted_at: new Date().toISOString(),
+        outcome,
+        comments: comments || null,
+        gating_result: gatingInfo || {},
+        updated_at: new Date().toISOString(),
+      })
+      .eq('case_id', caseId);
+
+    if (error) throw error;
+
+    const briefComment = comments ? comments.substring(0, 100) : '';
+    await this.addAuditEvent({
+      caseId,
+      userId: user?.id || '',
+      userRole: 'clinical_reviewer',
+      action: 'Clinical Review Submitted',
+      notes: `Outcome: ${outcome}${briefComment ? ` - ${briefComment}` : ''}`,
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  async getClinicalReviewerCases(userId: string): Promise<Case[]> {
+    const { data, error } = await supabase
+      .from('doctor_reviews')
+      .select(`
+        case_id,
+        cases(
+          id,
+          case_number,
+          hospital_id,
+          process_type,
+          case_status,
+          created_by,
+          created_at,
+          updated_at,
+          last_action_at,
+          submitted_at,
+          reviewed_at,
+          decision_at,
+          hospital:hospitals(name, code)
+        )
+      `)
+      .eq('assigned_to_user_id', userId)
+      .not('submitted_at', 'is', null);
+
+    if (error) throw error;
+
+    return (data || [])
+      .filter(r => r.cases)
+      .map(r => {
+        const c = r.cases;
+        return {
+          caseId: c.id,
+          caseNumber: c.case_number,
+          hospitalId: c.hospital_id,
+          hospitalName: c.hospital?.name || 'Unknown',
+          bgrcCycleId: c.bgrc_cycle_id || undefined,
+          processType: c.process_type,
+          caseStatus: c.case_status,
+          createdBy: c.created_by,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at,
+          lastActionAt: c.last_action_at,
+          submittedAt: c.submitted_at,
+          reviewedAt: c.reviewed_at,
+          decisionAt: c.decision_at,
+        };
+      });
   },
 };

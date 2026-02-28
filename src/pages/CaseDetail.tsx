@@ -14,11 +14,13 @@ import { FamilyTab } from '../components/case-tabs/FamilyTab';
 import { ClinicalTab } from '../components/case-tabs/ClinicalTab';
 import { FinancialTab } from '../components/case-tabs/FinancialTab';
 import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
+import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
+import { getDoctorReviewGatingInfo } from '../utils/submitGating';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
@@ -29,6 +31,7 @@ export function CaseDetail() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { provider } = useAppContext();
+  const authState = getAuthState();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
   const [caseData, setCaseData] = useState<CaseWithDetails | null>(null);
@@ -104,6 +107,7 @@ export function CaseDetail() {
       heading: 'Workflow',
       tabs: [
         { id: 'documents', label: 'Documents', icon: <Upload size={16} />, count: documents.length },
+        { id: 'doctor-review', label: 'Clinical Review', icon: <Stethoscope size={16} /> },
         { id: 'verification', label: 'Verification', icon: <CheckCircle size={16} /> },
         { id: 'approval', label: 'Approval', icon: <CheckCircle size={16} /> },
         ...(showPostApproval ? [
@@ -172,6 +176,12 @@ export function CaseDetail() {
               {activeTab === 'clinical' && <ClinicalTab caseId={caseId!} onDatesChanged={bumpDocs} />}
               {activeTab === 'financial' && <FinancialTab caseId={caseId!} />}
               {activeTab === 'documents' && <DocumentsTab documents={documents} caseId={caseId!} onDocumentsChanged={bumpDocs} />}
+              {activeTab === 'doctor-review' && (
+                <DoctorReviewTab
+                  caseId={caseId!}
+                  currentUser={authState.activeUser}
+                />
+              )}
               {activeTab === 'verification' && (
                 <VerificationTab
                   caseId={caseId!}
@@ -916,11 +926,16 @@ function VerificationTab({
   const [rejectReason, setRejectReason] = useState('');
   const [readiness, setReadiness] = useState<any>(null);
   const [previewDoc, setPreviewDoc] = useState<DocumentMetadata | null>(null);
+  const [doctorReview, setDoctorReview] = useState<any>(null);
 
   useEffect(() => {
     const loadReadiness = async () => {
-      const data = await provider.getCaseSubmitReadiness(caseId);
+      const [data, review] = await Promise.all([
+        provider.getCaseSubmitReadiness(caseId),
+        caseService.getDoctorReview(caseId),
+      ]);
       setReadiness(data);
+      setDoctorReview(review);
     };
     loadReadiness();
   }, [caseId, provider, documents]);
@@ -1009,6 +1024,12 @@ function VerificationTab({
   };
 
   const handleSendToCommittee = async () => {
+    const doctorGating = getDoctorReviewGatingInfo(doctorReview);
+    if (!doctorGating.canSendToCommittee) {
+      showToast(`Cannot send to committee: ${doctorGating.reason}`, 'error');
+      return;
+    }
+
     if (!readiness?.canSubmit) {
       const issues: string[] = [];
       if (!readiness?.fundAppComplete) issues.push('Fund Application incomplete');
@@ -1035,13 +1056,14 @@ function VerificationTab({
   const verifiedDocs = documents.filter(d => d.status === 'Verified').length;
   const rejectedDocs = documents.filter(d => d.status === 'Rejected').length;
   const naDocs = documents.filter(d => d.status === 'Not_Applicable').length;
-  const canSendToCommittee = readiness?.canSubmit ?? false;
+  const doctorGating = getDoctorReviewGatingInfo(doctorReview);
+  const canSendToCommittee = (readiness?.canSubmit ?? false) && doctorGating.canSendToCommittee;
 
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Verification Checklist</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div>
             <p className="text-sm text-[var(--nfi-text-secondary)]">Total Documents</p>
             <p className="text-2xl font-bold text-[var(--nfi-text)]">{totalDocs}</p>
@@ -1064,6 +1086,12 @@ function VerificationTab({
               {readiness?.mandatoryComplete || 0}/{readiness?.mandatoryTotal || 0}
             </p>
           </div>
+          <div>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">Clinical Review</p>
+            <p className="text-2xl font-bold" style={{ color: doctorReview?.outcome === 'Approved' || doctorReview?.outcome === 'Approved_With_Comments' ? '#10b981' : '#f59e0b' }}>
+              {doctorReview?.outcome ? '✓' : '◯'}
+            </p>
+          </div>
         </div>
         {canSendToCommittee && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
@@ -1077,6 +1105,9 @@ function VerificationTab({
             <div className="flex-1">
               <p className="text-sm font-medium text-red-800">Cannot Submit - Incomplete</p>
               <div className="text-xs text-red-700 mt-2 space-y-1">
+                {!doctorGating.canSendToCommittee && (
+                  <p>• Clinical Review: {doctorGating.reason}</p>
+                )}
                 {!readiness?.fundAppComplete && (
                   <p>• Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
                 )}
@@ -1087,6 +1118,11 @@ function VerificationTab({
                   <p>• Missing documents: {readiness.missingDocuments.join(', ')}</p>
                 )}
               </div>
+              {!doctorGating.canSendToCommittee && (
+                <p className="text-xs text-red-600 mt-2">
+                  Complete the clinical review in the <strong>Clinical Review</strong> tab to proceed.
+                </p>
+              )}
               {!readiness?.fundAppComplete || !readiness?.interimSummaryComplete ? (
                 <p className="text-xs text-red-600 mt-2">
                   Complete the intake forms in the <strong>Intake Forms</strong> tab to proceed.

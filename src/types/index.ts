@@ -12,7 +12,7 @@ export type CaseStatus =
 
 export type UserRole =
   | 'hospital_spoc'
-  | 'clinical'
+  | 'clinical_reviewer'
   | 'verifier'
   | 'committee_member'
   | 'accounts'
@@ -369,6 +369,33 @@ export interface AuditEvent {
   action: string;
   notes?: string;
   changes?: Record<string, unknown>;
+}
+
+export interface DoctorReview {
+  reviewId: string;
+  caseId: string;
+  assignedToUserId?: string;
+  assignedToName?: string;
+  submittedAt?: string;
+  outcome?: 'Approved' | 'Approved_With_Comments' | 'Returned';
+  comments?: string;
+  gatingResult?: {
+    canSubmit: boolean;
+    reasons: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubmitGatingInfo {
+  canSubmit: boolean;
+  blockedBy: string[];
+  details: {
+    fundAppComplete: boolean;
+    interimSummaryComplete: boolean;
+    documentsReady: boolean;
+    doctorReviewApproved: boolean;
+  };
 }
 
 export interface IntakeFundApplicationSection {
