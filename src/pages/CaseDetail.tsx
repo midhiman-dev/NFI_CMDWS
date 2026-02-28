@@ -27,6 +27,9 @@ import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 
+const HIDE_LEGACY_CASE_DATA_TABS = true;
+const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
+
 export function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>();
   const navigate = useNavigate();
@@ -74,7 +77,11 @@ export function CaseDetail() {
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam) {
-      setActiveTab(tabParam);
+      if (HIDE_LEGACY_CASE_DATA_TABS && HIDDEN_TABS.includes(tabParam)) {
+        setActiveTab('intake');
+      } else {
+        setActiveTab(tabParam);
+      }
     }
   }, [searchParams]);
 
@@ -92,17 +99,21 @@ export function CaseDetail() {
 
   const showPostApproval = caseData?.caseStatus === 'Approved' || caseData?.caseStatus === 'Closed';
 
+  const caseDataTabs = [
+    { id: 'overview', label: 'Overview', icon: <FileText size={16} /> },
+    { id: 'intake', label: 'Intake Forms', icon: <FileText size={16} /> },
+    ...(HIDE_LEGACY_CASE_DATA_TABS ? [] : [
+      { id: 'beneficiary', label: 'Beneficiary', icon: <Baby size={16} /> },
+      { id: 'family', label: 'Family', icon: <Users size={16} /> },
+      { id: 'clinical', label: 'Clinical', icon: <Stethoscope size={16} /> },
+      { id: 'financial', label: 'Financial', icon: <IndianRupee size={16} /> },
+    ]),
+  ];
+
   const navGroups: NavGroup[] = [
     {
       heading: 'Case Data',
-      tabs: [
-        { id: 'overview', label: 'Overview', icon: <FileText size={16} /> },
-        { id: 'intake', label: 'Intake Forms', icon: <FileText size={16} /> },
-        { id: 'beneficiary', label: 'Beneficiary', icon: <Baby size={16} /> },
-        { id: 'family', label: 'Family', icon: <Users size={16} /> },
-        { id: 'clinical', label: 'Clinical', icon: <Stethoscope size={16} /> },
-        { id: 'financial', label: 'Financial', icon: <IndianRupee size={16} /> },
-      ],
+      tabs: caseDataTabs,
     },
     {
       heading: 'Workflow',
