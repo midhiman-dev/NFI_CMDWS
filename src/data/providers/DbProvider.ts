@@ -2,6 +2,7 @@ import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemp
 import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
 import { caseService } from '../../services/caseService';
 import { supabase } from '../../lib/supabase';
+import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 
 export class DbProvider implements DataProvider {
   async listCases(): Promise<CaseWithDetails[]> {
@@ -123,9 +124,12 @@ export class DbProvider implements DataProvider {
     const templates = await caseService.getDocumentTemplates();
 
     return docs.map(doc => {
-      const template = templates.find(t => t.doc_type === doc.docType);
+      const resolved = resolveDocTypeAlias(doc.docType, doc.category);
+      const template = templates.find(t => t.doc_type === resolved.docType);
       return {
         ...doc,
+        docType: resolved.docType,
+        category: resolved.category,
         mandatoryFlag: template?.mandatory_flag,
         conditionNotes: template?.condition_notes,
       };

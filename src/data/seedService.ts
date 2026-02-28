@@ -1,7 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { generateSeedData } from './seedData';
+import { SEED_VERSION } from '../store/seedData';
 
-const SEED_VERSION = '1';
+const CURRENT_SEED_VERSION = SEED_VERSION;
 
 export async function getSeedStatus() {
   const { data } = await supabase
@@ -12,7 +13,7 @@ export async function getSeedStatus() {
 
   return {
     version: data?.value || '0',
-    needsSeeding: data?.value !== SEED_VERSION,
+    needsSeeding: data?.value !== CURRENT_SEED_VERSION,
   };
 }
 

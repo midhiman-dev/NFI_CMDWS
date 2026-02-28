@@ -1,6 +1,7 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
 import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../../types';
 import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
+import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -661,9 +662,12 @@ export class MockProvider implements DataProvider {
     const templates = this.getBuiltInTemplates();
 
     return caseDocs.map(doc => {
-      const template = templates.find(t => t.docType === doc.docType);
+      const resolved = resolveDocTypeAlias(doc.docType, doc.category);
+      const template = templates.find(t => t.docType === resolved.docType);
       return {
         ...doc,
+        docType: resolved.docType,
+        category: resolved.category,
         mandatoryFlag: template?.mandatoryFlag,
         conditionNotes: template?.conditionNotes,
       };
