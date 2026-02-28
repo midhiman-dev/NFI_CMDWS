@@ -6,6 +6,7 @@ import i18next from '../../i18n';
 import { getAuthState, logout, switchRole } from '../../utils/auth';
 import { UserRole } from '../../types';
 import { useAppContext } from '../../App';
+import { APP_NAME } from '../../constants/branding';
 
 export function Navbar() {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export function Navbar() {
               className="h-10 bg-white px-2 py-1 rounded"
             />
             <div>
-              <h1 className="text-xl font-bold">NFI CMDWS</h1>
+              <h1 className="text-xl font-bold truncate max-w-[320px]">{APP_NAME}</h1>
               <p className="text-xs text-gray-300">Case Management & Document Workflow System</p>
             </div>
             <div

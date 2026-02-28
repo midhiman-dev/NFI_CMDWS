@@ -6,6 +6,7 @@ import { login, isAuthenticated } from '../utils/auth';
 import { User, UserRole } from '../types';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiCard } from '../components/design-system/NfiCard';
+import { APP_NAME } from '../constants/branding';
 
 export function Login() {
   const navigate = useNavigate();
@@ -79,7 +80,7 @@ export function Login() {
             alt="NFI Logo"
             className="h-16 mx-auto mb-4"
           />
-          <h1 className="text-2xl font-bold text-[var(--nfi-text)]">NFI CMDWS</h1>
+          <h1 className="text-2xl font-bold text-[var(--nfi-text)]">{APP_NAME}</h1>
           <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
             Case Management & Document Workflow System
           </p>
