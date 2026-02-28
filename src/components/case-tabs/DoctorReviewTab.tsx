@@ -23,7 +23,7 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = currentUser?.roles.includes('admin') || currentUser?.roles.includes('leadership');
-  const isClinicalReviewer = currentUser?.roles.includes('clinical_reviewer');
+  const isClinicalReviewer = currentUser?.roles.includes('hospital_doctor');
   const isAssignedReviewer = isClinicalReviewer && review?.assignedToUserId === currentUser?.userId;
 
   useEffect(() => {

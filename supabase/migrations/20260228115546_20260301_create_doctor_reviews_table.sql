@@ -5,17 +5,17 @@
     - `doctor_reviews`
       - `id` (uuid, primary key) - unique review record
       - `case_id` (uuid, FK to cases) - the case being reviewed
-      - `assigned_to_user_id` (uuid, FK to users) - clinical_reviewer role user
+      - `assigned_to_user_id` (uuid, FK to users) - hospital_doctor role user
       - `submitted_at` (timestamptz) - when review was submitted
       - `outcome` (text) - Approved/Approved_With_Comments/Returned
       - `comments` (text) - optional reviewer comments
       - `gating_result` (jsonb) - cached submit readiness result {canSubmit, reasons}
       - `created_at` (timestamptz)
       - `updated_at` (timestamptz)
-      
+
   2. Security
     - Enable RLS on `doctor_reviews` table
-    - Add policy for clinical_reviewer to view/update assignments
+    - Add policy for hospital_doctor to view/update assignments
     - Add policy for admin/leadership to assign/edit assignments
     - Add policy for case creators to view assignments
 

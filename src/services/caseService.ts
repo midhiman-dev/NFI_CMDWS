@@ -697,7 +697,7 @@ export const caseService = {
     const { data, error } = await supabase
       .from('users')
       .select('id, full_name, email')
-      .eq('role', 'clinical_reviewer')
+      .eq('role', 'hospital_doctor')
       .eq('is_active', true)
       .order('full_name');
 
@@ -777,7 +777,7 @@ export const caseService = {
     await this.addAuditEvent({
       caseId,
       userId: user?.id || '',
-      userRole: 'clinical_reviewer',
+      userRole: 'hospital_doctor',
       action: 'Clinical Review Submitted',
       notes: `Outcome: ${outcome}${briefComment ? ` - ${briefComment}` : ''}`,
       timestamp: new Date().toISOString(),
