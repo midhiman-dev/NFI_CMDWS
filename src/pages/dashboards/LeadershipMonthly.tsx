@@ -100,6 +100,16 @@ export function LeadershipMonthly() {
   const [exporting, setExporting] = useState(false);
   const dataAsOf = new Date(2024, 11, 15);
 
+  const formatDownloadTimestamp = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}_${hh}${min}`;
+  };
+
   const handleExport = async () => {
     try {
       setExporting(true);
@@ -115,8 +125,8 @@ export function LeadershipMonthly() {
       });
 
       const csv = generateCSV(sampleData);
-      downloadCSV(csv, `leadership-monthly-${selectedFY}-m${selectedMonth}`);
-      showToast('Report exported successfully', 'success');
+      downloadCSV(csv, `Leadership_Monthly_${formatDownloadTimestamp()}`);
+      showToast('Download started', 'success');
       navigate('/reports/runs');
     } catch (error) {
       console.error('Error exporting report:', error);
