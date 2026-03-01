@@ -43,6 +43,7 @@ export function Login() {
   const roleLabels: Record<UserRole, string> = {
     hospital_spoc: t('roles.hospital_spoc'),
     clinical: t('roles.clinical'),
+    clinical_reviewer: t('roles.clinical'),
     verifier: t('roles.verifier'),
     committee_member: t('roles.committee_member'),
     accounts: t('roles.accounts'),
@@ -56,6 +57,7 @@ export function Login() {
     'leadership',
     'committee_member',
     'verifier',
+    'clinical_reviewer',
     'clinical',
     'hospital_spoc',
     'accounts',

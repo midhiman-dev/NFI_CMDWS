@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
-import { caseService } from '../../services/caseService';
-import { intakeService } from '../../services/intakeService';
 import type { DoctorReview, IntakeCompleteness, User } from '../../types';
 import { getSubmitGatingInfo } from '../../utils/submitGating';
 import { NfiButton } from '../design-system/NfiButton';
 import { NfiCard } from '../design-system/NfiCard';
+import { useAppContext } from '../../App';
+import { useToast } from '../design-system/Toast';
 
 interface DoctorReviewTabProps {
   caseId: string;
@@ -13,6 +13,8 @@ interface DoctorReviewTabProps {
 }
 
 export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
+  const { provider, mode } = useAppContext();
+  const { showToast } = useToast();
   const [review, setReview] = useState<DoctorReview | null>(null);
   const [intakeCompleteness, setIntakeCompleteness] = useState<IntakeCompleteness | null>(null);
   const [clinicalReviewers, setClinicalReviewers] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
@@ -23,7 +25,7 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = currentUser?.roles.includes('admin') || currentUser?.roles.includes('leadership');
-  const isClinicalReviewer = currentUser?.roles.includes('hospital_doctor');
+  const isClinicalReviewer = !!currentUser?.roles.some((r) => r === 'clinical_reviewer' || r === 'clinical' || r === 'hospital_doctor');
   const isAssignedReviewer = isClinicalReviewer && review?.assignedToUserId === currentUser?.userId;
 
   useEffect(() => {
@@ -31,20 +33,36 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
   }, [caseId]);
 
   async function loadData() {
+    setError(null);
     try {
       setLoading(true);
-      const [reviewData, completeness, reviewers] = await Promise.all([
-        caseService.getDoctorReview(caseId),
-        intakeService.getCompleteness(caseId),
-        caseService.getClinicalReviewers(),
+      const [reviewResult, completenessResult, reviewersResult] = await Promise.allSettled([
+        provider.getDoctorReview(caseId),
+        provider.getIntakeCompleteness(caseId),
+        provider.listUsersByRole('clinical_reviewer'),
       ]);
 
+      const reviewData = reviewResult.status === 'fulfilled' ? reviewResult.value : null;
       setReview(reviewData);
-      setIntakeCompleteness(completeness);
-      setClinicalReviewers(reviewers);
       setSelectedReviewerId(reviewData?.assignedToUserId || '');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load review data');
+
+      if (completenessResult.status === 'fulfilled') {
+        setIntakeCompleteness(completenessResult.value);
+      } else {
+        setIntakeCompleteness(null);
+      }
+
+      if (reviewersResult.status === 'fulfilled') {
+        setClinicalReviewers(reviewersResult.value);
+      } else {
+        setClinicalReviewers([]);
+      }
+
+      if (reviewResult.status === 'rejected' || completenessResult.status === 'rejected' || reviewersResult.status === 'rejected') {
+        if (mode === 'DB') {
+          setError('Some clinical review data could not be loaded. Please check DB configuration and permissions.');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -57,9 +75,10 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
     }
 
     try {
-      await caseService.assignDoctorReview(caseId, selectedReviewerId);
+      await provider.assignDoctorReviewer(caseId, selectedReviewerId);
       await loadData();
       setError(null);
+      showToast('Clinical reviewer assigned successfully', 'success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to assign reviewer');
     }
@@ -71,7 +90,7 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
     try {
       setIsSubmitting(true);
       const gatingInfo = getSubmitGatingInfo(intakeCompleteness, true, review);
-      await caseService.submitDoctorReview(
+      await provider.submitDoctorReview(
         caseId,
         outcome,
         outcome === 'Approved_With_Comments' ? submitComments : undefined,
@@ -80,6 +99,7 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
       await loadData();
       setSubmitComments('');
       setError(null);
+      showToast('Clinical review submitted successfully', 'success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit review');
     } finally {
@@ -116,10 +136,13 @@ export function DoctorReviewTab({ caseId, currentUser }: DoctorReviewTabProps) {
                   </option>
                 ))}
               </select>
+              {clinicalReviewers.length === 0 && (
+                <p className="text-sm text-[#6B7280] mt-2">No clinical reviewers available yet.</p>
+              )}
             </div>
             <NfiButton
               onClick={handleAssignReviewer}
-              disabled={!selectedReviewerId}
+              disabled={!selectedReviewerId || clinicalReviewers.length === 0}
               variant="primary"
               size="sm"
             >

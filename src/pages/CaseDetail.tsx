@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
@@ -17,8 +17,8 @@ import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { caseService } from '../services/caseService';
-import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue } from '../types';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown } from 'lucide-react';
+import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion } from '../types';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
 import { getDoctorReviewGatingInfo } from '../utils/submitGating';
@@ -29,6 +29,7 @@ import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/Da
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
+const SHOW_DEMO_SIM_BUTTONS = false;
 
 export function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -146,7 +147,7 @@ export function CaseDetail() {
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{caseData.caseRef}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">
-              {caseData.processType} • {hospitalName}
+              {caseData.processType} â€¢ {hospitalName}
             </p>
           </div>
           <NfiBadge
@@ -411,7 +412,7 @@ function OverviewTab({
               />
             </NfiField>
 
-            <NfiField label="Estimated Amount (₹)" required>
+            <NfiField label="Estimated Amount (â‚¹)" required>
               <input
                 type="number"
                 value={editData.estimateAmount}
@@ -565,6 +566,7 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const categories = getVisibleCategories(authState.activeRole);
 
@@ -572,10 +574,18 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
     setAllDocs(documents);
   }, [documents]);
 
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes || Number.isNaN(bytes)) return '';
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
+
   const handleFileUpload = async (docId: string, file: File) => {
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+    const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '';
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedTypes.includes(file.type) && (!extension || !allowedExtensions.includes(extension))) {
       showToast('Only PDF, JPG, PNG, DOC, DOCX files are allowed', 'error');
       return;
     }
@@ -583,15 +593,67 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
     setUploadingDoc(docId);
 
     try {
+      const uploadedAt = new Date().toISOString();
+      const uploadedBy = authState.activeUser?.fullName || 'Current User';
       await provider.uploadDocument(caseId, docId, {
         fileName: file.name,
-        fileType: file.type,
-        size: file.size,
+        mimeType: file.type || undefined,
+        fileSize: file.size,
+        lastModified: file.lastModified,
       });
+
+      setAllDocs(prev =>
+        prev.map(doc => {
+          if (doc.docId !== docId) return doc;
+
+          const versions: DocVersion[] = doc.versions ? [...doc.versions] : [];
+          if (versions.length === 0 && doc.fileName && doc.uploadedAt && doc.uploadedBy) {
+            versions.push({
+              versionNo: 1,
+              fileName: doc.fileName,
+              fileType: doc.fileType,
+              mimeType: doc.mimeType || doc.fileType,
+              size: doc.size,
+              fileSize: doc.fileSize ?? doc.size,
+              lastModified: doc.lastModified,
+              uploadedAt: doc.uploadedAt,
+              uploadedBy: doc.uploadedBy,
+              status: doc.status,
+            });
+          }
+
+          versions.push({
+            versionNo: versions.length + 1,
+            fileName: file.name,
+            fileType: file.type || undefined,
+            mimeType: file.type || undefined,
+            size: file.size,
+            fileSize: file.size,
+            lastModified: file.lastModified,
+            uploadedAt,
+            uploadedBy,
+            status: 'Uploaded',
+          });
+
+          return {
+            ...doc,
+            fileName: file.name,
+            fileType: file.type || undefined,
+            mimeType: file.type || undefined,
+            size: file.size,
+            fileSize: file.size,
+            lastModified: file.lastModified,
+            uploadedAt,
+            uploadedBy,
+            status: 'Uploaded',
+            versions,
+          };
+        })
+      );
 
       setUploadingDoc(null);
       onDocumentsChanged();
-      showToast('Document uploaded (metadata saved)', 'success');
+      showToast(`Selected: ${file.name}`, 'success');
     } catch (error) {
       console.error('Error uploading document:', error);
       setUploadingDoc(null);
@@ -609,6 +671,23 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
 
     try {
       await provider.updateDocumentStatus(docId, isNA ? 'Not_Applicable' : 'Missing');
+      setAllDocs(prev =>
+        prev.map(doc => {
+          if (doc.docId !== docId) return doc;
+          const versions = doc.versions ? [...doc.versions] : undefined;
+          if (versions && versions.length > 0) {
+            versions[versions.length - 1] = {
+              ...versions[versions.length - 1],
+              status: isNA ? 'Not_Applicable' : 'Missing',
+            };
+          }
+          return {
+            ...doc,
+            status: isNA ? 'Not_Applicable' : 'Missing',
+            versions,
+          };
+        })
+      );
       onDocumentsChanged();
       showToast(isNA ? 'Document marked as not applicable' : 'Document unmarked', 'success');
     } catch (error) {
@@ -647,14 +726,14 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
   const verifiedCount = allDocs.filter(d => d.status === 'Verified').length;
   const mandatoryDocs = allDocs.filter(d => d.mandatoryFlag);
   const mandatoryCount = 12;
-  const mandatoryVerifiedCount = mandatoryDocs.filter(d => d.status === 'Verified' || d.status === 'Not_Applicable').length;
+  const mandatoryCompleteCount = mandatoryDocs.filter(isDocSatisfied).length;
   const totalCount = allDocs.length;
 
   const isDemoMode = mode === 'DEMO';
   const isCommittee = authState.activeRole === 'committee_member';
   const canSimulate = isDemoMode && (authState.activeRole === 'admin' || authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc');
-  const hasMissingMandatory = allDocs.some(d => d.mandatoryFlag && (d.status === 'Missing' || d.status === 'Rejected'));
-  const hasUnverifiedMandatory = allDocs.some(d => d.mandatoryFlag && d.status !== 'Verified' && d.status !== 'Not_Applicable');
+  const hasMissingMandatory = allDocs.some(d => d.mandatoryFlag && !isDocSatisfied(d));
+  const hasUnverifiedMandatory = allDocs.some(d => d.mandatoryFlag && !isDocSatisfied(d));
 
   const committeeMessage = isCommittee && isDemoMode ? (
     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -671,7 +750,7 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Checklist Readiness</h3>
           {canSimulate && hasUnverifiedMandatory && (
-            <div className="flex gap-2">
+            <div className={SHOW_DEMO_SIM_BUTTONS ? 'flex gap-2' : 'hidden'}>
               {hasMissingMandatory && (
                 <NfiButton size="sm" variant="secondary" onClick={() => handleSimulate(false)} disabled={simulating}>
                   <Upload size={14} className="mr-1" />
@@ -700,21 +779,21 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
           </div>
           <div>
             <p className="text-sm text-[var(--nfi-text-secondary)]">Mandatory Complete</p>
-            <p className="text-2xl font-bold text-orange-600">{mandatoryVerifiedCount}/{mandatoryCount}</p>
+            <p className="text-2xl font-bold text-orange-600">{mandatoryCompleteCount}/{mandatoryCount}</p>
           </div>
         </div>
-        {mandatoryVerifiedCount === mandatoryCount && mandatoryCount > 0 && (
+        {mandatoryCompleteCount === mandatoryCount && mandatoryCount > 0 && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
             <CheckCircle size={20} className="text-green-600" />
-            <p className="text-sm text-green-800">All mandatory documents verified. Ready to proceed.</p>
+            <p className="text-sm text-green-800">All mandatory documents complete. Ready to proceed.</p>
           </div>
         )}
       </div>
 
-      {mandatoryVerifiedCount === mandatoryCount && mandatoryCount > 0 && (
+      {mandatoryCompleteCount === mandatoryCount && mandatoryCount > 0 && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            Readiness check: All 12 mandatory documents verified and ready for committee review.
+            Readiness check: All 12 mandatory documents complete and ready for committee review.
           </p>
         </div>
       )}
@@ -747,6 +826,7 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                 const latestVersion = getLatestVersion(doc);
                 const hasVersions = doc.versions && doc.versions.length > 1;
                 const isExpanded = expandedVersions.has(doc.docId);
+                const uploadButtonLabel = doc.status === 'Uploaded' ? 'Re-upload' : isRejected || isVerified ? 'Upload New Version' : 'Upload';
 
                 return (
                   <div key={doc.docId} className="border border-[var(--nfi-border)] rounded-lg p-4">
@@ -762,14 +842,18 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                           )}
                           {doc.conditionNotes && (
                             <span className="text-xs text-[var(--nfi-text-secondary)] italic" title={doc.conditionNotes}>
-                              ⓘ {doc.conditionNotes}
+                              â“˜ {doc.conditionNotes}
                             </span>
                           )}
                         </div>
                         {latestVersion && (
-                          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
-                            {latestVersion.fileName} {latestVersion.size ? `(${(latestVersion.size / 1024).toFixed(1)} KB)` : ''}{' '}
-                            {latestVersion.uploadedAt && `• ${new Date(latestVersion.uploadedAt).toLocaleDateString()}`}
+                          <p className="text-xs text-[var(--nfi-text-secondary)] mt-1 flex items-center gap-1.5 flex-wrap">
+                            <Paperclip size={12} />
+                            <span>{latestVersion.fileName || 'Uploaded file'}</span>
+                            {latestVersion.uploadedAt && <span>• {new Date(latestVersion.uploadedAt).toLocaleString()}</span>}
+                            {(latestVersion.fileSize ?? latestVersion.size) && (
+                              <span>• {formatFileSize(latestVersion.fileSize ?? latestVersion.size)}</span>
+                            )}
                           </p>
                         )}
                       </div>
@@ -796,42 +880,33 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {!isVerified && !isNA && (
-                          <label className="relative cursor-pointer">
+                        {!isNA && (
+                          <>
                             <input
+                              ref={(el) => {
+                                fileInputRefs.current[doc.docId] = el;
+                              }}
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) handleFileUpload(doc.docId, file);
+                                if (!file) return;
+                                void handleFileUpload(doc.docId, file);
+                                e.currentTarget.value = '';
                               }}
                               className="hidden"
                               disabled={uploadingDoc === doc.docId}
                             />
-                            <NfiButton size="sm" variant="secondary" disabled={uploadingDoc === doc.docId}>
-                              <Upload size={16} className="mr-2" />
-                              {uploadingDoc === doc.docId ? 'Uploading...' : doc.status === 'Uploaded' ? 'Re-upload' : isRejected ? 'Upload New Version' : 'Upload'}
-                            </NfiButton>
-                          </label>
-                        )}
-
-                        {isVerified && (
-                          <label className="relative cursor-pointer">
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleFileUpload(doc.docId, file);
-                              }}
-                              className="hidden"
+                            <NfiButton
+                              size="sm"
+                              variant="secondary"
                               disabled={uploadingDoc === doc.docId}
-                            />
-                            <NfiButton size="sm" variant="secondary" disabled={uploadingDoc === doc.docId}>
+                              onClick={() => fileInputRefs.current[doc.docId]?.click()}
+                            >
                               <Upload size={16} className="mr-2" />
-                              {uploadingDoc === doc.docId ? 'Uploading...' : 'Upload New Version'}
+                              {uploadingDoc === doc.docId ? 'Uploading...' : uploadButtonLabel}
                             </NfiButton>
-                          </label>
+                          </>
                         )}
 
                         {canMarkNA && !isVerified && !isRejected && (
@@ -1103,7 +1178,7 @@ function VerificationTab({
           <div>
             <p className="text-sm text-[var(--nfi-text-secondary)]">Clinical Review</p>
             <p className="text-2xl font-bold" style={{ color: doctorReview?.outcome === 'Approved' || doctorReview?.outcome === 'Approved_With_Comments' ? '#10b981' : '#f59e0b' }}>
-              {doctorReview?.outcome ? '✓' : '◯'}
+              {doctorReview?.outcome ? 'âœ“' : 'â—¯'}
             </p>
           </div>
         </div>
@@ -1120,16 +1195,16 @@ function VerificationTab({
               <p className="text-sm font-medium text-red-800">Cannot Submit - Incomplete</p>
               <div className="text-xs text-red-700 mt-2 space-y-1">
                 {!doctorGating.canSendToCommittee && (
-                  <p>• Clinical Review: {doctorGating.reason}</p>
+                  <p>â€¢ Clinical Review: {doctorGating.reason}</p>
                 )}
                 {!readiness?.fundAppComplete && (
-                  <p>• Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
+                  <p>â€¢ Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
                 )}
                 {!readiness?.interimSummaryComplete && (
-                  <p>• Interim Summary: {readiness?.interimSummaryTotalPercent || 0}% complete</p>
+                  <p>â€¢ Interim Summary: {readiness?.interimSummaryTotalPercent || 0}% complete</p>
                 )}
                 {readiness?.missingDocuments && readiness.missingDocuments.length > 0 && (
-                  <p>• Missing documents: {readiness.missingDocuments.join(', ')}</p>
+                  <p>â€¢ Missing documents: {readiness.missingDocuments.join(', ')}</p>
                 )}
               </div>
               {!doctorGating.canSendToCommittee && (
@@ -1438,7 +1513,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       const approvedAmount = parseFloat(formData.approvedAmount);
 
       if (Math.abs(totalInstallments - approvedAmount) > 0.01) {
-        showToast(`Warning: Installments total (₹${totalInstallments.toLocaleString()}) does not match approved amount (₹${approvedAmount.toLocaleString()})`, 'error');
+        showToast(`Warning: Installments total (â‚¹${totalInstallments.toLocaleString()}) does not match approved amount (â‚¹${approvedAmount.toLocaleString()})`, 'error');
         return;
       }
     }
@@ -1564,7 +1639,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </NfiField>
 
               {formData.outcome === 'Approved' && (
-                <NfiField label="Approved Amount (₹)" required>
+                <NfiField label="Approved Amount (â‚¹)" required>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
@@ -1638,14 +1713,14 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 {installmentRows.length > 0 && (
                   <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
                     <p className="text-[var(--nfi-text-secondary)]">
-                      Total: ₹{installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toLocaleString()}
+                      Total: â‚¹{installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toLocaleString()}
                       {formData.approvedAmount && (
                         <span className={
                           Math.abs(installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0) - parseFloat(formData.approvedAmount)) < 0.01
                             ? 'text-green-600 ml-2'
                             : 'text-red-600 ml-2'
                         }>
-                          (Approved: ₹{parseFloat(formData.approvedAmount).toLocaleString()})
+                          (Approved: â‚¹{parseFloat(formData.approvedAmount).toLocaleString()})
                         </span>
                       )}
                     </p>
@@ -1753,7 +1828,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               {decision.approvedAmount && (
                 <div>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">Approved Amount</p>
-                  <p className="font-semibold text-lg text-[var(--nfi-text)]">₹{decision.approvedAmount.toLocaleString()}</p>
+                  <p className="font-semibold text-lg text-[var(--nfi-text)]">â‚¹{decision.approvedAmount.toLocaleString()}</p>
                 </div>
               )}
               <div>
@@ -1782,8 +1857,8 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 <div className="flex-1">
                   <p className="font-medium text-[var(--nfi-text)]">{inst.label}</p>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">
-                    ₹{inst.amount.toLocaleString()}
-                    {inst.dueDate && ` • Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
+                    â‚¹{inst.amount.toLocaleString()}
+                    {inst.dueDate && ` â€¢ Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
                   </p>
                 </div>
                 <NfiBadge tone={inst.status === 'Paid' ? 'success' : inst.status === 'Requested' ? 'warning' : 'neutral'}>
@@ -1946,19 +2021,19 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Approved Amount</p>
-            <p className="text-2xl font-bold text-[var(--nfi-primary)]">₹{summary.totalApproved.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-[var(--nfi-primary)]">â‚¹{summary.totalApproved.toLocaleString()}</p>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Total Planned</p>
-            <p className="text-2xl font-bold text-purple-600">₹{summary.totalPlanned.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-purple-600">â‚¹{summary.totalPlanned.toLocaleString()}</p>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Total Disbursed</p>
-            <p className="text-2xl font-bold text-green-600">₹{summary.totalPaid.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-green-600">â‚¹{summary.totalPaid.toLocaleString()}</p>
           </div>
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Balance</p>
-            <p className="text-2xl font-bold text-orange-600">₹{summary.balance.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-orange-600">â‚¹{summary.balance.toLocaleString()}</p>
           </div>
         </div>
       )}
@@ -1966,7 +2041,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
       {summary && summary.totalPlanned !== summary.totalApproved && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Total planned amount (₹{summary.totalPlanned.toLocaleString()}) differs from approved amount (₹{summary.totalApproved.toLocaleString()})
+            <strong>Note:</strong> Total planned amount (â‚¹{summary.totalPlanned.toLocaleString()}) differs from approved amount (â‚¹{summary.totalApproved.toLocaleString()})
           </p>
         </div>
       )}
@@ -2003,7 +2078,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
                 {installments.map((inst) => (
                   <tr key={inst.installmentId} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-[var(--nfi-text)]">{inst.label}</td>
-                    <td className="py-3 px-4 text-right text-[var(--nfi-text)]">₹{inst.amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right text-[var(--nfi-text)]">â‚¹{inst.amount.toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <select
                         value={inst.status}
@@ -2044,7 +2119,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
               <NfiField label="Label" required>
                 <input type="text" value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]" placeholder="e.g., Installment 1" />
               </NfiField>
-              <NfiField label="Amount (₹)" required>
+              <NfiField label="Amount (â‚¹)" required>
                 <input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]" placeholder="0" />
               </NfiField>
               <NfiField label="Planned Date">
@@ -2310,3 +2385,5 @@ function AuditTab({ events }: { events: AuditEvent[] }) {
     </div>
   );
 }
+
+

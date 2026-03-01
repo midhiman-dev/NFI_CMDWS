@@ -12,6 +12,8 @@ export type CaseStatus =
 
 export type UserRole =
   | 'hospital_spoc'
+  | 'clinical'
+  | 'clinical_reviewer'
   | 'hospital_doctor'
   | 'verifier'
   | 'committee_member'
@@ -244,7 +246,10 @@ export interface DocVersion {
   versionNo: number;
   fileName: string;
   fileType?: string;
+  mimeType?: string;
   size?: number;
+  fileSize?: number;
+  lastModified?: number;
   uploadedAt: string;
   uploadedBy: string;
   status: DocumentStatus;
@@ -260,7 +265,10 @@ export interface DocumentMetadata {
   docType: string;
   fileName?: string;
   fileType?: string;
+  mimeType?: string;
   size?: number;
+  fileSize?: number;
+  lastModified?: number;
   uploadedAt?: string;
   uploadedBy?: string;
   status: DocumentStatus;

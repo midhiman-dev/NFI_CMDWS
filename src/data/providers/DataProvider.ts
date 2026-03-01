@@ -1,4 +1,4 @@
-import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
+import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, ProcessType, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DoctorReview, SubmitGatingInfo } from '../../types';
 
 export interface CaseWithDetails extends Case {
   hospitalName?: string;
@@ -100,8 +100,11 @@ export interface DataProvider {
   updateDocumentNotes(documentId: string, notes: string): Promise<void>;
   uploadDocument(caseId: string, documentId: string, fileMetadata: {
     fileName: string;
-    fileType: string;
-    size: number;
+    fileType?: string;
+    size?: number;
+    mimeType?: string;
+    fileSize?: number;
+    lastModified?: number;
   }): Promise<void>;
   getDocumentTemplates(processType: string): Promise<DocumentRequirementTemplate[]>;
   getChecklistReadiness(caseId: string): Promise<ChecklistReadiness>;
@@ -147,6 +150,10 @@ export interface DataProvider {
   updateClinicalDates(caseId: string, dates: { admissionDate?: string; dischargeDate?: string }): Promise<void>;
   getBeniProgramOps(caseId: string): Promise<BeniProgramOpsData | null>;
   saveBeniProgramOps(caseId: string, ops: Omit<BeniProgramOpsData, 'opsId' | 'caseId' | 'beniTeamMemberName'>): Promise<void>;
+  getDoctorReview(caseId: string): Promise<DoctorReview | null>;
+  listUsersByRole(role: string): Promise<Array<{ userId: string; fullName: string; email: string }>>;
+  assignDoctorReviewer(caseId: string, reviewerUserId: string): Promise<void>;
+  submitDoctorReview(caseId: string, outcome: 'Approved' | 'Approved_With_Comments' | 'Returned', comments?: string, gatingInfo?: SubmitGatingInfo): Promise<void>;
   getBeneficiary(caseId: string): Promise<ChildProfile | null>;
   upsertBeneficiary(caseId: string, data: Partial<Omit<ChildProfile, 'caseId'>>): Promise<void>;
   getFamily(caseId: string): Promise<FamilyProfile | null>;

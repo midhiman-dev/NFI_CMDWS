@@ -1,10 +1,24 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, ChecklistReadiness, VerificationRecord, CommitteeReviewRecord, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo } from '../../types';
 import { caseService } from '../../services/caseService';
 import { supabase } from '../../lib/supabase';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 
 export class DbProvider implements DataProvider {
+  private static readonly DOC_VERSIONS_STORAGE_KEY = 'nfi_db_document_versions_v1';
+
+  private getStoredDocVersions(): Record<string, DocVersion[]> {
+    try {
+      return JSON.parse(localStorage.getItem(DbProvider.DOC_VERSIONS_STORAGE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  private saveStoredDocVersions(versions: Record<string, DocVersion[]>): void {
+    localStorage.setItem(DbProvider.DOC_VERSIONS_STORAGE_KEY, JSON.stringify(versions));
+  }
+
   async listCases(): Promise<CaseWithDetails[]> {
     const cases = await caseService.getCases();
     return cases.map(c => ({
@@ -122,18 +136,48 @@ export class DbProvider implements DataProvider {
   async listCaseDocuments(caseId: string): Promise<DocumentWithTemplate[]> {
     const docs = await caseService.getDocuments(caseId);
     const templates = await caseService.getDocumentTemplates();
+    const storedVersions = this.getStoredDocVersions();
+    let hasVersionUpdates = false;
 
-    return docs.map(doc => {
+    const mappedDocs = docs.map(doc => {
       const resolved = resolveDocTypeAlias(doc.docType, doc.category);
       const template = templates.find(t => t.doc_type === resolved.docType);
+
+      let versions = storedVersions[doc.docId];
+      if ((!versions || versions.length === 0) && doc.fileName && doc.uploadedAt && doc.uploadedBy) {
+        versions = [{
+          versionNo: 1,
+          fileName: doc.fileName,
+          fileType: doc.fileType,
+          mimeType: doc.mimeType || doc.fileType,
+          size: doc.size,
+          fileSize: doc.fileSize ?? doc.size,
+          lastModified: doc.lastModified,
+          uploadedAt: doc.uploadedAt,
+          uploadedBy: doc.uploadedBy,
+          status: doc.status,
+        }];
+        storedVersions[doc.docId] = versions;
+        hasVersionUpdates = true;
+      }
+
       return {
         ...doc,
+        mimeType: doc.mimeType || doc.fileType,
+        fileSize: doc.fileSize ?? doc.size,
         docType: resolved.docType,
         category: resolved.category,
         mandatoryFlag: template?.mandatory_flag,
         conditionNotes: template?.condition_notes,
+        versions,
       };
     });
+
+    if (hasVersionUpdates) {
+      this.saveStoredDocVersions(storedVersions);
+    }
+
+    return mappedDocs;
   }
 
   async ensureDocumentChecklist(caseId: string, processType: string): Promise<void> {
@@ -158,6 +202,24 @@ export class DbProvider implements DataProvider {
       status,
       notes: notes !== undefined ? notes : undefined,
     });
+
+    const storedVersions = this.getStoredDocVersions();
+    const versions = storedVersions[documentId];
+    if (versions && versions.length > 0) {
+      const latestVersion = versions[versions.length - 1];
+      latestVersion.status = status;
+
+      if (status === 'Rejected') {
+        latestVersion.rejectionReason = notes;
+        latestVersion.reviewedAt = new Date().toISOString();
+        latestVersion.reviewedBy = 'user-id';
+      } else if (status === 'Verified') {
+        latestVersion.reviewedAt = new Date().toISOString();
+        latestVersion.reviewedBy = 'user-id';
+      }
+
+      this.saveStoredDocVersions(storedVersions);
+    }
   }
 
   async updateDocumentNotes(documentId: string, notes: string): Promise<void> {
@@ -168,14 +230,59 @@ export class DbProvider implements DataProvider {
 
   async uploadDocument(caseId: string, documentId: string, fileMetadata: {
     fileName: string;
-    fileType: string;
-    size: number;
+    fileType?: string;
+    size?: number;
+    mimeType?: string;
+    fileSize?: number;
+    lastModified?: number;
   }): Promise<void> {
+    const now = new Date().toISOString();
+    const effectiveFileType = fileMetadata.mimeType || fileMetadata.fileType || '';
+    const effectiveSize = fileMetadata.fileSize ?? fileMetadata.size ?? 0;
+
+    const docs = await caseService.getDocuments(caseId);
+    const currentDoc = docs.find(d => d.docId === documentId);
+
+    const storedVersions = this.getStoredDocVersions();
+    const versions: DocVersion[] = storedVersions[documentId] ? [...storedVersions[documentId]] : [];
+    if (versions.length === 0 && currentDoc?.fileName && currentDoc.uploadedAt && currentDoc.uploadedBy) {
+      versions.push({
+        versionNo: 1,
+        fileName: currentDoc.fileName,
+        fileType: currentDoc.fileType,
+        mimeType: currentDoc.mimeType || currentDoc.fileType,
+        size: currentDoc.size,
+        fileSize: currentDoc.fileSize ?? currentDoc.size,
+        lastModified: currentDoc.lastModified,
+        uploadedAt: currentDoc.uploadedAt,
+        uploadedBy: currentDoc.uploadedBy,
+        status: currentDoc.status,
+      });
+    }
+
+    versions.push({
+      versionNo: versions.length + 1,
+      fileName: fileMetadata.fileName,
+      fileType: effectiveFileType || undefined,
+      mimeType: effectiveFileType || undefined,
+      size: effectiveSize,
+      fileSize: effectiveSize,
+      lastModified: fileMetadata.lastModified,
+      uploadedAt: now,
+      uploadedBy: 'user-id',
+      status: 'Uploaded',
+    });
+    storedVersions[documentId] = versions;
+    this.saveStoredDocVersions(storedVersions);
+
     await caseService.updateDocument(documentId, {
       fileName: fileMetadata.fileName,
-      fileType: fileMetadata.fileType,
-      size: fileMetadata.size,
-      uploadedAt: new Date().toISOString(),
+      fileType: effectiveFileType || undefined,
+      mimeType: effectiveFileType || undefined,
+      size: effectiveSize,
+      fileSize: effectiveSize,
+      lastModified: fileMetadata.lastModified,
+      uploadedAt: now,
       uploadedBy: 'user-id',
       status: 'Uploaded',
     });
@@ -454,6 +561,25 @@ export class DbProvider implements DataProvider {
       voiceNoteReceivedAt: ops.voiceNoteReceivedAt,
       notes: ops.notes,
     });
+  }
+
+  async getDoctorReview(caseId: string): Promise<DoctorReview | null> {
+    return caseService.getDoctorReview(caseId);
+  }
+
+  async listUsersByRole(role: string): Promise<Array<{ userId: string; fullName: string; email: string }>> {
+    if (role === 'clinical_reviewer' || role === 'hospital_doctor' || role === 'clinical') {
+      return caseService.getClinicalReviewers();
+    }
+    return [];
+  }
+
+  async assignDoctorReviewer(caseId: string, reviewerUserId: string): Promise<void> {
+    await caseService.assignDoctorReview(caseId, reviewerUserId);
+  }
+
+  async submitDoctorReview(caseId: string, outcome: 'Approved' | 'Approved_With_Comments' | 'Returned', comments?: string, gatingInfo?: SubmitGatingInfo): Promise<void> {
+    await caseService.submitDoctorReview(caseId, outcome, comments, gatingInfo);
   }
 
   async getBeneficiary(caseId: string): Promise<ChildProfile | null> {

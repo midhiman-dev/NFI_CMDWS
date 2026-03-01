@@ -1,7 +1,8 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo } from '../../types';
 import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
+import { mockStore } from '../../store/mockStore';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -22,6 +23,7 @@ const TEMPLATE_REGISTRY_STORAGE_KEY = 'nfi_demo_template_registry_v1';
 const TEMPLATE_BINDINGS_STORAGE_KEY = 'nfi_demo_template_bindings_v1';
 const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
 const SETTLEMENTS_STORAGE_KEY = 'nfi_demo_settlements_v1';
+const DOCTOR_REVIEWS_STORAGE_KEY = 'nfi_demo_doctor_reviews_v1';
 
 interface MockData {
   hospitals: Hospital[];
@@ -84,6 +86,10 @@ interface ReportRunsData {
   [runId: string]: ReportRun;
 }
 
+interface DoctorReviewsData {
+  [caseId: string]: DoctorReview;
+}
+
 export class MockProvider implements DataProvider {
   private data: MockData;
   private documents: DocumentsData;
@@ -98,6 +104,7 @@ export class MockProvider implements DataProvider {
   private hospitalProcessMap: HospitalProcessMapData;
   private reportTemplates: ReportTemplatesData;
   private reportRuns: ReportRunsData;
+  private doctorReviews: DoctorReviewsData;
 
   private static readonly DEMO_VOLUNTEERS: User[] = [
     { userId: 'user-beni-1', username: 'priya.beni', fullName: 'Priya Deshmukh', email: 'priya@nfi.org', roles: ['beni_volunteer'], isActive: true },
@@ -119,6 +126,7 @@ export class MockProvider implements DataProvider {
     this.hospitalProcessMap = this.loadOrGenerateHospitalProcessMap();
     this.reportTemplates = this.loadOrGenerateReportTemplates();
     this.reportRuns = this.loadOrGenerateReportRuns();
+    this.doctorReviews = this.loadOrGenerateDoctorReviews();
     this.seedInstallmentsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
     this.seedClinicalIfNeeded();
@@ -383,6 +391,22 @@ export class MockProvider implements DataProvider {
 
   private saveBeniOps(): void {
     localStorage.setItem(BENI_OPS_STORAGE_KEY, JSON.stringify(this.beniOps));
+  }
+
+  private loadOrGenerateDoctorReviews(): DoctorReviewsData {
+    const stored = localStorage.getItem(DOCTOR_REVIEWS_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  private saveDoctorReviews(): void {
+    localStorage.setItem(DOCTOR_REVIEWS_STORAGE_KEY, JSON.stringify(this.doctorReviews));
   }
 
   private loadOrGenerateHospitalProcessMap(): HospitalProcessMapData {
@@ -667,6 +691,8 @@ export class MockProvider implements DataProvider {
       const template = templates.find(t => t.docType === resolved.docType);
       return {
         ...doc,
+        mimeType: doc.mimeType || doc.fileType,
+        fileSize: doc.fileSize ?? doc.size,
         docType: resolved.docType,
         category: resolved.category,
         mandatoryFlag: template?.mandatoryFlag,
@@ -703,6 +729,19 @@ export class MockProvider implements DataProvider {
       if (doc) {
         doc.status = status;
         if (notes !== undefined) doc.notes = notes;
+        if (doc.versions && doc.versions.length > 0) {
+          const latestVersion = doc.versions[doc.versions.length - 1];
+          latestVersion.status = status;
+
+          if (status === 'Rejected') {
+            latestVersion.rejectionReason = notes;
+            latestVersion.reviewedAt = new Date().toISOString();
+            latestVersion.reviewedBy = 'demo-user';
+          } else if (status === 'Verified') {
+            latestVersion.reviewedAt = new Date().toISOString();
+            latestVersion.reviewedBy = 'demo-user';
+          }
+        }
         this.saveDocuments();
         return;
       }
@@ -722,20 +761,60 @@ export class MockProvider implements DataProvider {
 
   async uploadDocument(caseId: string, documentId: string, fileMetadata: {
     fileName: string;
-    fileType: string;
-    size: number;
+    fileType?: string;
+    size?: number;
+    mimeType?: string;
+    fileSize?: number;
+    lastModified?: number;
   }): Promise<void> {
     const caseDocuments = this.documents[caseId];
     if (!caseDocuments) return;
 
     const doc = caseDocuments.find(d => d.docId === documentId);
     if (doc) {
+      const now = new Date().toISOString();
+      const effectiveFileType = fileMetadata.mimeType || fileMetadata.fileType || '';
+      const effectiveSize = fileMetadata.fileSize ?? fileMetadata.size ?? 0;
+
+      const versions: DocVersion[] = doc.versions ? [...doc.versions] : [];
+      if (versions.length === 0 && doc.fileName && doc.uploadedAt && doc.uploadedBy) {
+        versions.push({
+          versionNo: 1,
+          fileName: doc.fileName,
+          fileType: doc.fileType,
+          mimeType: doc.mimeType || doc.fileType,
+          size: doc.size,
+          fileSize: doc.fileSize ?? doc.size,
+          lastModified: doc.lastModified,
+          uploadedAt: doc.uploadedAt,
+          uploadedBy: doc.uploadedBy,
+          status: doc.status,
+        });
+      }
+
+      versions.push({
+        versionNo: versions.length + 1,
+        fileName: fileMetadata.fileName,
+        fileType: effectiveFileType || undefined,
+        mimeType: effectiveFileType || undefined,
+        size: effectiveSize,
+        fileSize: effectiveSize,
+        lastModified: fileMetadata.lastModified,
+        uploadedAt: now,
+        uploadedBy: 'demo-user',
+        status: 'Uploaded',
+      });
+
       doc.fileName = fileMetadata.fileName;
-      doc.fileType = fileMetadata.fileType;
-      doc.size = fileMetadata.size;
-      doc.uploadedAt = new Date().toISOString();
+      doc.fileType = effectiveFileType || undefined;
+      doc.mimeType = effectiveFileType || undefined;
+      doc.size = effectiveSize;
+      doc.fileSize = effectiveSize;
+      doc.lastModified = fileMetadata.lastModified;
+      doc.uploadedAt = now;
       doc.uploadedBy = 'demo-user';
       doc.status = 'Uploaded';
+      doc.versions = versions;
       this.saveDocuments();
     }
   }
@@ -1095,6 +1174,86 @@ export class MockProvider implements DataProvider {
       notes: ops.notes,
     };
     this.saveBeniOps();
+  }
+
+  async getDoctorReview(caseId: string): Promise<DoctorReview | null> {
+    return this.doctorReviews[caseId] || null;
+  }
+
+  async listUsersByRole(role: string): Promise<Array<{ userId: string; fullName: string; email: string }>> {
+    const allUsers = mockStore.getUsers();
+    const normalizedRole = role.toLowerCase();
+
+    const matchesRole = (userRole: string) => {
+      if (normalizedRole === 'clinical_reviewer') {
+        return userRole === 'clinical_reviewer' || userRole === 'clinical' || userRole === 'hospital_doctor';
+      }
+      return userRole === normalizedRole;
+    };
+
+    return allUsers
+      .filter((u) => u.isActive && u.roles.some(r => matchesRole(r)))
+      .map((u) => ({
+        userId: u.userId,
+        fullName: u.fullName,
+        email: u.email,
+      }));
+  }
+
+  async assignDoctorReviewer(caseId: string, reviewerUserId: string): Promise<void> {
+    const reviewers = await this.listUsersByRole('clinical_reviewer');
+    const reviewer = reviewers.find(r => r.userId === reviewerUserId);
+    if (!reviewer) {
+      throw new Error('Selected reviewer not found');
+    }
+
+    const now = new Date().toISOString();
+    const existing = this.doctorReviews[caseId];
+    this.doctorReviews[caseId] = {
+      reviewId: existing?.reviewId || `dr-${caseId}-${Date.now()}`,
+      caseId,
+      assignedToUserId: reviewerUserId,
+      assignedToName: reviewer.fullName,
+      submittedAt: existing?.submittedAt,
+      outcome: existing?.outcome,
+      comments: existing?.comments,
+      gatingResult: existing?.gatingResult,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    this.saveDoctorReviews();
+
+    const caseItem = this.data.cases.find(c => c.caseId === caseId) as (CaseWithDetails & { doctorAssignment?: any }) | undefined;
+    if (caseItem) {
+      caseItem.doctorAssignment = {
+        reviewerUserId,
+        reviewerName: reviewer.fullName,
+        assignedAt: now,
+        assignedBy: 'demo-user',
+      };
+      caseItem.updatedAt = now;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+    }
+  }
+
+  async submitDoctorReview(caseId: string, outcome: 'Approved' | 'Approved_With_Comments' | 'Returned', comments?: string, gatingInfo?: SubmitGatingInfo): Promise<void> {
+    const existing = this.doctorReviews[caseId];
+    if (!existing?.assignedToUserId) {
+      throw new Error('No clinical reviewer assigned for this case');
+    }
+
+    const now = new Date().toISOString();
+    this.doctorReviews[caseId] = {
+      ...existing,
+      submittedAt: now,
+      outcome,
+      comments: comments || undefined,
+      gatingResult: gatingInfo
+        ? { canSubmit: gatingInfo.canSubmit, reasons: gatingInfo.blockedBy }
+        : existing.gatingResult,
+      updatedAt: now,
+    };
+    this.saveDoctorReviews();
   }
 
   private static readonly BENE_KEY = 'nfi_demo_beneficiary_v1';

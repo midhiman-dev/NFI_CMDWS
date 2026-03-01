@@ -113,7 +113,9 @@ export const caseService = {
           docType: existing.doc_type,
           fileName: existing.file_name,
           fileType: existing.file_type,
+          mimeType: existing.file_type,
           size: existing.size,
+          fileSize: existing.size,
           uploadedAt: existing.uploaded_at,
           uploadedBy: existing.uploaded_by,
           status: existing.status,
@@ -151,8 +153,8 @@ export const caseService = {
     const dbUpdates: any = {};
 
     if (updates.fileName) dbUpdates.file_name = updates.fileName;
-    if (updates.fileType) dbUpdates.file_type = updates.fileType;
-    if (updates.size !== undefined) dbUpdates.size = updates.size;
+    if (updates.fileType || updates.mimeType) dbUpdates.file_type = updates.fileType || updates.mimeType;
+    if (updates.size !== undefined || updates.fileSize !== undefined) dbUpdates.size = updates.size ?? updates.fileSize;
     if (updates.uploadedAt) dbUpdates.uploaded_at = updates.uploadedAt;
     if (updates.uploadedBy) dbUpdates.uploaded_by = updates.uploadedBy;
     if (updates.status) dbUpdates.status = updates.status;
@@ -697,7 +699,7 @@ export const caseService = {
     const { data, error } = await supabase
       .from('users')
       .select('id, full_name, email')
-      .eq('role', 'hospital_doctor')
+      .in('role', ['clinical_reviewer', 'clinical', 'hospital_doctor'])
       .eq('is_active', true)
       .order('full_name');
 
