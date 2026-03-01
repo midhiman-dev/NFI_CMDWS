@@ -402,7 +402,7 @@ export function CaseNew() {
                 )}
               </NfiField>
 
-              <NfiField label="Admission Date" required>
+              <NfiField label="Admission Date (dd-mm-yyyy)" required>
                 <input
                   type="date"
                   value={formData.admissionDate}
@@ -411,7 +411,7 @@ export function CaseNew() {
                 />
               </NfiField>
 
-              <NfiField label="Intake Date" required hint="Date when case was registered with NFI">
+              <NfiField label="Intake Date (dd-mm-yyyy)" required hint="Date when case was registered with NFI">
                 <input
                   type="date"
                   value={formData.intakeDate}
@@ -462,7 +462,7 @@ export function CaseNew() {
                 </select>
               </NfiField>
 
-              <NfiField label="Date of Birth" required>
+              <NfiField label="Date of Birth (dd-mm-yyyy)" required>
                 <input
                   type="date"
                   value={formData.dob}

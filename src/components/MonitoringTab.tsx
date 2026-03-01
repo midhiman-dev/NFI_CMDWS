@@ -7,6 +7,7 @@ import { NfiModal } from './design-system/NfiModal';
 import { useToast } from './design-system/Toast';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
+import { formatDateDMY } from '../utils/dateFormat';
 import type { Case, User, ClinicalCaseDetails } from '../types';
 import type { BeniProgramOpsData } from '../data/providers/DataProvider';
 
@@ -195,14 +196,14 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                 {nextDueMilestone.milestoneMonths} Months
               </p>
               <p className="text-sm text-blue-600">
-                Due: {new Date(nextDueMilestone.dueDate).toLocaleDateString()}
+                Due: {formatDateDMY(nextDueMilestone.dueDate)}
               </p>
             </div>
           )}
           <div>
             <p className="text-sm text-[var(--nfi-text-secondary)]">Anchor Date</p>
             <p className="text-base font-medium text-[var(--nfi-text)]">
-              {anchorDate ? new Date(anchorDate).toLocaleDateString() : 'Not set'}
+              {anchorDate ? formatDateDMY(anchorDate) : 'Not set'}
             </p>
             <p className="text-xs text-[var(--nfi-text-secondary)]">
               {clinicalDetails?.dischargeDate ? '(Discharge)' : clinicalDetails?.admissionDate ? '(Admission)' : ''}
@@ -294,7 +295,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                 <div>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">Hamper Sent</p>
                   <p className="font-medium text-[var(--nfi-text)]">
-                    {new Date(beniOps.hamperSentDate).toLocaleDateString()}
+                    {formatDateDMY(beniOps.hamperSentDate)}
                   </p>
                 </div>
               )}
@@ -302,7 +303,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                 <div>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">Voice Note Received</p>
                   <p className="font-medium text-[var(--nfi-text)]">
-                    {new Date(beniOps.voiceNoteReceivedAt).toLocaleDateString()}
+                    {formatDateDMY(beniOps.voiceNoteReceivedAt)}
                   </p>
                 </div>
               )}
@@ -360,13 +361,13 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)]">
                           <Calendar size={14} />
-                          {milestone.dueDate ? new Date(milestone.dueDate).toLocaleDateString() : 'Not set'}
+                          {milestone.dueDate ? formatDateDMY(milestone.dueDate) : 'Not set'}
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         {milestone.followupDate ? (
                           <span className="text-sm text-[var(--nfi-text)]">
-                            {new Date(milestone.followupDate).toLocaleDateString()}
+                            {formatDateDMY(milestone.followupDate)}
                           </span>
                         ) : (
                           <span className="text-sm text-[var(--nfi-text-secondary)]">-</span>

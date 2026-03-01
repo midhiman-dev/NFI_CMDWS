@@ -2,6 +2,7 @@ import { NfiModal } from './design-system/NfiModal';
 import { NfiBadge } from './design-system/NfiBadge';
 import { FileText, Calendar, User, HardDrive, File } from 'lucide-react';
 import type { DocumentMetadata } from '../types';
+import { formatDateTimeDMY } from '../utils/dateFormat';
 
 interface DocumentPreviewModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export function DocumentPreviewModal({ isOpen, onClose, document: doc, caseRef }
             <div>
               <p className="text-xs text-[var(--nfi-text-secondary)] uppercase font-medium">Uploaded At</p>
               <p className="text-sm font-medium text-[var(--nfi-text)]">
-                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'N/A'}
+                {doc.uploadedAt ? formatDateTimeDMY(doc.uploadedAt) : 'N/A'}
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { IntakeFundApplication } from '../../types';
 import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
 import { parseNumberInput } from '../../utils/fieldValue';
+import { formatDateDMY } from '../../utils/dateFormat';
 import {
   validateFundApplicationSection,
   FUND_APPLICATION_FIELDS,
@@ -110,7 +111,7 @@ export function FundApplicationForm({
       >
         <div className="grid grid-cols-2 gap-4">
           <NfiField
-            label="Father's Date of Birth"
+            label="Father's Date of Birth (dd-mm-yyyy)"
             type="input"
             inputProps={{
               type: 'date',
@@ -128,7 +129,7 @@ export function FundApplicationForm({
             }}
           />
           <NfiField
-            label="Mother's Date of Birth"
+            label="Mother's Date of Birth (dd-mm-yyyy)"
             type="input"
             inputProps={{
               type: 'date',
@@ -146,7 +147,7 @@ export function FundApplicationForm({
             }}
           />
           <NfiField
-            label="Marriage Date"
+            label="Marriage Date (dd-mm-yyyy)"
             type="input"
             inputProps={{
               type: 'date',
@@ -344,7 +345,7 @@ export function FundApplicationForm({
       >
         <div className="grid grid-cols-2 gap-4">
           <NfiField
-            label="NICU Admission Date"
+            label="NICU Admission Date (dd-mm-yyyy)"
             type="input"
             inputProps={{
               type: 'date',
@@ -454,7 +455,7 @@ export function FundApplicationForm({
           </label>
           {formData.declarationsSection?.declarationsAccepted && (
             <p className="text-sm text-[var(--nfi-text-light)]">
-              Accepted on {new Date().toLocaleDateString()}
+              Accepted on {formatDateDMY(new Date())}
             </p>
           )}
         </div>

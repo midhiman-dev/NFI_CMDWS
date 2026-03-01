@@ -416,7 +416,7 @@ function generateCommitteeReviews(casesList: any[], financialDetails: any[]) {
         outcome: caseObj.caseStatus === 'Rejected' ? 'Rejected' : decision,
         amount_sanctioned: approvedAmount,
         approvedAmount,
-        remarks: `Reviewed on ${new Date().toLocaleDateString()}`,
+        remarks: `Reviewed on ${new Date().toISOString().slice(0, 10).split('-').reverse().join('-')}`,
         reviewedBy: null,
         decisionDate: caseObj.decisionAt || new Date(),
         comments: `Committee decision: ${decision}`,

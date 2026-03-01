@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { formatDateDMY } from '../utils/dateFormat';
+
 
 export const adminService = {
   async getUsers() {
@@ -562,7 +564,7 @@ export const adminService = {
       reasonForRejection: r.reason_category || '',
       statusOfRejection: r.rejection_level || '',
       statusOfCommunication: r.communication_status || '',
-      dateOfRejection: r.rejection_date ? new Date(r.rejection_date).toLocaleDateString() : '',
+      dateOfRejection: formatDateDMY(r.rejection_date),
       referringHospital: r.referring_hospital || '',
       remarks: r.detailed_reason || '',
     }));
