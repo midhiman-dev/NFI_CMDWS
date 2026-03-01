@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions } from '../../types';
 import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { mockStore } from '../../store/mockStore';
@@ -1923,6 +1923,51 @@ export class MockProvider implements DataProvider {
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  async getWorkflowExt(caseId: string): Promise<WorkflowExtensions | null> {
+    const caseItem = this.data.cases.find(c => c.caseId === caseId);
+    return caseItem?.workflowExt || null;
+  }
+
+  async saveWorkflowExt(caseId: string, patch: Partial<WorkflowExtensions>): Promise<void> {
+    const idx = this.data.cases.findIndex(c => c.caseId === caseId);
+    if (idx < 0) {
+      throw new Error('Case not found');
+    }
+
+    const existingWorkflow = (this.data.cases[idx].workflowExt || {}) as WorkflowExtensions;
+    const updatedWorkflow: WorkflowExtensions = {
+      ...existingWorkflow,
+      ...patch,
+      interview: {
+        ...existingWorkflow.interview,
+        ...patch.interview,
+      },
+      appeal: {
+        ...existingWorkflow.appeal,
+        ...patch.appeal,
+      },
+      funding: {
+        ...existingWorkflow.funding,
+        ...patch.funding,
+        campaign: {
+          ...existingWorkflow.funding?.campaign,
+          ...patch.funding?.campaign,
+        },
+        sponsorQuantification: {
+          ...existingWorkflow.funding?.sponsorQuantification,
+          ...patch.funding?.sponsorQuantification,
+        },
+      },
+    };
+
+    this.data.cases[idx] = {
+      ...this.data.cases[idx],
+      workflowExt: updatedWorkflow,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
   }
 
   async getSettlement(caseId: string): Promise<SettlementRecord | null> {

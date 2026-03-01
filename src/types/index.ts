@@ -174,6 +174,64 @@ export interface SettlementRecord {
   updatedAt?: string;
 }
 
+export interface WorkflowInterview {
+  status?: 'NotStarted' | 'Completed';
+  notes?: string;
+  outcome?: 'Proceed' | 'NeedFollowUp' | 'UnableToContact';
+  interviewedAt?: string;
+  interviewedByUserId?: string;
+  interviewedByName?: string;
+}
+
+export interface WorkflowAppeal {
+  requested?: boolean;
+  requestReason?: string;
+  requestedAt?: string;
+  requestedByUserId?: string;
+  requestedByName?: string;
+  status?: 'Pending' | 'Approved' | 'Rejected';
+  decisionComments?: string;
+  decidedAt?: string;
+  decidedByUserId?: string;
+  decidedByName?: string;
+}
+
+export interface WorkflowCampaign {
+  campaignName?: string;
+  platform?: string;
+  link?: string;
+  targetAmount?: number;
+  raisedAmount?: number;
+  status?: 'Draft' | 'Active' | 'Closed';
+  updatedAt?: string;
+}
+
+export interface WorkflowSponsorQuantification {
+  sponsorName?: string;
+  proposedAmount?: number;
+  notes?: string;
+  status?: 'NotStarted' | 'PendingDirectorApproval' | 'Approved' | 'Returned';
+  submittedAt?: string;
+  submittedByUserId?: string;
+  submittedByName?: string;
+  directorComments?: string;
+  decidedAt?: string;
+  decidedByUserId?: string;
+  decidedByName?: string;
+}
+
+export interface WorkflowFunding {
+  channel?: 'DirectSponsor' | 'Campaign';
+  campaign?: WorkflowCampaign;
+  sponsorQuantification?: WorkflowSponsorQuantification;
+}
+
+export interface WorkflowExtensions {
+  interview?: WorkflowInterview;
+  appeal?: WorkflowAppeal;
+  funding?: WorkflowFunding;
+}
+
 export interface Case {
   caseId: string;
   caseRef: string;
@@ -186,6 +244,7 @@ export interface Case {
   updatedAt: string;
   lastActionAt: string;
   settlement?: SettlementRecord;
+  workflowExt?: WorkflowExtensions;
 }
 
 export interface ChildProfile {

@@ -1,4 +1,4 @@
-import { ChevronDown, CheckCircle2 } from 'lucide-react';
+﻿import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { NfiButton } from '../design-system/NfiButton';
 import { SectionStatus } from '../../utils/intakeValidation';
@@ -84,7 +84,7 @@ export function IntakeSectionAccordion({
                 <ul className="mt-2 space-y-1">
                   {Object.entries(errors).map(([field, message]) => (
                     <li key={field} className="text-sm text-[var(--nfi-error)]">
-                      • {message}
+                      - {message}
                     </li>
                   ))}
                 </ul>
@@ -114,3 +114,4 @@ export function IntakeSectionAccordion({
     </div>
   );
 }
+

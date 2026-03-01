@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, ChecklistReadiness, VerificationRecord, CommitteeReviewRecord, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions } from '../../types';
 import { caseService } from '../../services/caseService';
 import { supabase } from '../../lib/supabase';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
@@ -1708,6 +1708,81 @@ export class DbProvider implements DataProvider {
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  async getWorkflowExt(caseId: string): Promise<WorkflowExtensions | null> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data?.data?.workflowExt) {
+        return null;
+      }
+
+      return caseRow.data.data.workflowExt as WorkflowExtensions;
+    } catch (e) {
+      console.error('Failed to get workflow extensions:', e);
+      return null;
+    }
+  }
+
+  async saveWorkflowExt(caseId: string, patch: Partial<WorkflowExtensions>): Promise<void> {
+    try {
+      const caseRow = await supabase
+        .from('cases')
+        .select('data')
+        .eq('id', caseId)
+        .maybeSingle();
+
+      if (caseRow.error || !caseRow.data) {
+        throw new Error('Case not found');
+      }
+
+      const existing = caseRow.data.data || {};
+      const existingWorkflow = (existing.workflowExt || {}) as WorkflowExtensions;
+      const updatedWorkflow: WorkflowExtensions = {
+        ...existingWorkflow,
+        ...patch,
+        interview: {
+          ...existingWorkflow.interview,
+          ...patch.interview,
+        },
+        appeal: {
+          ...existingWorkflow.appeal,
+          ...patch.appeal,
+        },
+        funding: {
+          ...existingWorkflow.funding,
+          ...patch.funding,
+          campaign: {
+            ...existingWorkflow.funding?.campaign,
+            ...patch.funding?.campaign,
+          },
+          sponsorQuantification: {
+            ...existingWorkflow.funding?.sponsorQuantification,
+            ...patch.funding?.sponsorQuantification,
+          },
+        },
+      };
+
+      const updated = {
+        ...existing,
+        workflowExt: updatedWorkflow,
+      };
+
+      const { error } = await supabase
+        .from('cases')
+        .update({ data: updated })
+        .eq('id', caseId);
+
+      if (error) throw error;
+    } catch (e) {
+      console.error('Failed to save workflow extensions:', e);
+      throw e;
+    }
   }
 
   async getSettlement(caseId: string): Promise<SettlementRecord | null> {

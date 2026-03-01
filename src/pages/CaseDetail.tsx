@@ -16,6 +16,7 @@ import { FinancialTab } from '../components/case-tabs/FinancialTab';
 import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
+import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
@@ -25,6 +26,8 @@ import { getDoctorReviewGatingInfo } from '../utils/submitGating';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
+import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
+import { normalizeSeparator } from '../utils/textNormalize';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
@@ -123,6 +126,7 @@ export function CaseDetail() {
         { id: 'doctor-review', label: 'Clinical Review', icon: <Stethoscope size={16} /> },
         { id: 'verification', label: 'Verification', icon: <CheckCircle size={16} /> },
         { id: 'approval', label: 'Approval', icon: <CheckCircle size={16} /> },
+        { id: 'workflow-extensions', label: 'Workflow Extensions', icon: <CheckCircle size={16} /> },
         ...(showPostApproval ? [
           { id: 'settlement', label: 'Settlement & Closure', icon: <CheckCircle size={16} /> },
           { id: 'installments', label: 'Installments', icon: <Clock size={16} /> },
@@ -147,7 +151,7 @@ export function CaseDetail() {
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{caseData.caseRef}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">
-              {caseData.processType} â€¢ {hospitalName}
+              {normalizeSeparator(`${caseData.processType}${CASE_SUBTITLE_SEPARATOR}${hospitalName}`)}
             </p>
           </div>
           <NfiBadge
@@ -205,6 +209,14 @@ export function CaseDetail() {
                 />
               )}
               {activeTab === 'approval' && <ApprovalTab caseId={caseId!} />}
+              {activeTab === 'workflow-extensions' && (
+                <WorkflowExtensionsTab
+                  caseId={caseId!}
+                  caseData={caseData}
+                  currentUser={authState.activeUser}
+                  onUpdate={bumpDocs}
+                />
+              )}
               {activeTab === 'settlement' && <SettlementTab caseId={caseId!} caseData={caseData} onStatusChange={() => {}} />}
               {activeTab === 'installments' && <InstallmentsTab caseId={caseId!} caseData={caseData} onUpdate={() => {}} />}
               {activeTab === 'monitoring' && <MonitoringTab caseId={caseId!} />}
@@ -850,9 +862,9 @@ function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: Do
                           <p className="text-xs text-[var(--nfi-text-secondary)] mt-1 flex items-center gap-1.5 flex-wrap">
                             <Paperclip size={12} />
                             <span>{latestVersion.fileName || 'Uploaded file'}</span>
-                            {latestVersion.uploadedAt && <span>• {new Date(latestVersion.uploadedAt).toLocaleString()}</span>}
+                            {latestVersion.uploadedAt && <span>{CASE_SUBTITLE_SEPARATOR}{new Date(latestVersion.uploadedAt).toLocaleString()}</span>}
                             {(latestVersion.fileSize ?? latestVersion.size) && (
-                              <span>• {formatFileSize(latestVersion.fileSize ?? latestVersion.size)}</span>
+                              <span>{CASE_SUBTITLE_SEPARATOR}{formatFileSize(latestVersion.fileSize ?? latestVersion.size)}</span>
                             )}
                           </p>
                         )}
@@ -1195,16 +1207,16 @@ function VerificationTab({
               <p className="text-sm font-medium text-red-800">Cannot Submit - Incomplete</p>
               <div className="text-xs text-red-700 mt-2 space-y-1">
                 {!doctorGating.canSendToCommittee && (
-                  <p>â€¢ Clinical Review: {doctorGating.reason}</p>
+                  <p>- Clinical Review: {doctorGating.reason}</p>
                 )}
                 {!readiness?.fundAppComplete && (
-                  <p>â€¢ Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
+                  <p>- Fund Application: {readiness?.fundAppTotalPercent || 0}% complete</p>
                 )}
                 {!readiness?.interimSummaryComplete && (
-                  <p>â€¢ Interim Summary: {readiness?.interimSummaryTotalPercent || 0}% complete</p>
+                  <p>- Interim Summary: {readiness?.interimSummaryTotalPercent || 0}% complete</p>
                 )}
                 {readiness?.missingDocuments && readiness.missingDocuments.length > 0 && (
-                  <p>â€¢ Missing documents: {readiness.missingDocuments.join(', ')}</p>
+                  <p>- Missing documents: {readiness.missingDocuments.join(', ')}</p>
                 )}
               </div>
               {!doctorGating.canSendToCommittee && (
@@ -1858,7 +1870,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                   <p className="font-medium text-[var(--nfi-text)]">{inst.label}</p>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">
                     â‚¹{inst.amount.toLocaleString()}
-                    {inst.dueDate && ` â€¢ Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
+                    {inst.dueDate && `${CASE_SUBTITLE_SEPARATOR}Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
                   </p>
                 </div>
                 <NfiBadge tone={inst.status === 'Paid' ? 'success' : inst.status === 'Requested' ? 'warning' : 'neutral'}>

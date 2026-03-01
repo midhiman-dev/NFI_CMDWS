@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
+import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
+import { normalizeSeparator } from '../utils/textNormalize';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
 
 export function Dashboard() {
@@ -153,8 +155,9 @@ export function Dashboard() {
                       <NfiBadge tone={getStatusTone(c.caseStatus)}>{c.caseStatus.replace(/_/g, ' ')}</NfiBadge>
                     </div>
                     <p className="text-sm text-[var(--nfi-text-secondary)]">
-                      {c.childName && `${c.childName} - `}
-                      {c.hospitalName || 'Unknown Hospital'} - {c.processType}
+                      {normalizeSeparator(
+                        `${c.childName ? `${c.childName}${CASE_SUBTITLE_SEPARATOR}` : ''}${c.hospitalName || 'Unknown Hospital'}${CASE_SUBTITLE_SEPARATOR}${c.processType}`
+                      )}
                     </p>
                   </div>
                   <p className="text-xs text-[var(--nfi-text-secondary)]">
