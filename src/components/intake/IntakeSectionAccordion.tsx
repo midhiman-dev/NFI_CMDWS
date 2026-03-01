@@ -1,4 +1,4 @@
-import { ChevronDown, CheckCircle2 } from 'lucide-react';
+﻿import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { NfiButton } from '../design-system/NfiButton';
 import { SectionStatus } from '../../utils/intakeValidation';
