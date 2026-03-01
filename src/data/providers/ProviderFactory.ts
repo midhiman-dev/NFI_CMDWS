@@ -3,6 +3,8 @@ import type { DataProvider, DataMode } from './DataProvider';
 import { DbProvider } from './DbProvider';
 import { MockProvider } from './MockProvider';
 
+const ENABLE_DB_MODE = import.meta.env.VITE_ENABLE_DB_MODE === 'true';
+
 class ProviderFactory {
   private provider: DataProvider | null = null;
   private mode: DataMode | null = null;
@@ -10,6 +12,14 @@ class ProviderFactory {
 
   async initialize(): Promise<{ provider: DataProvider; mode: DataMode }> {
     if (this.initialized && this.provider && this.mode) {
+      return { provider: this.provider, mode: this.mode };
+    }
+
+    if (!ENABLE_DB_MODE) {
+      this.provider = new MockProvider();
+      this.mode = 'DEMO';
+      localStorage.setItem('nfi_force_demo_mode', 'true');
+      this.initialized = true;
       return { provider: this.provider, mode: this.mode };
     }
 

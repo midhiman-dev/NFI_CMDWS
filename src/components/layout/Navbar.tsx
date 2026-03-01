@@ -1,4 +1,4 @@
-import { LogOut, User, ChevronDown, Database, Beaker } from 'lucide-react';
+import { LogOut, User, ChevronDown, Database, Beaker, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import { getAuthState, logout, switchRole } from '../../utils/auth';
 import { UserRole } from '../../types';
 import { useAppContext } from '../../App';
 import { APP_NAME } from '../../constants/branding';
+
+const ENABLE_DB_MODE = import.meta.env.VITE_ENABLE_DB_MODE === 'true';
 
 export function Navbar() {
   const navigate = useNavigate();
@@ -61,14 +63,30 @@ export function Navbar() {
               <p className="text-xs text-gray-300">Case Management & Document Workflow System</p>
             </div>
             <div
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                mode === 'DB'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold group relative ${
+                !ENABLE_DB_MODE
+                  ? 'bg-slate-600 text-white'
+                  : mode === 'DB'
                   ? 'bg-blue-600 text-white'
                   : 'bg-orange-500 text-white'
               }`}
+              title={!ENABLE_DB_MODE ? 'Database mode disabled (pilot demo)' : undefined}
             >
-              {mode === 'DB' ? <Database size={14} /> : <Beaker size={14} />}
-              <span>Mode: {mode}</span>
+              {!ENABLE_DB_MODE ? (
+                <AlertCircle size={14} />
+              ) : mode === 'DB' ? (
+                <Database size={14} />
+              ) : (
+                <Beaker size={14} />
+              )}
+              <span>
+                {!ENABLE_DB_MODE ? 'Demo Only' : `Mode: ${mode}`}
+              </span>
+              {!ENABLE_DB_MODE && (
+                <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50">
+                  Database mode disabled (pilot demo)
+                </div>
+              )}
             </div>
             <div className="relative">
               <button
