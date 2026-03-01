@@ -52,6 +52,22 @@ export class DbProvider implements DataProvider {
     }));
   }
 
+  async getHospitalProcessType(hospitalId: string): Promise<import('../../types').ProcessType | null> {
+    try {
+      const { data, error } = await supabase
+        .from('hospital_process_maps')
+        .select('process_type')
+        .eq('hospital_id', hospitalId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return data.process_type;
+    } catch {
+      return null;
+    }
+  }
+
   async createCase(payload: CreateCasePayload): Promise<CaseWithDetails> {
     const year = new Date().getFullYear();
     const { count } = await supabase

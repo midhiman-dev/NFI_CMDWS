@@ -2039,7 +2039,7 @@ export class MockProvider implements DataProvider {
         caseItem.caseStatus = 'Closed';
         caseItem.closureDate = new Date().toISOString().split('T')[0];
         caseItem.updatedAt = new Date().toISOString();
-        this.saveData();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
       }
     } catch (e) {
       console.error('Failed to close case with settlement:', e);

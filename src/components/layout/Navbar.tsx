@@ -36,6 +36,8 @@ export function Navbar() {
   const roleLabels: Record<UserRole, string> = {
     hospital_spoc: t('roles.hospital_spoc'),
     clinical: t('roles.clinical'),
+    clinical_reviewer: t('roles.clinical'),
+    hospital_doctor: t('roles.clinical'),
     verifier: t('roles.verifier'),
     committee_member: t('roles.committee_member'),
     accounts: t('roles.accounts'),
