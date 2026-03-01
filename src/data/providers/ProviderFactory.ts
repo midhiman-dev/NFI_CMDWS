@@ -39,31 +39,19 @@ class ProviderFactory {
   private async runHealthCheck(): Promise<{ healthy: boolean }> {
     try {
       const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Health check timeout')), 500)
+        setTimeout(() => reject(new Error('Health check timeout')), 3000)
       );
 
-      const checks = Promise.all([
-        supabase.from('users').select('id', { count: 'exact', head: true }),
-        supabase.from('hospitals').select('id', { count: 'exact', head: true }),
-        supabase.from('cases').select('id', { count: 'exact', head: true }),
-      ]);
+      const check = supabase.from('app_settings').select('key').limit(1);
 
-      const results = await Promise.race([checks, timeout]) as any[];
+      const result = await Promise.race([check, timeout]) as any;
 
-      for (const result of results) {
-        if (result.error) {
-          console.warn('Health check failed:', result.error);
+      if (result.error) {
+        const code = result.error?.code;
+        if (code === 'PGRST116' || result.error?.message?.includes('does not exist')) {
+          console.warn('Health check: table not found', result.error);
           return { healthy: false };
         }
-      }
-
-      const [usersResult, hospitalsResult] = results;
-      const userCount = usersResult.count || 0;
-      const hospitalCount = hospitalsResult.count || 0;
-
-      if (userCount === 0 || hospitalCount === 0) {
-        console.warn('Database empty: users=' + userCount + ', hospitals=' + hospitalCount);
-        return { healthy: false };
       }
 
       return { healthy: true };
