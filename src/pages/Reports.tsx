@@ -7,9 +7,10 @@ import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiField } from '../components/design-system/NfiField';
 import { NfiModal } from '../components/design-system/NfiModal';
 import { useToast } from '../components/design-system/Toast';
-import { Play, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Play, Clock, CheckCircle, AlertCircle, Download, Info } from 'lucide-react';
 import { useAppContext } from '../App';
 import type { ReportTemplate, ReportRun } from '../types';
+import { STATUS_GROUP_ORDER, STATUS_GROUP_LABELS } from '../utils/reportingStatusTaxonomy';
 
 export function Reports() {
   const navigate = useNavigate();
@@ -114,6 +115,50 @@ export function Reports() {
     }
   };
 
+  const formatDownloadTimestamp = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}_${hh}${min}`;
+  };
+
+  const downloadRunAsCSV = (run: ReportRun) => {
+    const headers = ['Run ID', 'Template', 'Code', 'Status', 'Fiscal Year', 'Month Range', 'Data As Of', 'Generated At', 'Created At'];
+    const filters = run.filters || {};
+    const dataRow = [
+      run.runId,
+      run.templateName || '',
+      run.templateCode || '',
+      run.status,
+      filters.fiscalYear ? String(filters.fiscalYear) : '',
+      filters.monthRange ? `${filters.monthRange[0]}-${filters.monthRange[1]}` : '',
+      run.dataAsOf || '',
+      run.generatedAt ? new Date(run.generatedAt).toLocaleString() : '',
+      new Date(run.createdAt).toLocaleString(),
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      dataRow.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const safeName = (run.templateName || 'Report').replace(/[^a-zA-Z0-9]/g, '_');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${safeName}_${formatDownloadTimestamp()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Download started', 'success');
+  };
+
   const recentRuns = runs.filter(r => !selectedTemplate || r.templateId === selectedTemplate.templateId).slice(0, 10);
 
   return (
@@ -187,8 +232,27 @@ export function Reports() {
             </NfiCard>
 
             <NfiCard>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-4">Run History</h2>
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Run History</h2>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-[var(--nfi-text-secondary)] whitespace-nowrap">
+                    Status Group
+                  </label>
+                  <select
+                    disabled
+                    className="px-3 py-1.5 border border-[var(--nfi-border)] rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                    title="Status grouping is available when reports are run for cases"
+                  >
+                    <option value="all">All Groups</option>
+                    {STATUS_GROUP_ORDER.map(group => (
+                      <option key={group} value={group}>{STATUS_GROUP_LABELS[group]}</option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-1 text-xs text-[var(--nfi-text-secondary)]" title="Status grouping is available when case datasets are linked to report runs">
+                    <Info size={13} className="text-gray-400 flex-shrink-0" />
+                    <span className="hidden sm:inline">Available when report is run for cases</span>
+                  </div>
+                </div>
               </div>
 
               {recentRuns.length === 0 ? (
@@ -207,6 +271,7 @@ export function Reports() {
                         <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Data As Of</th>
                         <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Generated At</th>
                         <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Created</th>
+                        <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Download</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -234,6 +299,17 @@ export function Reports() {
                           </td>
                           <td className="py-3 px-4 text-[var(--nfi-text-secondary)] text-sm">
                             {new Date(run.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => downloadRunAsCSV(run)}
+                              disabled={run.status !== 'Succeeded'}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-[var(--nfi-primary)] text-white rounded text-sm hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={run.status !== 'Succeeded' ? 'Report must be completed to download' : 'Download as CSV'}
+                            >
+                              <Download size={13} />
+                              CSV
+                            </button>
                           </td>
                         </tr>
                       ))}

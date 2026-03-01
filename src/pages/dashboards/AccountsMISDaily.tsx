@@ -129,6 +129,16 @@ export function AccountsMISDaily() {
   const [exporting, setExporting] = useState(false);
   const dataAsOf = new Date(2024, 11, 15);
 
+  const formatDownloadTimestamp = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}_${hh}${min}`;
+  };
+
   const handleExport = async () => {
     try {
       setExporting(true);
@@ -143,8 +153,8 @@ export function AccountsMISDaily() {
       });
 
       const csv = generateCSV(sampleData);
-      downloadCSV(csv, `accounts-mis-daily-${selectedDate}`);
-      showToast('Report exported successfully', 'success');
+      downloadCSV(csv, `Accounts_MIS_Daily_${formatDownloadTimestamp()}`);
+      showToast('Download started', 'success');
       navigate('/reports/runs');
     } catch (error) {
       console.error('Error exporting report:', error);
