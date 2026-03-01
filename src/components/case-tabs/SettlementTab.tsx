@@ -5,6 +5,7 @@ import { NfiField } from '../design-system/NfiField';
 import { NfiCard } from '../design-system/NfiCard';
 import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
+import { getAuthState } from '../../utils/auth';
 import { caseService } from '../../services/caseService';
 import type { SettlementRecord, Case, CaseStatus } from '../../types';
 
@@ -15,8 +16,10 @@ interface Props {
 }
 
 export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
-  const { provider, user } = useAppContext();
+  const { provider } = useAppContext();
   const { showToast } = useToast();
+  const authState = getAuthState();
+  const user = authState.activeUser;
 
   const [settlement, setSettlement] = useState<SettlementRecord | null>(null);
   const [loading, setLoading] = useState(true);

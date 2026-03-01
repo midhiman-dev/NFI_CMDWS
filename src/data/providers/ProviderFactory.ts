@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import type { DataProvider, DataMode } from './DataProvider';
 import { DbProvider } from './DbProvider';
 import { MockProvider } from './MockProvider';
@@ -15,7 +15,7 @@ class ProviderFactory {
 
     const forceDemo = localStorage.getItem('nfi_force_demo_mode') === 'true';
 
-    if (forceDemo) {
+    if (forceDemo || !isSupabaseConfigured()) {
       this.provider = new MockProvider();
       this.mode = 'DEMO';
       this.initialized = true;
@@ -39,7 +39,7 @@ class ProviderFactory {
   private async runHealthCheck(): Promise<{ healthy: boolean }> {
     try {
       const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Health check timeout')), 3000)
+        setTimeout(() => reject(new Error('Health check timeout')), 5000)
       );
 
       const check = supabase.from('app_settings').select('key').limit(1);
@@ -49,14 +49,12 @@ class ProviderFactory {
       if (result.error) {
         const code = result.error?.code;
         if (code === 'PGRST116' || result.error?.message?.includes('does not exist')) {
-          console.warn('Health check: table not found', result.error);
           return { healthy: false };
         }
       }
 
       return { healthy: true };
-    } catch (error) {
-      console.warn('Health check error:', error);
+    } catch {
       return { healthy: false };
     }
   }
