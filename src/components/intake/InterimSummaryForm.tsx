@@ -3,6 +3,7 @@ import { IntakeInterimSummary } from '../../types';
 import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
 import { parseNumberInput } from '../../utils/fieldValue';
+import { textareaBase } from '../ui/formStyles';
 import {
   INTERIM_SUMMARY_FIELDS,
   getInterimSummarySectionProgress,
@@ -243,13 +244,13 @@ export function InterimSummaryForm({
         isDirty={dirtyFields.has('antenatalRiskFactorsSection')}
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Risk Factors</label>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-700">Risk Factors</label>
             <textarea
               value={(formData.antenatalRiskFactorsSection?.riskFactors || []).join('\n')}
               onChange={e => handleFieldChange('antenatalRiskFactorsSection', 'riskFactors', e.target.value.split('\n').filter(s => s.trim()))}
               placeholder="One per line (e.g., Hypertension, Diabetes, Previous Cesarean, etc.)"
-              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)] min-h-24"
+              className={textareaBase}
             />
           </div>
           <NfiField
@@ -271,13 +272,13 @@ export function InterimSummaryForm({
         isDirty={dirtyFields.has('diagnosisSection')}
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Diagnoses</label>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-700">Diagnoses</label>
             <textarea
               value={(formData.diagnosisSection?.diagnoses || []).join('\n')}
               onChange={e => handleFieldChange('diagnosisSection', 'diagnoses', e.target.value.split('\n').filter(s => s.trim()))}
               placeholder="One per line (e.g., Respiratory Distress Syndrome, Hyperbilirubinemia, etc.)"
-              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)] min-h-24"
+              className={textareaBase}
             />
           </div>
           <NfiField
@@ -307,36 +308,36 @@ export function InterimSummaryForm({
               type="checkbox"
               checked={formData.treatmentGivenSection?.respiratorySupportRequired || false}
               onChange={e => handleFieldChange('treatmentGivenSection', 'respiratorySupportRequired', e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">Respiratory Support Required</span>
+            <span className="text-sm text-slate-700">Respiratory Support Required</span>
           </label>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.treatmentGivenSection?.phototherapyRequired || false}
               onChange={e => handleFieldChange('treatmentGivenSection', 'phototherapyRequired', e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">Phototherapy Required</span>
+            <span className="text-sm text-slate-700">Phototherapy Required</span>
           </label>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.treatmentGivenSection?.antibioticsRequired || false}
               onChange={e => handleFieldChange('treatmentGivenSection', 'antibioticsRequired', e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">Antibiotics Required</span>
+            <span className="text-sm text-slate-700">Antibiotics Required</span>
           </label>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.treatmentGivenSection?.nutritionalSupportRequired || false}
               onChange={e => handleFieldChange('treatmentGivenSection', 'nutritionalSupportRequired', e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">Nutritional Support Required</span>
+            <span className="text-sm text-slate-700">Nutritional Support Required</span>
           </label>
           <NfiField
             label="Treatment Notes"
@@ -457,9 +458,9 @@ export function InterimSummaryForm({
               type="checkbox"
               checked={formData.dischargePlanInvestigationsSection?.investigationsDone || false}
               onChange={e => handleFieldChange('dischargePlanInvestigationsSection', 'investigationsDone', e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">Investigations Done</span>
+            <span className="text-sm text-slate-700">Investigations Done</span>
           </label>
         </div>
       </IntakeSectionAccordion>

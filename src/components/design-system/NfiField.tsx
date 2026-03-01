@@ -1,4 +1,5 @@
 import { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import { inputBase, inputError, textareaBase, selectBase } from '../ui/formStyles';
 
 interface NfiFieldProps {
   label: string;
@@ -10,6 +11,8 @@ interface NfiFieldProps {
   textareaProps?: TextareaHTMLAttributes<HTMLTextAreaElement>;
   selectProps?: InputHTMLAttributes<HTMLSelectElement>;
   children?: React.ReactNode;
+  value?: string;
+  onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
 }
 
 export function NfiField({
@@ -22,18 +25,26 @@ export function NfiField({
   textareaProps,
   selectProps,
   children,
+  value,
+  onChange,
 }: NfiFieldProps) {
-  const baseInputClasses =
-    'block w-full rounded-md border-[var(--nfi-border)] shadow-sm focus:border-[var(--nfi-primary)] focus:ring-1 focus:ring-[var(--nfi-primary)] sm:text-sm';
-  const errorClasses = error
-    ? 'border-[var(--nfi-error)] focus:border-[var(--nfi-error)] focus:ring-[var(--nfi-error)]'
-    : '';
+  const resolvedInputClass = [inputBase, error ? inputError : '', inputProps?.className || '']
+    .filter(Boolean)
+    .join(' ');
+
+  const resolvedTextareaClass = [textareaBase, error ? inputError : '', textareaProps?.className || '']
+    .filter(Boolean)
+    .join(' ');
+
+  const resolvedSelectClass = [selectBase, error ? inputError : '', selectProps?.className || '']
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-[var(--nfi-text)]">
+      <label className="block text-sm font-medium text-slate-700">
         {label}
-        {required && <span className="text-[var(--nfi-error)] ml-1">*</span>}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
       {children ? (
@@ -42,30 +53,32 @@ export function NfiField({
         <>
           {type === 'input' && (
             <input
-              className={`${baseInputClasses} ${errorClasses} ${inputProps?.className || ''}`}
+              className={resolvedInputClass}
               {...inputProps}
             />
           )}
 
           {type === 'textarea' && (
             <textarea
-              className={`${baseInputClasses} ${errorClasses} ${textareaProps?.className || ''}`}
+              className={resolvedTextareaClass}
               rows={4}
+              value={value}
+              onChange={onChange}
               {...textareaProps}
             />
           )}
 
           {type === 'select' && (
             <select
-              className={`${baseInputClasses} ${errorClasses} ${selectProps?.className || ''}`}
-              {...selectProps}
+              className={resolvedSelectClass}
+              {...(selectProps as React.SelectHTMLAttributes<HTMLSelectElement>)}
             />
           )}
         </>
       )}
 
-      {hint && !error && <p className="text-xs text-[var(--nfi-text-secondary)]">{hint}</p>}
-      {error && <p className="text-xs text-[var(--nfi-error)]">{error}</p>}
+      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
+      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
   );
 }

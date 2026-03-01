@@ -4,6 +4,7 @@ import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
 import { parseNumberInput } from '../../utils/fieldValue';
 import { formatDateDMY } from '../../utils/dateFormat';
+import { inputBase, textareaBase, selectBase } from '../ui/formStyles';
 import {
   validateFundApplicationSection,
   FUND_APPLICATION_FIELDS,
@@ -264,15 +265,15 @@ export function FundApplicationForm({
         isDirty={dirtyFields.has('birthDetailsSection')}
       >
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Inborn/Outborn</label>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-700">Inborn/Outborn</label>
             <select
               value={formData.birthDetailsSection?.isInborn === true ? 'inborn' : formData.birthDetailsSection?.isInborn === false ? 'outborn' : ''}
               onChange={e => {
                 const val = e.target.value === 'inborn' ? true : e.target.value === 'outborn' ? false : undefined;
                 handleFieldChange('birthDetailsSection', 'isInborn', val);
               }}
-              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]"
+              className={selectBase}
             >
               <option value="">Select...</option>
               <option value="inborn">Inborn</option>
@@ -407,13 +408,13 @@ export function FundApplicationForm({
         isDirty={dirtyFields.has('otherSupportSection')}
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Other Support Types</label>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-700">Other Support Types</label>
             <textarea
               value={(formData.otherSupportSection?.otherSupportTypes || []).join('\n')}
               onChange={e => handleFieldChange('otherSupportSection', 'otherSupportTypes', e.target.value.split('\n').filter(s => s.trim()))}
               placeholder="One per line (e.g., Government Scheme, NGO Support, Family Contribution)"
-              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)] min-h-24"
+              className={textareaBase}
             />
           </div>
           <NfiField
@@ -447,9 +448,9 @@ export function FundApplicationForm({
               type="checkbox"
               checked={formData.declarationsSection?.declarationsAccepted || false}
               onChange={e => handleFieldChange('declarationsSection', 'declarationsAccepted', e.target.checked)}
-              className="mt-1 w-4 h-4"
+              className="mt-1 w-4 h-4 accent-teal-600 cursor-pointer"
             />
-            <span className="text-sm text-[var(--nfi-text)]">
+            <span className="text-sm text-slate-700">
               I hereby declare that the information provided is true and correct to the best of my knowledge.
             </span>
           </label>
