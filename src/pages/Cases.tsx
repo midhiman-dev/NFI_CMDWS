@@ -87,6 +87,13 @@ export function Cases() {
     setFilteredCases(filtered);
   };
 
+  const getCaseOpenPath = (caseItem: CaseRow) => {
+    if (authState.activeRole === 'hospital_spoc' && (caseItem.caseStatus === 'Draft' || caseItem.caseStatus === 'Returned')) {
+      return `/cases/${caseItem.caseId}/wizard`;
+    }
+    return `/cases/${caseItem.caseId}`;
+  };
+
   const getRoleAction = (caseItem: CaseRow) => {
     const role = authState.activeRole;
 
@@ -97,14 +104,14 @@ export function Cases() {
             label: 'Continue',
             icon: <Edit size={16} />,
             variant: 'primary' as const,
-            onClick: () => navigate(`/cases/${caseItem.caseId}`),
+            onClick: () => navigate(getCaseOpenPath(caseItem)),
           };
         }
         return {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       case 'clinical':
@@ -112,7 +119,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       case 'verifier':
@@ -128,7 +135,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       case 'committee_member':
@@ -144,7 +151,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       case 'beni_volunteer':
@@ -160,7 +167,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       case 'admin':
@@ -168,7 +175,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
 
       default:
@@ -176,7 +183,7 @@ export function Cases() {
           label: 'View',
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
-          onClick: () => navigate(`/cases/${caseItem.caseId}`),
+          onClick: () => navigate(getCaseOpenPath(caseItem)),
         };
     }
   };
@@ -362,7 +369,7 @@ export function Cases() {
                       >
                         <td className="py-3 px-4">
                           <button
-                            onClick={() => navigate(`/cases/${caseItem.caseId}`)}
+                            onClick={() => navigate(getCaseOpenPath(caseItem))}
                             className="font-medium text-[var(--nfi-primary)] hover:underline text-left"
                           >
                             {caseItem.caseRef}

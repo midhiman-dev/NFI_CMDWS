@@ -608,7 +608,7 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
   );
 }
 
-function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: DocumentWithTemplate[]; caseId: string; onDocumentsChanged: () => void }) {
+export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: DocumentWithTemplate[]; caseId: string; onDocumentsChanged: () => void }) {
   const authState = getAuthState();
   const { showToast } = useToast();
   const { provider, mode } = useAppContext();

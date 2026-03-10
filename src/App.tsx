@@ -133,6 +133,7 @@ function App() {
             <Route path="/dashboard" element={<GuardedRoute pathKey="/dashboard" element={<Dashboard />} />} />
             <Route path="/cases" element={<GuardedRoute pathKey="/cases" element={<Cases />} />} />
             <Route path="/cases/new" element={<GuardedRoute pathKey="/cases/new" element={<CaseNew />} />} />
+            <Route path="/cases/:caseId/wizard" element={<GuardedRoute pathKey="/cases/:caseId/wizard" element={<CaseNew />} />} />
             <Route path="/cases/:caseId" element={<GuardedRoute pathKey="/cases/:caseId" element={<CaseDetail />} />} />
             <Route path="/reports" element={<GuardedRoute pathKey="/reports" element={<Reports />} />} />
             <Route path="/reports/runs" element={<GuardedRoute pathKey="/reports/runs" element={<ReportRuns />} />} />

@@ -58,6 +58,12 @@ export function Dashboard() {
   }, [provider]);
 
   const queueMetrics = getRoleQueueMetrics(authState.activeRole || 'admin', cases);
+  const getCaseOpenPath = (caseItem: CaseWithDetails) => {
+    if (authState.activeRole === 'hospital_spoc' && (caseItem.caseStatus === 'Draft' || caseItem.caseStatus === 'Returned')) {
+      return `/cases/${caseItem.caseId}/wizard`;
+    }
+    return `/cases/${caseItem.caseId}`;
+  };
 
   if (loading) {
     return (
@@ -147,7 +153,7 @@ export function Dashboard() {
                 <div
                   key={c.caseId}
                   className="flex items-center justify-between p-4 border border-[var(--nfi-border)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/cases/${c.caseId}`)}
+                  onClick={() => navigate(getCaseOpenPath(c))}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">

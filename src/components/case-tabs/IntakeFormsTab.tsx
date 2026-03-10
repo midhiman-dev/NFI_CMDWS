@@ -12,9 +12,10 @@ import { deriveMaternalFields, isEmptyDerivedValue, parseDateFlexible } from '..
 interface IntakeFormsTabProps {
   caseId: string;
   variant?: 'detail' | 'wizard';
+  section?: 'fund' | 'interim' | 'both';
 }
 
-export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabProps) {
+export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }: IntakeFormsTabProps) {
   const { showToast } = useToast();
   const authState = getAuthState();
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
@@ -118,9 +119,9 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
       });
   }, [canEdit, caseId, marriageDate, derivedMaternalFields, interimSummary]);
 
-  const handleFundAppSectionSave = async (section: string, data: any) => {
+  const handleFundAppSectionSave = async (sectionName: string, data: any) => {
     try {
-      const updated = { ...fundApplication, [section]: data };
+      const updated = { ...fundApplication, [sectionName]: data };
       await intakeService.saveIntakeSection(caseId, 'fundApp', updated);
       setFundApplication(updated);
 
@@ -134,9 +135,9 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
     }
   };
 
-  const handleInterimSummarySectionSave = async (section: string, data: any) => {
+  const handleInterimSummarySectionSave = async (sectionName: string, data: any) => {
     try {
-      const updated = { ...interimSummary, [section]: data };
+      const updated = { ...interimSummary, [sectionName]: data };
       await intakeService.saveIntakeSection(caseId, 'interimSummary', updated);
       setInterimSummary(updated);
 
@@ -190,89 +191,97 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`p-4 rounded-lg border ${
-                completeness.fundAppIsComplete
-                  ? 'bg-[var(--nfi-success-bg)] border-[var(--nfi-success-border)]'
-                  : 'bg-[var(--nfi-warning-bg)] border-[var(--nfi-warning-border)]'
-              }`}>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2
-                    size={20}
-                    style={{
-                      color: completeness.fundAppIsComplete ? 'var(--nfi-success)' : 'var(--nfi-warning)',
-                    }}
-                  />
-                  <div className="flex-1">
-                    <h4 className={`font-semibold ${
-                      completeness.fundAppIsComplete
-                        ? 'text-[var(--nfi-success)]'
-                        : 'text-[var(--nfi-warning)]'
-                    }`}>
-                      Fund Application
-                    </h4>
-                    <p className="text-sm text-[var(--nfi-text-light)]">
-                      {completeness.fundAppTotalPercent}% complete
-                    </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {section !== 'interim' && (
+                <div className={`p-4 rounded-lg border ${
+                  completeness.fundAppIsComplete
+                    ? 'bg-[var(--nfi-success-bg)] border-[var(--nfi-success-border)]'
+                    : 'bg-[var(--nfi-warning-bg)] border-[var(--nfi-warning-border)]'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2
+                      size={20}
+                      style={{
+                        color: completeness.fundAppIsComplete ? 'var(--nfi-success)' : 'var(--nfi-warning)',
+                      }}
+                    />
+                    <div className="flex-1">
+                      <h4 className={`font-semibold ${
+                        completeness.fundAppIsComplete
+                          ? 'text-[var(--nfi-success)]'
+                          : 'text-[var(--nfi-warning)]'
+                      }`}>
+                        Fund Application
+                      </h4>
+                      <p className="text-sm text-[var(--nfi-text-light)]">
+                        {completeness.fundAppTotalPercent}% complete
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className={`p-4 rounded-lg border ${
-                completeness.interimSummaryIsComplete
-                  ? 'bg-[var(--nfi-success-bg)] border-[var(--nfi-success-border)]'
-                  : 'bg-[var(--nfi-warning-bg)] border-[var(--nfi-warning-border)]'
-              }`}>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2
-                    size={20}
-                    style={{
-                      color: completeness.interimSummaryIsComplete ? 'var(--nfi-success)' : 'var(--nfi-warning)',
-                    }}
-                  />
-                  <div className="flex-1">
-                    <h4 className={`font-semibold ${
-                      completeness.interimSummaryIsComplete
-                        ? 'text-[var(--nfi-success)]'
-                        : 'text-[var(--nfi-warning)]'
-                    }`}>
-                      Interim Summary
-                    </h4>
-                    <p className="text-sm text-[var(--nfi-text-light)]">
-                      {completeness.interimSummaryTotalPercent}% complete
-                    </p>
+              {section !== 'fund' && (
+                <div className={`p-4 rounded-lg border ${
+                  completeness.interimSummaryIsComplete
+                    ? 'bg-[var(--nfi-success-bg)] border-[var(--nfi-success-border)]'
+                    : 'bg-[var(--nfi-warning-bg)] border-[var(--nfi-warning-border)]'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2
+                      size={20}
+                      style={{
+                        color: completeness.interimSummaryIsComplete ? 'var(--nfi-success)' : 'var(--nfi-warning)',
+                      }}
+                    />
+                    <div className="flex-1">
+                      <h4 className={`font-semibold ${
+                        completeness.interimSummaryIsComplete
+                          ? 'text-[var(--nfi-success)]'
+                          : 'text-[var(--nfi-warning)]'
+                      }`}>
+                        Interim Summary
+                      </h4>
+                      <p className="text-sm text-[var(--nfi-text-light)]">
+                        {completeness.interimSummaryTotalPercent}% complete
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Fund Application</h2>
-          <FundApplicationForm
-            caseId={caseId}
-            initialData={fundApplication}
-            onSectionSave={handleFundAppSectionSave}
-            onFormDataChange={setFundApplication}
-            isLoading={isLoading}
-            readOnly={!canEdit}
-          />
-        </div>
+        {section !== 'interim' && (
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Fund Application</h2>
+            <FundApplicationForm
+              caseId={caseId}
+              initialData={fundApplication}
+              onSectionSave={handleFundAppSectionSave}
+              onFormDataChange={setFundApplication}
+              isLoading={isLoading}
+              readOnly={!canEdit}
+            />
+          </div>
+        )}
 
-        <div className="border-t border-[var(--nfi-border)] pt-6">
-          <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Interim Summary</h2>
-          <InterimSummaryForm
-            caseId={caseId}
-            initialData={interimSummary}
-            onSectionSave={handleInterimSummarySectionSave}
-            onFormDataChange={setInterimSummary}
-            readOnly={!canEdit}
-            isLoading={isLoading}
-          />
-        </div>
+        {section !== 'fund' && (
+          <div className={section === 'both' ? 'border-t border-[var(--nfi-border)] pt-6' : ''}>
+            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Interim Summary</h2>
+            <InterimSummaryForm
+              caseId={caseId}
+              initialData={interimSummary}
+              onSectionSave={handleInterimSummarySectionSave}
+              onFormDataChange={setInterimSummary}
+              readOnly={!canEdit}
+              isLoading={isLoading}
+            />
+          </div>
+        )}
       </div>
 
       {variant === 'wizard' && (
@@ -280,7 +289,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail' }: IntakeFormsTabPro
           <div className="flex items-start gap-2">
             <AlertCircle size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-800">
-              Intake forms are optional during case creation. You can complete them later from Case → Intake Forms. Intake will be required before submission to committee.
+              Complete required sections now to avoid submit blockers in the final step.
             </p>
           </div>
         </div>

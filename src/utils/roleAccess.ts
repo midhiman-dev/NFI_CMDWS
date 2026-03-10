@@ -19,6 +19,7 @@ export const ROUTE_ACCESS: RouteRoleMap = {
   '/dashboard': ['hospital_spoc', 'clinical', 'clinical_reviewer', 'hospital_doctor', 'verifier', 'committee_member', 'beni_volunteer', 'accounts', 'leadership', 'admin'],
   '/cases': ['hospital_spoc', 'clinical', 'clinical_reviewer', 'hospital_doctor', 'verifier', 'committee_member', 'beni_volunteer', 'accounts', 'admin'],
   '/cases/new': ['hospital_spoc', 'admin'],
+  '/cases/:caseId/wizard': ['hospital_spoc', 'admin'],
   '/cases/:caseId': ['hospital_spoc', 'clinical', 'clinical_reviewer', 'hospital_doctor', 'verifier', 'committee_member', 'beni_volunteer', 'accounts', 'admin'],
   '/reports': ['accounts', 'leadership', 'admin'],
   '/reports/runs': ['accounts', 'leadership', 'admin'],
