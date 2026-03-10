@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18next from '../../i18n';
 import { getAuthState, logout, switchRole } from '../../utils/auth';
+import { getDefaultRouteForAuth } from '../../utils/roleAccess';
 import { UserRole } from '../../types';
 import { useAppContext } from '../../App';
 import { APP_NAME } from '../../constants/branding';
@@ -26,7 +27,7 @@ export function Navbar() {
   const handleRoleSwitch = (role: UserRole) => {
     switchRole(role);
     setShowMenu(false);
-    navigate('/dashboard');
+    navigate(getDefaultRouteForAuth(getAuthState()));
   };
 
   const handleLanguageChange = (lang: string) => {

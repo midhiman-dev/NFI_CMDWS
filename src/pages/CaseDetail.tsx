@@ -21,6 +21,7 @@ import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
+import { getDefaultRouteForAuth } from '../utils/roleAccess';
 import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
 import { getDoctorReviewGatingInfo } from '../utils/submitGating';
 import { useToast } from '../components/design-system/Toast';
@@ -43,6 +44,8 @@ export function CaseDetail() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
   const [caseData, setCaseData] = useState<CaseWithDetails | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [childProfile, setChildProfile] = useState<ChildProfile | null>(null);
   const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
   const [clinicalDetails, setClinicalDetails] = useState<ClinicalCaseDetails | null>(null);
@@ -57,7 +60,13 @@ export function CaseDetail() {
     const loadCaseData = async () => {
       if (caseId) {
         try {
+          setIsLoading(true);
+          setAccessDenied(false);
           const caseInfo = await provider.getCaseById(caseId);
+          if (!caseInfo) {
+            setCaseData(null);
+            return;
+          }
           setCaseData(caseInfo);
 
           const [docs, events, clinical] = await Promise.all([
@@ -70,7 +79,13 @@ export function CaseDetail() {
           setAuditEvents(events);
           setClinicalDetails(clinical);
         } catch (error) {
+          if (error instanceof Error && error.message === 'ACCESS_DENIED_CASE_SCOPE') {
+            setAccessDenied(true);
+          }
+          setCaseData(null);
           console.error('Error loading case data:', error);
+        } finally {
+          setIsLoading(false);
         }
       }
     };
@@ -88,6 +103,30 @@ export function CaseDetail() {
       }
     }
   }, [searchParams]);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <p className="text-[var(--nfi-text-secondary)]">Loading case...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto">
+          <NfiCard>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-2">Access denied</h2>
+            <p className="text-[var(--nfi-text-secondary)] mb-4">You do not have access to this case.</p>
+            <NfiButton onClick={() => navigate(getDefaultRouteForAuth(authState))}>Go to home</NfiButton>
+          </NfiCard>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!caseData) {
     return (

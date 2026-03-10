@@ -3,6 +3,8 @@ import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, 
 import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { mockStore } from '../../store/mockStore';
+import { getAuthState } from '../../utils/auth';
+import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -629,17 +631,26 @@ export class MockProvider implements DataProvider {
   }
 
   async listCases(): Promise<CaseWithDetails[]> {
-    return this.data.cases.sort((a, b) =>
+    return filterCasesForAuth(getAuthState(), this.data.cases).sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }
 
   async getCaseById(caseId: string): Promise<CaseWithDetails | null> {
-    return this.data.cases.find(c => c.caseId === caseId) || null;
+    const caseItem = this.data.cases.find(c => c.caseId === caseId) || null;
+    if (!caseItem) return null;
+    if (!isCaseVisibleToAuth(getAuthState(), caseItem.hospitalId)) {
+      throw new Error('ACCESS_DENIED_CASE_SCOPE');
+    }
+    return caseItem;
   }
 
   async getHospitals(): Promise<Hospital[]> {
-    return this.data.hospitals;
+    const scopedHospitalId = getScopedHospitalId(getAuthState());
+    if (!scopedHospitalId) {
+      return this.data.hospitals;
+    }
+    return this.data.hospitals.filter((h) => normalizeHospitalId(h.hospitalId) === scopedHospitalId);
   }
 
   async getHospitalProcessType(hospitalId: string): Promise<ProcessType | null> {
@@ -652,18 +663,20 @@ export class MockProvider implements DataProvider {
   }
 
   async createCase(payload: CreateCasePayload): Promise<CaseWithDetails> {
+    const scopedHospitalId = getScopedHospitalId(getAuthState());
+    const resolvedHospitalId = scopedHospitalId || normalizeHospitalId(payload.hospitalId) || payload.hospitalId;
     const caseId = `case-demo-${Date.now()}`;
     const year = new Date().getFullYear();
     const nextNum = this.data.cases.length + 1;
     const caseRef = `NFI/${payload.processType}/${year}/${String(nextNum).padStart(4, '0')}`;
-    const hospital = this.data.hospitals.find(h => h.hospitalId === payload.hospitalId);
+    const hospital = this.data.hospitals.find(h => normalizeHospitalId(h.hospitalId) === resolvedHospitalId);
     const now = new Date().toISOString();
 
     const newCase: CaseWithDetails = {
       caseId,
       caseRef,
       processType: payload.processType,
-      hospitalId: payload.hospitalId,
+      hospitalId: hospital?.hospitalId || resolvedHospitalId,
       hospitalName: hospital?.name || 'Unknown',
       caseStatus: payload.caseStatus,
       intakeDate: payload.intakeDate,

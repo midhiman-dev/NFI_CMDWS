@@ -3,6 +3,8 @@ import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, 
 import { caseService } from '../../services/caseService';
 import { supabase } from '../../lib/supabase';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
+import { getAuthState } from '../../utils/auth';
+import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 
 export class DbProvider implements DataProvider {
   private static readonly DOC_VERSIONS_STORAGE_KEY = 'nfi_db_document_versions_v1';
@@ -21,7 +23,7 @@ export class DbProvider implements DataProvider {
 
   async listCases(): Promise<CaseWithDetails[]> {
     const cases = await caseService.getCases();
-    return cases.map(c => ({
+    return filterCasesForAuth(getAuthState(), cases).map(c => ({
       ...c,
       caseRef: c.caseNumber,
       intakeDate: c.createdAt,
@@ -31,6 +33,9 @@ export class DbProvider implements DataProvider {
   async getCaseById(caseId: string): Promise<CaseWithDetails | null> {
     const caseData = await caseService.getCaseById(caseId);
     if (!caseData) return null;
+    if (!isCaseVisibleToAuth(getAuthState(), caseData.hospitalId)) {
+      throw new Error('ACCESS_DENIED_CASE_SCOPE');
+    }
 
     return {
       ...caseData,
@@ -41,7 +46,7 @@ export class DbProvider implements DataProvider {
 
   async getHospitals(): Promise<Hospital[]> {
     const hospitals = await caseService.getHospitals();
-    return hospitals.map(h => ({
+    const mappedHospitals = hospitals.map(h => ({
       hospitalId: h.hospitalId,
       name: h.name,
       city: h.city,
@@ -50,6 +55,11 @@ export class DbProvider implements DataProvider {
       spocPhone: h.phone,
       isActive: h.isActive,
     }));
+    const scopedHospitalId = getScopedHospitalId(getAuthState());
+    if (!scopedHospitalId) {
+      return mappedHospitals;
+    }
+    return mappedHospitals.filter((h) => normalizeHospitalId(h.hospitalId) === scopedHospitalId);
   }
 
   async getHospitalProcessType(hospitalId: string): Promise<import('../../types').ProcessType | null> {
@@ -69,6 +79,8 @@ export class DbProvider implements DataProvider {
   }
 
   async createCase(payload: CreateCasePayload): Promise<CaseWithDetails> {
+    const scopedHospitalId = getScopedHospitalId(getAuthState());
+    const hospitalId = scopedHospitalId || normalizeHospitalId(payload.hospitalId) || payload.hospitalId;
     const year = new Date().getFullYear();
     const { count } = await supabase
       .from('cases')
@@ -80,7 +92,7 @@ export class DbProvider implements DataProvider {
       .from('cases')
       .insert({
         case_number: caseNumber,
-        hospital_id: payload.hospitalId,
+        hospital_id: hospitalId,
         process_type: payload.processType,
         case_status: payload.caseStatus,
         created_by: payload.createdBy || null,

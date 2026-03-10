@@ -6,6 +6,7 @@ import { NfiBadge } from '../components/design-system/NfiBadge';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { Search, Filter, PlusCircle, Eye, Edit, CheckSquare, FileCheck, Heart, AlertTriangle } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
+import { getScopedHospitalId } from '../utils/roleAccess';
 import { useAppContext } from '../App';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
 
@@ -25,6 +26,8 @@ export function Cases() {
   const [hospitalFilter, setHospitalFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const authState = getAuthState();
+  const scopedHospitalId = getScopedHospitalId(authState);
+  const canFilterHospital = !scopedHospitalId;
 
   useEffect(() => {
     loadCases();
@@ -274,26 +277,30 @@ export function Cases() {
                 <option value="Returned">Returned</option>
               </select>
 
-              <select
-                value={hospitalFilter}
-                onChange={(e) => setHospitalFilter(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
-              >
-                <option value="all">All Hospitals</option>
-                {hospitals.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.name}
-                  </option>
-                ))}
-              </select>
+              {canFilterHospital && (
+                <select
+                  value={hospitalFilter}
+                  onChange={(e) => setHospitalFilter(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
+                >
+                  <option value="all">All Hospitals</option>
+                  {hospitals.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-              {(searchTerm || statusFilter !== 'all' || processFilter !== 'all' || hospitalFilter !== 'all') && (
+              {(searchTerm || statusFilter !== 'all' || processFilter !== 'all' || (canFilterHospital && hospitalFilter !== 'all')) && (
                 <button
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('all');
                     setProcessFilter('all');
-                    setHospitalFilter('all');
+                    if (canFilterHospital) {
+                      setHospitalFilter('all');
+                    }
                   }}
                   className="text-sm text-[var(--nfi-primary)] hover:underline"
                 >

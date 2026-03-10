@@ -18,6 +18,7 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getAuthState } from '../../utils/auth';
 import { UserRole } from '../../types';
+import { getDefaultRouteForRole } from '../../utils/roleAccess';
 
 interface MenuItemConfig {
   id: string;
@@ -118,7 +119,16 @@ export function Sidebar() {
     'reporting-admin': <LineChart size={20} />,
   };
 
-  const filteredMenuItems = mainMenuConfig.filter((item) => userRole && item.roles.includes(userRole));
+  const resolvedMainMenuItems = mainMenuConfig
+    .filter((item) => userRole && item.roles.includes(userRole))
+    .map((item) => {
+      if (item.id === 'dashboard') {
+        return { ...item, to: getDefaultRouteForRole(userRole) };
+      }
+      return item;
+    })
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.to === item.to) === index);
+  const filteredMenuItems = resolvedMainMenuItems;
   const filteredAdminItems = adminMenuConfig.filter((item) => userRole && item.roles.includes(userRole));
 
   return (

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { mockStore } from '../store/mockStore';
-import { login, isAuthenticated } from '../utils/auth';
+import { getAuthState, login, isAuthenticated } from '../utils/auth';
+import { getDefaultRouteForAuth } from '../utils/roleAccess';
 import { User, UserRole } from '../types';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiCard } from '../components/design-system/NfiCard';
@@ -17,7 +18,7 @@ export function Login() {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      navigate('/dashboard');
+      navigate(getDefaultRouteForAuth(getAuthState()));
     }
   }, [navigate]);
 
@@ -36,7 +37,7 @@ export function Login() {
   const handleLogin = () => {
     if (selectedUser && selectedRole) {
       login(selectedUser, selectedRole);
-      navigate('/dashboard');
+      navigate(getDefaultRouteForAuth(getAuthState()));
     }
   };
 

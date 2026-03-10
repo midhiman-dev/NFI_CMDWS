@@ -8,6 +8,7 @@ import { IntakeFormsTab } from '../components/case-tabs/IntakeFormsTab';
 import { ProcessType, CaseStatus, Hospital } from '../types';
 import { ArrowLeft, ArrowRight, Save, Send, AlertTriangle, Loader2 } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
+import { normalizeHospitalId } from '../utils/roleAccess';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 
@@ -47,7 +48,7 @@ export function CaseNew() {
   const [processMappingMissing, setProcessMappingMissing] = useState(false);
   const [formData, setFormData] = useState<CaseFormData>({
     processType: '',
-    hospitalId: authState.activeUser?.hospitalId || '',
+    hospitalId: normalizeHospitalId(authState.activeUser?.hospitalId) || '',
     admissionDate: '',
     intakeDate: new Date().toISOString().split('T')[0],
     beneficiaryNo: '',
@@ -298,7 +299,7 @@ export function CaseNew() {
   };
 
   const warnings = getTimingWarnings();
-  const isHospitalSpoc = authState.activeUser?.roles?.includes('hospital_spoc') && authState.activeUser?.hospitalId;
+  const isHospitalSpoc = authState.activeUser?.roles?.includes('hospital_spoc') && normalizeHospitalId(authState.activeUser?.hospitalId);
 
   return (
     <Layout>

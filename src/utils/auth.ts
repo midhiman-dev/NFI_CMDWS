@@ -1,4 +1,5 @@
 import { AuthState, User, UserRole } from '../types';
+import { getResolvedActiveRole } from './roleAccess';
 
 const AUTH_KEY = 'nfi_cmdws_auth';
 
@@ -6,7 +7,9 @@ export function getAuthState(): AuthState {
   try {
     const stored = localStorage.getItem(AUTH_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored) as AuthState;
+      const resolvedRole = getResolvedActiveRole(parsed);
+      return { ...parsed, activeRole: resolvedRole };
     }
   } catch (error) {
     console.error('Error loading auth state:', error);
@@ -23,7 +26,8 @@ export function setAuthState(state: AuthState): void {
 }
 
 export function login(user: User, role: UserRole): void {
-  setAuthState({ activeUser: user, activeRole: role });
+  const activeRole = user.roles.includes(role) ? role : user.roles[0] || null;
+  setAuthState({ activeUser: user, activeRole });
 }
 
 export function logout(): void {
