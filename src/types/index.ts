@@ -494,38 +494,58 @@ export interface IntakeFundApplicationSection {
 
 export interface IntakeFundApplication {
   parentsFamilySection: {
+    fatherName?: string;
+    motherName?: string;
+    fatherContactNo?: string;
+    motherContactNo?: string;
+    addressDetails?: string;
     fatherDob?: string;
     fatherEducation?: string;
     motherDob?: string;
     motherEducation?: string;
     marriageDate?: string;
     dependents?: string;
+    numberOfFamilyMembers?: number;
   };
   occupationIncomeSection: {
     fatherOccupation?: string;
     fatherEmployer?: string;
     fatherMonthlyIncome?: number;
+    fatherDailyIncome?: number;
     motherOccupation?: string;
     motherEmployer?: string;
     motherMonthlyIncome?: number;
+    motherDailyIncome?: number;
+    assetsLandHouse?: string;
     incomeProofType?: string;
+    incomeProofTahsildarCertificate?: boolean;
+    incomeProofBankStatement6Months?: boolean;
   };
   birthDetailsSection: {
+    babyDateOfBirth?: string;
+    babyGender?: 'Male' | 'Female' | 'Other';
+    babyBirthWeightKg?: number;
     isInborn?: boolean;
+    outbornHospitalName?: string;
     conceptionType?: string;
     gestationalAgeWeeks?: number;
     deliveryType?: string;
+    deliveryCharges?: number;
     gravida?: number;
     parity?: number;
   };
   nicuFinancialSection: {
     nicuAdmissionDate?: string;
     estimatedNicuDays?: number;
+    totalEstimatedHospitalBill?: number;
+    advancePaidByFamily?: number;
+    currentOutstandingBillAmount?: number;
     nfiRequestedAmount?: number;
     estimateBilled?: number;
     estimateAfterDiscount?: number;
   };
   otherSupportSection: {
+    anyOtherSupportReceived?: string;
     otherSupportTypes?: string[];
     otherSupportNotes?: string;
   };
@@ -533,9 +553,16 @@ export interface IntakeFundApplication {
     declarationsAccepted?: boolean;
     declarationTimestamp?: string;
     declaredByUser?: string;
+    declarationTruthfulnessAccepted?: boolean;
+    declarationDocumentationConsentAccepted?: boolean;
+    declarationPhotoVideoConsentAccepted?: boolean;
+    declarationDate?: string;
+    parentSignatureRef?: string;
   };
   hospitalApprovalSection: {
     approvedByName?: string;
+    approvalDesignation?: string;
+    approvalSignatureStampRef?: string;
     approvalDate?: string;
     approvalRemarks?: string;
   };
@@ -543,7 +570,13 @@ export interface IntakeFundApplication {
 
 export interface IntakeInterimSummary {
   birthSummarySection: {
-    apgarScore?: number;
+    babyBirthWeightKg?: number;
+    gender?: 'Male' | 'Female' | 'Other';
+    isInborn?: boolean;
+    outbornHospitalName?: string;
+    apgarAt1Min?: number;
+    apgarAt5Min?: number;
+    dateOfBirth?: string;
     timeOfBirth?: string;
     placeOfBirth?: string;
     gestationalAgeWeeks?: number;
@@ -556,6 +589,7 @@ export interface IntakeInterimSummary {
     parity?: number;
     abortions?: number;
     liveChildrenBefore?: number;
+    conceptionMode?: 'Natural' | 'IUI' | 'IVF';
     _autoDerived?: boolean;
   };
   antenatalRiskFactorsSection: {
@@ -567,6 +601,14 @@ export interface IntakeInterimSummary {
     otherDiagnosis?: string;
   };
   treatmentGivenSection: {
+    mechanicalVentilation?: boolean;
+    cpap?: boolean;
+    hhfnc?: boolean;
+    o2?: boolean;
+    ivAntibiotics?: boolean;
+    ionotropes?: boolean;
+    tpn?: boolean;
+    othersIfAny?: string;
     respiratorySupportRequired?: boolean;
     phototherapyRequired?: boolean;
     antibioticsRequired?: boolean;
@@ -577,19 +619,44 @@ export interface IntakeInterimSummary {
     dayOfLife?: number;
     currentWeight?: number;
     correctedGestationalAge?: number;
+    ongoingMechanicalVentilation?: boolean;
+    ongoingCpap?: boolean;
+    ongoingHhfnc?: boolean;
+    ongoingO2?: boolean;
+    ongoingNpo?: boolean;
+    ongoingOg?: boolean;
+    ongoingPalada?: boolean;
+    ongoingDbf?: boolean;
+    ongoingOtherNotes?: string;
   };
   feedingRespirationSection: {
     feedingMode?: string;
     respirationStatus?: string;
+    ongoingMechanicalVentilation?: boolean;
+    ongoingCpap?: boolean;
+    ongoingHhfnc?: boolean;
+    ongoingO2?: boolean;
+    ongoingNpo?: boolean;
+    ongoingOg?: boolean;
+    ongoingPalada?: boolean;
+    ongoingDbf?: boolean;
+    ongoingOtherNotes?: string;
   };
   dischargePlanInvestigationsSection: {
     dischargeDate?: string;
+    planOfDischarge?: string;
     investigationsPlanned?: string;
     investigationsDone?: boolean;
+    investigationsLabs?: boolean;
+    investigationsXRay?: boolean;
+    investigationsScans?: boolean;
+    investigationsOthers?: boolean;
+    investigationsOthersNotes?: string;
   };
   remarksSignatureSection: {
     remarks?: string;
     doctorName?: string;
+    signatureRef?: string;
     signedAt?: string;
   };
 }

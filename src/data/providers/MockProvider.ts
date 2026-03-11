@@ -5,6 +5,13 @@ import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { mockStore } from '../../store/mockStore';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
+import {
+  FUND_APPLICATION_FIELDS,
+  INTERIM_SUMMARY_FIELDS,
+  getFundApplicationSectionProgress,
+  getInterimSummarySectionProgress,
+  getSectionStatus,
+} from '../../utils/intakeValidation';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
@@ -1885,47 +1892,59 @@ export class MockProvider implements DataProvider {
   }
 
   private calculateIntakeCompleteness(fundApplication?: IntakeFundApplication, interimSummary?: IntakeInterimSummary): IntakeCompleteness {
-    const isSectionComplete = (section: any): boolean => {
-      if (!section) return false;
-      return Object.values(section).some(v => v !== undefined && v !== null && v !== '');
-    };
+    const fundSectionKeys = Object.keys(FUND_APPLICATION_FIELDS) as Array<keyof typeof FUND_APPLICATION_FIELDS>;
+    const interimSectionKeys = Object.keys(INTERIM_SUMMARY_FIELDS) as Array<keyof typeof INTERIM_SUMMARY_FIELDS>;
+
+    const fundSectionProgress = fundSectionKeys.reduce((acc, sectionKey) => {
+      acc[sectionKey] = getFundApplicationSectionProgress(sectionKey, fundApplication?.[sectionKey]);
+      return acc;
+    }, {} as Record<keyof typeof FUND_APPLICATION_FIELDS, { pct: number; filled: number; total: number }>);
+
+    const interimSectionProgress = interimSectionKeys.reduce((acc, sectionKey) => {
+      acc[sectionKey] = getInterimSummarySectionProgress(sectionKey, interimSummary?.[sectionKey]);
+      return acc;
+    }, {} as Record<keyof typeof INTERIM_SUMMARY_FIELDS, { pct: number; filled: number; total: number }>);
 
     const fundAppSections = {
-      parentsFamilySection: isSectionComplete(fundApplication?.parentsFamilySection),
-      occupationIncomeSection: isSectionComplete(fundApplication?.occupationIncomeSection),
-      birthDetailsSection: isSectionComplete(fundApplication?.birthDetailsSection),
-      nicuFinancialSection: isSectionComplete(fundApplication?.nicuFinancialSection),
-      otherSupportSection: isSectionComplete(fundApplication?.otherSupportSection),
-      declarationsSection: isSectionComplete(fundApplication?.declarationsSection),
-      hospitalApprovalSection: isSectionComplete(fundApplication?.hospitalApprovalSection),
+      parentsFamilySection: getSectionStatus(fundSectionProgress.parentsFamilySection) === 'complete',
+      occupationIncomeSection: getSectionStatus(fundSectionProgress.occupationIncomeSection) === 'complete',
+      birthDetailsSection: getSectionStatus(fundSectionProgress.birthDetailsSection) === 'complete',
+      nicuFinancialSection: getSectionStatus(fundSectionProgress.nicuFinancialSection) === 'complete',
+      otherSupportSection: getSectionStatus(fundSectionProgress.otherSupportSection) === 'complete',
+      declarationsSection: getSectionStatus(fundSectionProgress.declarationsSection) === 'complete',
+      hospitalApprovalSection: getSectionStatus(fundSectionProgress.hospitalApprovalSection) === 'complete',
     };
 
     const interimSummarySections = {
-      birthSummarySection: isSectionComplete(interimSummary?.birthSummarySection),
-      maternalDetailsSection: isSectionComplete(interimSummary?.maternalDetailsSection),
-      antenatalRiskFactorsSection: isSectionComplete(interimSummary?.antenatalRiskFactorsSection),
-      diagnosisSection: isSectionComplete(interimSummary?.diagnosisSection),
-      treatmentGivenSection: isSectionComplete(interimSummary?.treatmentGivenSection),
-      currentStatusSection: isSectionComplete(interimSummary?.currentStatusSection),
-      feedingRespirationSection: isSectionComplete(interimSummary?.feedingRespirationSection),
-      dischargePlanInvestigationsSection: isSectionComplete(interimSummary?.dischargePlanInvestigationsSection),
-      remarksSignatureSection: isSectionComplete(interimSummary?.remarksSignatureSection),
+      birthSummarySection: getSectionStatus(interimSectionProgress.birthSummarySection) === 'complete',
+      maternalDetailsSection: getSectionStatus(interimSectionProgress.maternalDetailsSection) === 'complete',
+      antenatalRiskFactorsSection: getSectionStatus(interimSectionProgress.antenatalRiskFactorsSection) === 'complete',
+      diagnosisSection: getSectionStatus(interimSectionProgress.diagnosisSection) === 'complete',
+      treatmentGivenSection: getSectionStatus(interimSectionProgress.treatmentGivenSection) === 'complete',
+      currentStatusSection: getSectionStatus(interimSectionProgress.currentStatusSection) === 'complete',
+      feedingRespirationSection: getSectionStatus(interimSectionProgress.feedingRespirationSection) === 'complete',
+      dischargePlanInvestigationsSection: getSectionStatus(interimSectionProgress.dischargePlanInvestigationsSection) === 'complete',
+      remarksSignatureSection: getSectionStatus(interimSectionProgress.remarksSignatureSection) === 'complete',
     };
 
-    const fundAppComplete = Object.values(fundAppSections).every(v => v === true);
-    const interimSummaryComplete = Object.values(interimSummarySections).every(v => v === true);
-    const fundAppTotalPercent = (Object.values(fundAppSections).filter(v => v).length / Object.keys(fundAppSections).length) * 100;
-    const interimSummaryTotalPercent = (Object.values(interimSummarySections).filter(v => v).length / Object.keys(interimSummarySections).length) * 100;
-    const overallPercent = (fundAppTotalPercent + interimSummaryTotalPercent) / 2;
+    const fundAppComplete = Object.values(fundAppSections).every(v => v);
+    const interimSummaryComplete = Object.values(interimSummarySections).every(v => v);
+    const fundAppTotalPercent = Math.round(
+      fundSectionKeys.reduce((sum, key) => sum + fundSectionProgress[key].pct, 0) / fundSectionKeys.length
+    );
+    const interimSummaryTotalPercent = Math.round(
+      interimSectionKeys.reduce((sum, key) => sum + interimSectionProgress[key].pct, 0) / interimSectionKeys.length
+    );
+    const overallPercent = Math.round((fundAppTotalPercent + interimSummaryTotalPercent) / 2);
 
     return {
       fundAppSections,
-      fundAppTotalPercent: Math.round(fundAppTotalPercent),
+      fundAppTotalPercent,
       fundAppIsComplete: fundAppComplete,
       interimSummarySections,
-      interimSummaryTotalPercent: Math.round(interimSummaryTotalPercent),
+      interimSummaryTotalPercent,
       interimSummaryIsComplete: interimSummaryComplete,
-      overallPercent: Math.round(overallPercent),
+      overallPercent,
       allRequiredFieldsComplete: fundAppComplete && interimSummaryComplete,
     };
   }

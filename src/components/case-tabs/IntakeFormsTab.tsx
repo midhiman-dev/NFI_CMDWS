@@ -15,6 +15,32 @@ interface IntakeFormsTabProps {
   section?: 'fund' | 'interim' | 'both';
 }
 
+function createEmptyFundApplication(): IntakeFundApplication {
+  return {
+    parentsFamilySection: {},
+    occupationIncomeSection: {},
+    birthDetailsSection: {},
+    nicuFinancialSection: {},
+    otherSupportSection: {},
+    declarationsSection: {},
+    hospitalApprovalSection: {},
+  };
+}
+
+function createEmptyInterimSummary(): IntakeInterimSummary {
+  return {
+    birthSummarySection: {},
+    maternalDetailsSection: {},
+    antenatalRiskFactorsSection: {},
+    diagnosisSection: {},
+    treatmentGivenSection: {},
+    currentStatusSection: {},
+    feedingRespirationSection: {},
+    dischargePlanInvestigationsSection: {},
+    remarksSignatureSection: {},
+  };
+}
+
 export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }: IntakeFormsTabProps) {
   const { showToast } = useToast();
   const authState = getAuthState();
@@ -30,15 +56,70 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
     try {
       setIsLoading(true);
       const provider = providerFactory.getProvider();
-      const [data, caseData] = await Promise.all([
+      const [data, caseData, beneficiary, family] = await Promise.all([
         intakeService.loadIntakeForCase(caseId),
         provider.getCaseById(caseId),
+        provider.getBeneficiary(caseId).catch(() => null),
+        provider.getFamily(caseId).catch(() => null),
       ]);
 
-      setFundApplication(data.fundApplication);
-      setInterimSummary(data.interimSummary);
+      const resolvedFund = data.fundApplication || createEmptyFundApplication();
+      const seededAddress = [
+        family?.address,
+        family?.city,
+        family?.state,
+        family?.pincode,
+      ].filter(Boolean).join(', ');
+      const patchedFund: IntakeFundApplication = {
+        ...resolvedFund,
+        parentsFamilySection: {
+          ...(resolvedFund.parentsFamilySection || {}),
+          fatherName: resolvedFund.parentsFamilySection?.fatherName || family?.fatherName || undefined,
+          motherName: resolvedFund.parentsFamilySection?.motherName || family?.motherName || undefined,
+          fatherContactNo: resolvedFund.parentsFamilySection?.fatherContactNo || family?.phone || undefined,
+          motherContactNo: resolvedFund.parentsFamilySection?.motherContactNo || family?.phone || undefined,
+          addressDetails: resolvedFund.parentsFamilySection?.addressDetails || seededAddress || undefined,
+        },
+        birthDetailsSection: {
+          ...(resolvedFund.birthDetailsSection || {}),
+          babyDateOfBirth: resolvedFund.birthDetailsSection?.babyDateOfBirth || beneficiary?.dob || undefined,
+          babyGender: resolvedFund.birthDetailsSection?.babyGender || beneficiary?.gender || undefined,
+        },
+      };
+      const resolvedInterim = data.interimSummary || createEmptyInterimSummary();
+      const patchedBirthSummary = {
+        ...resolvedInterim.birthSummarySection,
+        dateOfBirth: resolvedInterim.birthSummarySection?.dateOfBirth || beneficiary?.dob || undefined,
+        gender: resolvedInterim.birthSummarySection?.gender || beneficiary?.gender || undefined,
+      };
+      const patchedInterim = {
+        ...resolvedInterim,
+        birthSummarySection: patchedBirthSummary,
+      };
+
+      setFundApplication(patchedFund);
+      setInterimSummary(patchedInterim);
       const intakeAsOfDate = parseDateFlexible(caseData?.intakeDate) || new Date();
       setAsOfDate(intakeAsOfDate);
+
+      if (
+        patchedFund.parentsFamilySection?.fatherName !== resolvedFund.parentsFamilySection?.fatherName ||
+        patchedFund.parentsFamilySection?.motherName !== resolvedFund.parentsFamilySection?.motherName ||
+        patchedFund.parentsFamilySection?.fatherContactNo !== resolvedFund.parentsFamilySection?.fatherContactNo ||
+        patchedFund.parentsFamilySection?.motherContactNo !== resolvedFund.parentsFamilySection?.motherContactNo ||
+        patchedFund.parentsFamilySection?.addressDetails !== resolvedFund.parentsFamilySection?.addressDetails ||
+        patchedFund.birthDetailsSection?.babyDateOfBirth !== resolvedFund.birthDetailsSection?.babyDateOfBirth ||
+        patchedFund.birthDetailsSection?.babyGender !== resolvedFund.birthDetailsSection?.babyGender
+      ) {
+        await intakeService.saveIntakeSection(caseId, 'fundApp', patchedFund);
+      }
+
+      if (
+        patchedInterim.birthSummarySection?.dateOfBirth !== resolvedInterim.birthSummarySection?.dateOfBirth ||
+        patchedInterim.birthSummarySection?.gender !== resolvedInterim.birthSummarySection?.gender
+      ) {
+        await intakeService.saveIntakeSection(caseId, 'interimSummary', patchedInterim);
+      }
 
       const completenessData = await intakeService.getCompleteness(caseId);
       setCompleteness(completenessData);
@@ -119,9 +200,88 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       });
   }, [canEdit, caseId, marriageDate, derivedMaternalFields, interimSummary]);
 
+  useEffect(() => {
+    if (!canEdit) return;
+    if (!interimSummary) return;
+
+    const birthSummary = interimSummary.birthSummarySection || {};
+    const fundBirth = fundApplication?.birthDetailsSection || {};
+
+    let hasChanges = false;
+    const updatedBirthSummary = { ...birthSummary };
+
+    if (updatedBirthSummary.babyBirthWeightKg === undefined && fundBirth.babyBirthWeightKg !== undefined) {
+      updatedBirthSummary.babyBirthWeightKg = fundBirth.babyBirthWeightKg;
+      hasChanges = true;
+    }
+
+    if (updatedBirthSummary.gestationalAgeWeeks === undefined && fundBirth.gestationalAgeWeeks !== undefined) {
+      updatedBirthSummary.gestationalAgeWeeks = fundBirth.gestationalAgeWeeks;
+      hasChanges = true;
+    }
+
+    if (updatedBirthSummary.isInborn === undefined && fundBirth.isInborn !== undefined) {
+      updatedBirthSummary.isInborn = fundBirth.isInborn;
+      hasChanges = true;
+    }
+
+    if (
+      updatedBirthSummary.outbornHospitalName === undefined &&
+      fundBirth.isInborn === false &&
+      fundBirth.outbornHospitalName
+    ) {
+      updatedBirthSummary.outbornHospitalName = fundBirth.outbornHospitalName;
+      hasChanges = true;
+    }
+
+    if (!hasChanges) return;
+
+    const updatedInterimSummary: IntakeInterimSummary = {
+      ...interimSummary,
+      birthSummarySection: updatedBirthSummary,
+    };
+
+    setInterimSummary(updatedInterimSummary);
+    void intakeService.saveIntakeSection(caseId, 'interimSummary', updatedInterimSummary)
+      .then(() => intakeService.getCompleteness(caseId))
+      .then(setCompleteness)
+      .catch(error => {
+        console.error('Failed to persist linked birth summary details:', error);
+      });
+  }, [canEdit, caseId, fundApplication, interimSummary]);
+
+  useEffect(() => {
+    if (!canEdit) return;
+    if (!interimSummary) return;
+
+    const conceptionType = fundApplication?.birthDetailsSection?.conceptionType;
+    if (!conceptionType) return;
+    if (!['Natural', 'IUI', 'IVF'].includes(conceptionType)) return;
+    if (interimSummary.maternalDetailsSection?.conceptionMode) return;
+
+    const updatedInterimSummary: IntakeInterimSummary = {
+      ...interimSummary,
+      maternalDetailsSection: {
+        ...(interimSummary.maternalDetailsSection || {}),
+        conceptionMode: conceptionType as 'Natural' | 'IUI' | 'IVF',
+      },
+    };
+
+    setInterimSummary(updatedInterimSummary);
+    void intakeService.saveIntakeSection(caseId, 'interimSummary', updatedInterimSummary)
+      .then(() => intakeService.getCompleteness(caseId))
+      .then(setCompleteness)
+      .catch(error => {
+        console.error('Failed to seed maternal conception mode:', error);
+      });
+  }, [canEdit, caseId, fundApplication, interimSummary]);
+
   const handleFundAppSectionSave = async (sectionName: string, data: any) => {
     try {
-      const updated = { ...fundApplication, [sectionName]: data };
+      const updated: IntakeFundApplication = {
+        ...(fundApplication || createEmptyFundApplication()),
+        [sectionName]: data,
+      };
       await intakeService.saveIntakeSection(caseId, 'fundApp', updated);
       setFundApplication(updated);
 
@@ -137,7 +297,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
 
   const handleInterimSummarySectionSave = async (sectionName: string, data: any) => {
     try {
-      const updated = { ...interimSummary, [sectionName]: data };
+      const updated: IntakeInterimSummary = {
+        ...(interimSummary || createEmptyInterimSummary()),
+        [sectionName]: data,
+      };
       await intakeService.saveIntakeSection(caseId, 'interimSummary', updated);
       setInterimSummary(updated);
 
