@@ -1,0 +1,13 @@
+[31mfailed to load config from C:\Dhiman\P\NFI\code\NFI_CMDWS\vite.config.ts[39m
+[31merror when starting dev server:
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at Object.spawn (node:child_process:754:9)
+    at ensureServiceIsRunning (C:\Dhiman\P\NFI\code\NFI_CMDWS\node_modules\esbuild\lib\main.js:1975:29)
+    at build (C:\Dhiman\P\NFI\code\NFI_CMDWS\node_modules\esbuild\lib\main.js:1873:26)
+    at bundleConfigFile (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/chunks/dep-CDnG8rE7.js:66504:24)
+    at loadConfigFromFile (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/chunks/dep-CDnG8rE7.js:66474:27)
+    at resolveConfig (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/chunks/dep-CDnG8rE7.js:66083:30)
+    at _createServer (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/chunks/dep-CDnG8rE7.js:62701:24)
+    at createServer (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/chunks/dep-CDnG8rE7.js:62698:10)
+    at CAC.<anonymous> (file:///C:/Dhiman/P/NFI/code/NFI_CMDWS/node_modules/vite/dist/node/cli.js:735:26)[39m

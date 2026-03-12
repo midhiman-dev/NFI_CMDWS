@@ -6,6 +6,7 @@ import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
 import { caseService } from '../../services/caseService';
 import { getAuthState } from '../../utils/auth';
+import { FUNDING_CAMPAIGN_OPTIONS, FUNDING_PROGRAM_OPTIONS } from '../../utils/fundingConfig';
 import type { Case, User, UserRole, WorkflowExtensions } from '../../types';
 
 interface Props {
@@ -112,6 +113,27 @@ export function WorkflowExtensionsTab({ caseId, caseData, currentUser, onUpdate 
   const showAppealCard = caseData.caseStatus === 'Rejected' || !!workflowExt.appeal?.requested;
   const showCampaignCard = canEditBase;
   const showDirectorSection = workflowExt.funding?.sponsorQuantification?.status === 'PendingDirectorApproval';
+  const programOptions = useMemo(() => {
+    const options = [...FUNDING_PROGRAM_OPTIONS] as string[];
+    if (workflowExt.funding?.program && !options.includes(workflowExt.funding.program)) {
+      options.push(workflowExt.funding.program);
+    }
+    return options;
+  }, [workflowExt.funding?.program]);
+  const campaignOptions = useMemo(() => {
+    const options = [...FUNDING_CAMPAIGN_OPTIONS] as string[];
+    const existing = workflowExt.funding?.campaign?.campaignName;
+    if (existing && !options.includes(existing)) {
+      options.push(existing);
+    }
+    return options;
+  }, [workflowExt.funding?.campaign?.campaignName]);
+  const topUpTotal =
+    workflowExt.funding?.isTopUp &&
+    workflowExt.funding?.previousApprovedAmount !== undefined &&
+    workflowExt.funding?.topUpAmount !== undefined
+      ? workflowExt.funding.previousApprovedAmount + workflowExt.funding.topUpAmount
+      : undefined;
 
   const actorSummary = useMemo(() => `${actorName} (${actorRole})`, [actorName, actorRole]);
 
@@ -265,10 +287,9 @@ export function WorkflowExtensionsTab({ caseId, caseData, currentUser, onUpdate 
   }
 
   async function submitSponsorForDirectorApproval() {
-    const sponsorName = workflowExt.funding?.sponsorQuantification?.sponsorName?.trim();
     const proposedAmount = workflowExt.funding?.sponsorQuantification?.proposedAmount;
-    if (!sponsorName || proposedAmount === undefined) {
-      showToast('Sponsor name and proposed amount are required', 'error');
+    if (proposedAmount === undefined) {
+      showToast('Proposed amount is required', 'error');
       return;
     }
     const patch: Partial<WorkflowExtensions> = {
@@ -447,7 +468,7 @@ export function WorkflowExtensionsTab({ caseId, caseData, currentUser, onUpdate 
 
       {showCampaignCard && (
         <NfiCard className="space-y-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Campaign Variant</h3>
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Campaign Variant (Legacy Optional)</h3>
           <NfiField label="Funding Channel">
             <div className="flex flex-wrap gap-4">
               <label className="inline-flex items-center gap-2">
@@ -625,28 +646,8 @@ export function WorkflowExtensionsTab({ caseId, caseData, currentUser, onUpdate 
       )}
 
       <NfiCard className="space-y-4">
-        <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Sponsor Quantification + Director Approval</h3>
+        <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Funding Capture + Director Approval</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <NfiField label="Sponsor Name">
-            <input
-              className="nfi-input w-full"
-              value={workflowExt.funding?.sponsorQuantification?.sponsorName || ''}
-              disabled={!canEditSponsorDraft || busy}
-              onChange={(e) =>
-                setWorkflowExt(prev =>
-                  mergeWorkflow(prev, {
-                    funding: {
-                      ...prev.funding,
-                      sponsorQuantification: {
-                        ...prev.funding?.sponsorQuantification,
-                        sponsorName: e.target.value,
-                      },
-                    },
-                  })
-                )
-              }
-            />
-          </NfiField>
           <NfiField label="Proposed Amount">
             <input
               type="number"
@@ -668,6 +669,123 @@ export function WorkflowExtensionsTab({ caseId, caseData, currentUser, onUpdate 
               }
             />
           </NfiField>
+          <NfiField label="Program">
+            <select
+              className="nfi-input w-full"
+              value={workflowExt.funding?.program || ''}
+              disabled={!canEditSponsorDraft || busy}
+              onChange={(e) =>
+                setWorkflowExt(prev =>
+                  mergeWorkflow(prev, {
+                    funding: {
+                      ...prev.funding,
+                      program: e.target.value || undefined,
+                    },
+                  })
+                )
+              }
+            >
+              <option value="">Select Program</option>
+              {programOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </NfiField>
+          <NfiField label="Campaign">
+            <select
+              className="nfi-input w-full"
+              value={workflowExt.funding?.campaign?.campaignName || ''}
+              disabled={!canEditSponsorDraft || busy}
+              onChange={(e) =>
+                setWorkflowExt(prev =>
+                  mergeWorkflow(prev, {
+                    funding: {
+                      ...prev.funding,
+                      campaign: {
+                        ...prev.funding?.campaign,
+                        campaignName: e.target.value || undefined,
+                      },
+                    },
+                  })
+                )
+              }
+            >
+              <option value="">Select Campaign</option>
+              {campaignOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </NfiField>
+          <NfiField label="Top-up">
+            <select
+              className="nfi-input w-full"
+              value={workflowExt.funding?.isTopUp ? 'Yes' : 'No'}
+              disabled={!canEditSponsorDraft || busy}
+              onChange={(e) =>
+                setWorkflowExt(prev =>
+                  mergeWorkflow(prev, {
+                    funding: {
+                      ...prev.funding,
+                      isTopUp: e.target.value === 'Yes',
+                      previousApprovedAmount: e.target.value === 'Yes'
+                        ? (prev.funding?.previousApprovedAmount ?? prev.funding?.totalApprovedAmount)
+                        : undefined,
+                      topUpAmount: e.target.value === 'Yes' ? prev.funding?.topUpAmount : undefined,
+                      totalApprovedAmount: e.target.value === 'Yes'
+                        ? ((prev.funding?.previousApprovedAmount ?? prev.funding?.totalApprovedAmount) || 0) + (prev.funding?.topUpAmount || 0)
+                        : prev.funding?.totalApprovedAmount,
+                    },
+                  })
+                )
+              }
+            >
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </NfiField>
+          {workflowExt.funding?.isTopUp && (
+            <NfiField label="Previous Approved Amount">
+              <input
+                type="number"
+                className="nfi-input w-full bg-gray-50"
+                value={workflowExt.funding?.previousApprovedAmount ?? workflowExt.funding?.totalApprovedAmount ?? ''}
+                readOnly
+              />
+            </NfiField>
+          )}
+          {workflowExt.funding?.isTopUp && (
+            <NfiField label="Top-up Amount">
+              <input
+                type="number"
+                className="nfi-input w-full"
+                value={workflowExt.funding?.topUpAmount ?? ''}
+                disabled={!canEditSponsorDraft || busy}
+                onChange={(e) =>
+                  setWorkflowExt(prev => {
+                    const previousAmount = prev.funding?.previousApprovedAmount ?? prev.funding?.totalApprovedAmount ?? 0;
+                    const topUp = parseNumber(e.target.value);
+                    return mergeWorkflow(prev, {
+                      funding: {
+                        ...prev.funding,
+                        topUpAmount: topUp,
+                        totalApprovedAmount: topUp !== undefined ? previousAmount + topUp : undefined,
+                      },
+                    });
+                  })
+                }
+              />
+            </NfiField>
+          )}
+          {workflowExt.funding?.isTopUp && (
+            <NfiField label="Total Approved Amount">
+              <input
+                type="text"
+                className="nfi-input w-full bg-gray-50"
+                value={topUpTotal !== undefined ? `INR ${topUpTotal.toLocaleString()}` : 'N/A'}
+                readOnly
+              />
+            </NfiField>
+          )}
         </div>
         <NfiField label="Notes">
           <textarea

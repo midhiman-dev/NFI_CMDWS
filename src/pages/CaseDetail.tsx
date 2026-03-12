@@ -19,7 +19,7 @@ import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
 import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion, UserRole } from '../types';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
 import { getLatestVersion, getVisibleCategories } from '../utils/docVersioning';
@@ -32,6 +32,7 @@ import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
 import { normalizeSeparator } from '../utils/textNormalize';
 import { type CaseWorkflowEvent, getHospitalDisplayStatus, getLatestRejectedEvent, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
 import { formatDateTimeFriendly } from '../utils/dateFormat';
+import { FUNDING_CAMPAIGN_OPTIONS, FUNDING_PROGRAM_OPTIONS, toCurrency } from '../utils/fundingConfig';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
@@ -60,10 +61,10 @@ function getVisibleCaseTabIds(role: UserRole | null, showPostApproval: boolean):
     hospital_doctor: ['overview', 'documents', 'doctor-review', 'audit'],
     verifier: ['overview', 'intake', 'documents', 'doctor-review', 'verification', 'approval', 'workflow-extensions', 'audit'],
     committee_member: ['overview', 'documents', 'approval', 'audit'],
-    accounts: ['overview', 'approval', 'installments', 'audit'],
+    accounts: ['overview', 'approval', 'audit'],
     beni_volunteer: ['overview', 'monitoring', 'followups', 'audit'],
     leadership: ['overview', 'audit'],
-    admin: ['overview', 'intake', 'documents', 'doctor-review', 'verification', 'approval', 'workflow-extensions', 'settlement', 'installments', 'monitoring', 'followups', 'audit'],
+    admin: ['overview', 'intake', 'documents', 'doctor-review', 'verification', 'approval', 'workflow-extensions', 'settlement', 'monitoring', 'followups', 'audit'],
   };
 
   const base = role ? roleMap[role] || roleMap.admin : roleMap.admin;
@@ -395,10 +396,13 @@ function OverviewTab({
   const [approvalContext, setApprovalContext] = useState<{
     spocName?: string;
     spocPhone?: string;
-    sponsorName?: string;
-    sponsorAmount?: number;
-    sponsorDate?: string;
+    proposedSponsorAmount?: number;
+    program?: string;
     campaignName?: string;
+    isTopUp?: boolean;
+    previousApprovedAmount?: number;
+    topUpAmount?: number;
+    totalApprovedAmount?: number;
   } | null>(null);
   const [editData, setEditData] = useState({
     beneficiaryName: caseData.childName || '',
@@ -432,10 +436,13 @@ function OverviewTab({
         setApprovalContext({
           spocName: hospital?.spocName,
           spocPhone: hospital?.spocPhone,
-          sponsorName: workflowExt?.funding?.sponsorQuantification?.sponsorName,
-          sponsorAmount: workflowExt?.funding?.sponsorQuantification?.proposedAmount,
-          sponsorDate: workflowExt?.funding?.sponsorQuantification?.submittedAt,
+          proposedSponsorAmount: workflowExt?.funding?.sponsorQuantification?.proposedAmount,
+          program: workflowExt?.funding?.program,
           campaignName: workflowExt?.funding?.campaign?.campaignName,
+          isTopUp: workflowExt?.funding?.isTopUp,
+          previousApprovedAmount: workflowExt?.funding?.previousApprovedAmount,
+          topUpAmount: workflowExt?.funding?.topUpAmount,
+          totalApprovedAmount: workflowExt?.funding?.totalApprovedAmount,
         });
       } catch (error) {
         if (!cancelled) {
@@ -642,11 +649,21 @@ function OverviewTab({
           <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Approval Summary</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
             <InfoItem label="Approval Status" value={caseData.caseStatus.replace('_', ' ')} />
-            <InfoItem label="Approved Amount" value={caseData.approvedAmount ? `INR ${caseData.approvedAmount.toLocaleString()}` : 'N/A'} />
+            <InfoItem label="Approved Amount" value={toCurrency(caseData.approvedAmount)} />
             <InfoItem label="Approval Date" value={(caseData as any).decisionAt ? new Date((caseData as any).decisionAt).toLocaleDateString() : 'N/A'} />
-            <InfoItem label="Sponsor Amount" value={approvalContext?.sponsorAmount ? `INR ${approvalContext.sponsorAmount.toLocaleString()}` : 'N/A'} />
-            <InfoItem label="Sponsor/Campaign" value={approvalContext?.sponsorName || approvalContext?.campaignName || 'N/A'} />
-            <InfoItem label="Sponsorship Date" value={approvalContext?.sponsorDate ? new Date(approvalContext.sponsorDate).toLocaleDateString() : 'N/A'} />
+            <InfoItem label="Proposed Sponsor Amount" value={toCurrency(approvalContext?.proposedSponsorAmount)} />
+            <InfoItem label="Program" value={approvalContext?.program || 'N/A'} />
+            <InfoItem label="Campaign" value={approvalContext?.campaignName || 'N/A'} />
+            <InfoItem label="Top-up" value={approvalContext?.isTopUp ? 'Yes' : 'No'} />
+            {approvalContext?.isTopUp && (
+              <InfoItem label="Previous Approved Amount" value={toCurrency(approvalContext?.previousApprovedAmount)} />
+            )}
+            {approvalContext?.isTopUp && (
+              <InfoItem label="Top-up Amount" value={toCurrency(approvalContext?.topUpAmount)} />
+            )}
+            {approvalContext?.isTopUp && (
+              <InfoItem label="Total Approved Amount" value={toCurrency(approvalContext?.totalApprovedAmount)} />
+            )}
             <InfoItem label="Hospital SPOC" value={approvalContext?.spocName || 'N/A'} />
             <InfoItem label="SPOC Contact" value={approvalContext?.spocPhone || 'N/A'} />
           </div>
@@ -1671,6 +1688,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const [workflowExt, setWorkflowExt] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showLegacyInstallments, setShowLegacyInstallments] = useState(false);
 
   const [formData, setFormData] = useState({
     outcome: 'Pending',
@@ -1678,14 +1696,14 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     comments: '',
   });
 
-  const [installmentRows, setInstallmentRows] = useState<Array<{
-    label: string;
-    amount: string;
-    dueDate: string;
-    status: string;
-  }>>([
-    { label: 'First Installment', amount: '', dueDate: '', status: 'Planned' },
-  ]);
+  const [fundingData, setFundingData] = useState({
+    proposedSponsorAmount: '',
+    program: '',
+    campaign: '',
+    isTopUp: false,
+    previousApprovedAmount: '',
+    topUpAmount: '',
+  });
 
   const [rejectionForm, setRejectionForm] = useState({
     reasonCategory: 'Medical',
@@ -1698,6 +1716,45 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   useEffect(() => {
     loadData();
   }, [caseId]);
+
+  const parseAmount = (value: string): number | undefined => {
+    if (value.trim() === '') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const previousApprovedAmount = parseAmount(fundingData.previousApprovedAmount);
+  const topUpAmount = parseAmount(fundingData.topUpAmount);
+  const totalAfterTopUp =
+    fundingData.isTopUp && previousApprovedAmount !== undefined && topUpAmount !== undefined
+      ? previousApprovedAmount + topUpAmount
+      : undefined;
+  const topUpPreviousBase =
+    fundingData.previousApprovedAmount ||
+    workflowExt?.funding?.totalApprovedAmount?.toString() ||
+    workflowExt?.funding?.previousApprovedAmount?.toString() ||
+    decision?.approvedAmount?.toString() ||
+    (caseData as any)?.approvedAmount?.toString() ||
+    '';
+
+  const canEdit = authState.activeRole === 'committee_member' || authState.activeRole === 'admin';
+  const showEditor = canEdit && (!decision || isEditing);
+
+  const programOptions = useMemo(() => {
+    const options = [...FUNDING_PROGRAM_OPTIONS] as string[];
+    if (fundingData.program && !options.includes(fundingData.program)) {
+      options.push(fundingData.program);
+    }
+    return options;
+  }, [fundingData.program]);
+
+  const campaignOptions = useMemo(() => {
+    const options = [...FUNDING_CAMPAIGN_OPTIONS] as string[];
+    if (fundingData.campaign && !options.includes(fundingData.campaign)) {
+      options.push(fundingData.campaign);
+    }
+    return options;
+  }, [fundingData.campaign]);
 
   const loadData = async () => {
     try {
@@ -1715,22 +1772,26 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       setRejectionDetails(rejectionData);
       setWorkflowExt(workflowExtData);
 
-      if (decisionData) {
-        setFormData({
-          outcome: decisionData.outcome || 'Pending',
-          approvedAmount: decisionData.approvedAmount?.toString() || '',
-          comments: decisionData.comments || '',
-        });
+      setFormData({
+        outcome: decisionData?.outcome || 'Pending',
+        approvedAmount: decisionData?.approvedAmount?.toString() || '',
+        comments: decisionData?.comments || '',
+      });
 
-        if (installmentsData?.length > 0) {
-          setInstallmentRows(installmentsData.map((i: any) => ({
-            label: i.label,
-            amount: i.amount?.toString() || '',
-            dueDate: i.dueDate || '',
-            status: i.status,
-          })));
-        }
-      }
+      const workflowFunding = workflowExtData?.funding;
+      const isTopUp = !!workflowFunding?.isTopUp;
+      const fallbackPreviousAmount =
+        workflowFunding?.previousApprovedAmount ??
+        (decisionData?.approvedAmount || (caseInfo as any)?.approvedAmount || 0);
+
+      setFundingData({
+        proposedSponsorAmount: workflowFunding?.sponsorQuantification?.proposedAmount?.toString() || '',
+        program: workflowFunding?.program || '',
+        campaign: workflowFunding?.campaign?.campaignName || '',
+        isTopUp,
+        previousApprovedAmount: isTopUp ? String(fallbackPreviousAmount || '') : '',
+        topUpAmount: workflowFunding?.topUpAmount?.toString() || '',
+      });
 
       if (rejectionData) {
         setRejectionForm({
@@ -1746,19 +1807,19 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     }
   };
 
-  const canEdit = authState.activeRole === 'committee_member' || authState.activeRole === 'admin';
-
-  if (!canEdit) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-[var(--nfi-text-secondary)]">You do not have permission to approve cases</p>
-      </div>
-    );
-  }
-
   const handleSubmit = async () => {
-    if (formData.outcome === 'Approved' && !formData.approvedAmount) {
+    if (!canEdit) return;
+
+    const approvedAmountValue = parseAmount(formData.approvedAmount);
+    const finalApprovedAmount = fundingData.isTopUp ? totalAfterTopUp : approvedAmountValue;
+
+    if (formData.outcome === 'Approved' && finalApprovedAmount === undefined) {
       showToast('Approved amount is required for approved cases', 'error');
+      return;
+    }
+
+    if (formData.outcome === 'Approved' && fundingData.isTopUp && totalAfterTopUp === undefined) {
+      showToast('Previous approved amount and top-up amount are required for top-up cases', 'error');
       return;
     }
 
@@ -1770,43 +1831,43 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       }
     }
 
-    if (formData.outcome === 'Approved' && installmentRows.length > 0) {
-      const totalInstallments = installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
-      const approvedAmount = parseFloat(formData.approvedAmount);
-
-      if (Math.abs(totalInstallments - approvedAmount) > 0.01) {
-        showToast(`Warning: Installments total (₹${totalInstallments.toLocaleString()}) does not match approved amount (₹${approvedAmount.toLocaleString()})`, 'error');
-        return;
-      }
-    }
-
     setSubmitting(true);
 
     try {
       await provider.submitCommitteeDecision(caseId, {
         outcome: formData.outcome as any,
-        approvedAmount: formData.approvedAmount ? parseFloat(formData.approvedAmount) : undefined,
+        approvedAmount: formData.outcome === 'Approved' ? finalApprovedAmount : undefined,
         comments: formData.comments,
         decidedBy: authState.activeUser?.userId || 'unknown',
       });
 
       if (formData.outcome === 'Approved') {
-        if (formData.approvedAmount) {
-          await caseService.updateFinancialDetails(caseId, {
-            approvedAmount: parseFloat(formData.approvedAmount),
-          }).catch(() => {});
-        }
+        await caseService.updateFinancialDetails(caseId, {
+          approvedAmount: finalApprovedAmount,
+        }).catch(() => {});
 
-        const validInstallments = installmentRows.filter(row => row.label && row.amount);
-        if (validInstallments.length > 0) {
-          await caseService.saveInstallments(caseId, validInstallments.map(row => ({
-            label: row.label,
-            amount: parseFloat(row.amount),
-            dueDate: row.dueDate || undefined,
-            status: row.status,
-          }))).catch(() => {});
-        }
-      } else if (formData.outcome === 'Rejected') {
+        await provider.saveWorkflowExt(caseId, {
+          funding: {
+            ...workflowExt?.funding,
+            program: fundingData.program || undefined,
+            isTopUp: fundingData.isTopUp,
+            previousApprovedAmount: fundingData.isTopUp ? previousApprovedAmount : undefined,
+            topUpAmount: fundingData.isTopUp ? topUpAmount : undefined,
+            totalApprovedAmount: finalApprovedAmount,
+            campaign: {
+              ...workflowExt?.funding?.campaign,
+              campaignName: fundingData.campaign || undefined,
+            },
+            sponsorQuantification: {
+              ...workflowExt?.funding?.sponsorQuantification,
+              proposedAmount: parseAmount(fundingData.proposedSponsorAmount),
+              notes: formData.comments || workflowExt?.funding?.sponsorQuantification?.notes,
+            },
+          },
+        }).catch(() => {});
+      }
+
+      if (formData.outcome === 'Rejected') {
         await caseService.saveRejectionDetails(caseId, rejectionForm).catch(() => {});
       }
 
@@ -1821,48 +1882,24 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     }
   };
 
-  const addInstallmentRow = () => {
-    if (installmentRows.length >= 4) {
-      showToast('Maximum 4 installments allowed (3 regular + 1 BGRC)', 'error');
-      return;
-    }
-    setInstallmentRows([...installmentRows, {
-      label: `Installment ${installmentRows.length + 1}`,
-      amount: '',
-      dueDate: '',
-      status: 'Planned',
-    }]);
-  };
-
-  const removeInstallmentRow = (index: number) => {
-    setInstallmentRows(installmentRows.filter((_, i) => i !== index));
-  };
-
-  const updateInstallmentRow = (index: number, field: string, value: string) => {
-    const updated = [...installmentRows];
-    updated[index] = { ...updated[index], [field]: value };
-    setInstallmentRows(updated);
-  };
-
   return (
     <div className="space-y-6">
-      {(authState.activeRole === 'committee_member' || authState.activeRole === 'admin') && workflowExt && (
+      {workflowExt && (
         <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Decision Context</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <InfoItem label="Interview Status" value={workflowExt?.interview?.status || 'Not available'} />
             <InfoItem label="Interview Outcome" value={workflowExt?.interview?.outcome || 'Not available'} />
-            <InfoItem label="Sponsor Name" value={workflowExt?.funding?.sponsorQuantification?.sponsorName || 'Not available'} />
-            <InfoItem
-              label="Sponsor Amount"
-              value={
-                workflowExt?.funding?.sponsorQuantification?.proposedAmount
-                  ? `INR ${Number(workflowExt.funding.sponsorQuantification.proposedAmount).toLocaleString()}`
-                  : 'Not available'
-              }
-            />
-            <InfoItem label="Sponsor Status" value={workflowExt?.funding?.sponsorQuantification?.status || 'Not available'} />
+            <InfoItem label="Proposed Sponsor Amount" value={toCurrency(workflowExt?.funding?.sponsorQuantification?.proposedAmount)} />
+            <InfoItem label="Program" value={workflowExt?.funding?.program || 'Not available'} />
             <InfoItem label="Campaign" value={workflowExt?.funding?.campaign?.campaignName || 'Not available'} />
+            <InfoItem label="Top-up" value={workflowExt?.funding?.isTopUp ? 'Yes' : 'No'} />
+            {workflowExt?.funding?.isTopUp && (
+              <InfoItem label="Previous Approved Amount" value={toCurrency(workflowExt?.funding?.previousApprovedAmount)} />
+            )}
+            {workflowExt?.funding?.isTopUp && (
+              <InfoItem label="Total Approved Amount" value={toCurrency(workflowExt?.funding?.totalApprovedAmount)} />
+            )}
           </div>
           {workflowExt?.interview?.notes && (
             <div className="mt-3 p-3 rounded bg-white border border-[var(--nfi-border)]">
@@ -1880,13 +1917,13 @@ function ApprovalTab({ caseId }: { caseId: string }) {
             <div>
               <p className="text-[var(--nfi-text-secondary)]">Submitted</p>
               <p className="font-medium text-[var(--nfi-text)]">
-                {caseData.submittedAt ? new Date(caseData.submittedAt).toLocaleDateString() : 'Not submitted'}
+                {(caseData as any).submittedAt ? new Date((caseData as any).submittedAt).toLocaleDateString() : 'Not submitted'}
               </p>
             </div>
             <div>
               <p className="text-[var(--nfi-text-secondary)]">Decision Date</p>
               <p className="font-medium text-[var(--nfi-text)]">
-                {caseData.decisionAt ? new Date(caseData.decisionAt).toLocaleDateString() : 'Pending'}
+                {(caseData as any).decisionAt ? new Date((caseData as any).decisionAt).toLocaleDateString() : 'Pending'}
               </p>
             </div>
             <div>
@@ -1902,7 +1939,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Committee Decision</h3>
-          {decision && !isEditing && (
+          {canEdit && decision && !isEditing && (
             <NfiButton size="sm" onClick={() => setIsEditing(true)}>
               <Edit2 size={16} className="mr-1" />
               Edit Decision
@@ -1910,7 +1947,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
           )}
         </div>
 
-        {!decision || isEditing ? (
+        {showEditor ? (
           <div className="space-y-4 p-4 border border-[var(--nfi-border)] rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <NfiField label="Outcome" required>
@@ -1928,95 +1965,126 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </NfiField>
 
               {formData.outcome === 'Approved' && (
-                <NfiField label="Approved Amount (₹)" required>
+                <NfiField label="Approved Amount (INR)" required>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                    value={formData.approvedAmount}
+                    value={fundingData.isTopUp ? (totalAfterTopUp?.toString() || '') : formData.approvedAmount}
                     onChange={(e) => setFormData({ ...formData, approvedAmount: e.target.value })}
-                    placeholder="Enter amount"
+                    placeholder={fundingData.isTopUp ? 'Derived from top-up fields' : 'Enter amount'}
+                    disabled={fundingData.isTopUp}
                   />
                 </NfiField>
               )}
             </div>
 
-            <NfiField label="Comments">
+            <div className="pt-4 border-t border-[var(--nfi-border)] space-y-4">
+              <h4 className="font-semibold text-[var(--nfi-text)]">Funding Decision</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <NfiField label="Proposed Sponsor Amount">
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.proposedSponsorAmount}
+                    onChange={(e) => setFundingData({ ...fundingData, proposedSponsorAmount: e.target.value })}
+                    placeholder="Enter amount"
+                  />
+                </NfiField>
+
+                <NfiField label="Program">
+                  <select
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.program}
+                    onChange={(e) => setFundingData({ ...fundingData, program: e.target.value })}
+                  >
+                    <option value="">Select Program</option>
+                    {programOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </NfiField>
+
+                <NfiField label="Campaign">
+                  <select
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.campaign}
+                    onChange={(e) => setFundingData({ ...fundingData, campaign: e.target.value })}
+                  >
+                    <option value="">Select Campaign</option>
+                    {campaignOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </NfiField>
+
+                <NfiField label="Top-up">
+                  <select
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.isTopUp ? 'Yes' : 'No'}
+                    onChange={(e) =>
+                      setFundingData({
+                        ...fundingData,
+                        isTopUp: e.target.value === 'Yes',
+                        previousApprovedAmount: e.target.value === 'Yes' ? topUpPreviousBase : '',
+                        topUpAmount: e.target.value === 'Yes' ? fundingData.topUpAmount : '',
+                      })
+                    }
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </NfiField>
+
+                {fundingData.isTopUp && (
+                  <NfiField label="Previous Approved Amount">
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-gray-50"
+                      value={fundingData.previousApprovedAmount || topUpPreviousBase}
+                      readOnly
+                    />
+                  </NfiField>
+                )}
+
+                {fundingData.isTopUp && (
+                  <NfiField label="Top-up Amount">
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                      value={fundingData.topUpAmount}
+                      onChange={(e) => setFundingData({ ...fundingData, topUpAmount: e.target.value })}
+                      placeholder="Enter top-up amount"
+                    />
+                  </NfiField>
+                )}
+
+                {fundingData.isTopUp && (
+                  <NfiField label="Total Approved Amount">
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-gray-50"
+                      value={totalAfterTopUp !== undefined ? `INR ${totalAfterTopUp.toLocaleString()}` : 'N/A'}
+                      readOnly
+                    />
+                  </NfiField>
+                )}
+              </div>
+              {formData.outcome !== 'Approved' && (
+                <p className="text-xs text-[var(--nfi-text-secondary)]">
+                  Funding values are captured now and applied on approval submission.
+                </p>
+              )}
+            </div>
+
+            <NfiField label="Decision Notes / Remarks">
               <textarea
                 className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
                 rows={3}
                 value={formData.comments}
                 onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                placeholder="Add comments..."
+                placeholder="Add notes..."
               />
             </NfiField>
-
-            {formData.outcome === 'Approved' && (
-              <div className="pt-4 border-t border-[var(--nfi-border)]">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-[var(--nfi-text)]">Funding Installments</h4>
-                  <NfiButton size="sm" variant="secondary" onClick={addInstallmentRow}>
-                    <PlusCircle size={16} className="mr-1" />
-                    Add Installment
-                  </NfiButton>
-                </div>
-                <div className="space-y-3">
-                  {installmentRows.map((row, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-3 items-start">
-                      <div className="col-span-4">
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg text-sm"
-                          placeholder="Label"
-                          value={row.label}
-                          onChange={(e) => updateInstallmentRow(index, 'label', e.target.value)}
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg text-sm"
-                          placeholder="Amount"
-                          value={row.amount}
-                          onChange={(e) => updateInstallmentRow(index, 'amount', e.target.value)}
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg text-sm"
-                          value={row.dueDate}
-                          onChange={(e) => updateInstallmentRow(index, 'dueDate', e.target.value)}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <button
-                          onClick={() => removeInstallmentRow(index)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <X size={20} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {installmentRows.length > 0 && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
-                    <p className="text-[var(--nfi-text-secondary)]">
-                      Total: ₹{installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toLocaleString()}
-                      {formData.approvedAmount && (
-                        <span className={
-                          Math.abs(installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0) - parseFloat(formData.approvedAmount)) < 0.01
-                            ? 'text-green-600 ml-2'
-                            : 'text-red-600 ml-2'
-                        }>
-                          (Approved: ₹{parseFloat(formData.approvedAmount).toLocaleString()})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
 
             {formData.outcome === 'Rejected' && (
               <div className="pt-4 border-t border-[var(--nfi-border)] space-y-4">
@@ -2104,58 +2172,89 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 <p className="text-sm text-[var(--nfi-text-secondary)]">Outcome</p>
                 <NfiBadge
                   tone={
-                    decision.outcome === 'Approved'
+                    (decision?.outcome || 'Pending') === 'Approved'
                       ? 'success'
-                      : decision.outcome === 'Rejected'
+                      : (decision?.outcome || 'Pending') === 'Rejected'
                       ? 'error'
                       : 'warning'
                   }
                 >
-                  {decision.outcome?.replace('_', ' ')}
+                  {(decision?.outcome || 'Pending').replace('_', ' ')}
                 </NfiBadge>
               </div>
-              {decision.approvedAmount && (
+              {decision?.approvedAmount !== undefined && decision?.approvedAmount !== null && (
                 <div>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">Approved Amount</p>
-                  <p className="font-semibold text-lg text-[var(--nfi-text)]">₹{decision.approvedAmount.toLocaleString()}</p>
+                  <p className="font-semibold text-lg text-[var(--nfi-text)]">INR {Number(decision.approvedAmount).toLocaleString()}</p>
                 </div>
               )}
               <div>
                 <p className="text-sm text-[var(--nfi-text-secondary)]">Decision Date</p>
                 <p className="font-medium text-[var(--nfi-text)]">
-                  {decision.decisionDate ? new Date(decision.decisionDate).toLocaleDateString() : 'N/A'}
+                  {decision?.decisionDate || decision?.decidedAt ? new Date(decision.decisionDate || decision.decidedAt).toLocaleDateString() : 'N/A'}
                 </p>
               </div>
-              {decision.comments && (
+              {decision?.comments && (
                 <div className="md:col-span-2">
-                  <p className="text-sm text-[var(--nfi-text-secondary)]">Comments</p>
+                  <p className="text-sm text-[var(--nfi-text-secondary)]">Decision Notes / Remarks</p>
                   <p className="text-[var(--nfi-text)]">{decision.comments}</p>
                 </div>
               )}
+              <div className="md:col-span-2 pt-2 border-t border-[var(--nfi-border)]">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <InfoItem label="Proposed Sponsor Amount" value={toCurrency(workflowExt?.funding?.sponsorQuantification?.proposedAmount)} />
+                  <InfoItem label="Program" value={workflowExt?.funding?.program || 'N/A'} />
+                  <InfoItem label="Campaign" value={workflowExt?.funding?.campaign?.campaignName || 'N/A'} />
+                  <InfoItem label="Top-up" value={workflowExt?.funding?.isTopUp ? 'Yes' : 'No'} />
+                  {workflowExt?.funding?.isTopUp && (
+                    <InfoItem label="Previous Approved Amount" value={toCurrency(workflowExt?.funding?.previousApprovedAmount)} />
+                  )}
+                  {workflowExt?.funding?.isTopUp && (
+                    <InfoItem label="Top-up Amount" value={toCurrency(workflowExt?.funding?.topUpAmount)} />
+                  )}
+                  {workflowExt?.funding?.isTopUp && (
+                    <InfoItem label="Total Approved Amount" value={toCurrency(workflowExt?.funding?.totalApprovedAmount)} />
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       {installments.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Funding Installments</h3>
-          <div className="space-y-3">
-            {installments.map((inst: any) => (
-              <div key={inst.installmentId} className="flex items-center justify-between p-4 border border-[var(--nfi-border)] rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium text-[var(--nfi-text)]">{inst.label}</p>
-                  <p className="text-sm text-[var(--nfi-text-secondary)]">
-                    ₹{inst.amount.toLocaleString()}
-                    {inst.dueDate && `${CASE_SUBTITLE_SEPARATOR}Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
-                  </p>
-                </div>
-                <NfiBadge tone={inst.status === 'Paid' ? 'success' : inst.status === 'Requested' ? 'warning' : 'neutral'}>
-                  {inst.status}
-                </NfiBadge>
-              </div>
-            ))}
+        <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Legacy Installment Records</h3>
+              <p className="text-sm text-[var(--nfi-text-secondary)]">Hidden by default for MVP. Expand only when compatibility details are needed.</p>
+            </div>
+            <NfiButton
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowLegacyInstallments(prev => !prev)}
+            >
+              {showLegacyInstallments ? 'Hide' : 'Show'}
+            </NfiButton>
           </div>
+          {showLegacyInstallments && (
+            <div className="space-y-3 mt-4">
+              {installments.map((inst: any) => (
+                <div key={inst.installmentId} className="flex items-center justify-between p-4 border border-[var(--nfi-border)] rounded-lg bg-white">
+                  <div className="flex-1">
+                    <p className="font-medium text-[var(--nfi-text)]">{inst.label}</p>
+                    <p className="text-sm text-[var(--nfi-text-secondary)]">
+                      INR {Number(inst.amount).toLocaleString()}
+                      {inst.dueDate && `${CASE_SUBTITLE_SEPARATOR}Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <NfiBadge tone={inst.status === 'Paid' ? 'success' : inst.status === 'Requested' ? 'warning' : 'neutral'}>
+                    {inst.status}
+                  </NfiBadge>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2180,8 +2279,6 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     </div>
   );
 }
-
-
 function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseData: any; onUpdate: () => void }) {
   const authState = getAuthState();
   const { showToast } = useToast();
@@ -2697,6 +2794,7 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
     </div>
   );
 }
+
 
 
 

@@ -222,6 +222,11 @@ export interface WorkflowSponsorQuantification {
 
 export interface WorkflowFunding {
   channel?: 'DirectSponsor' | 'Campaign';
+  program?: string;
+  isTopUp?: boolean;
+  previousApprovedAmount?: number;
+  topUpAmount?: number;
+  totalApprovedAmount?: number;
   campaign?: WorkflowCampaign;
   sponsorQuantification?: WorkflowSponsorQuantification;
 }
