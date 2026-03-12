@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
@@ -18,7 +18,7 @@ import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
-import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion } from '../types';
+import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion, UserRole } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
@@ -37,6 +37,41 @@ import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/Da
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
 const SHOW_DEMO_SIM_BUTTONS = false;
+
+type CaseTabId =
+  | 'overview'
+  | 'intake'
+  | 'documents'
+  | 'doctor-review'
+  | 'verification'
+  | 'approval'
+  | 'workflow-extensions'
+  | 'settlement'
+  | 'installments'
+  | 'monitoring'
+  | 'followups'
+  | 'audit';
+
+function getVisibleCaseTabIds(role: UserRole | null, showPostApproval: boolean): CaseTabId[] {
+  const roleMap: Record<UserRole, CaseTabId[]> = {
+    hospital_spoc: ['overview', 'intake', 'documents', 'audit'],
+    clinical: ['overview', 'documents', 'doctor-review', 'audit'],
+    clinical_reviewer: ['overview', 'documents', 'doctor-review', 'audit'],
+    hospital_doctor: ['overview', 'documents', 'doctor-review', 'audit'],
+    verifier: ['overview', 'intake', 'documents', 'doctor-review', 'verification', 'approval', 'workflow-extensions', 'audit'],
+    committee_member: ['overview', 'documents', 'approval', 'audit'],
+    accounts: ['overview', 'approval', 'installments', 'audit'],
+    beni_volunteer: ['overview', 'monitoring', 'followups', 'audit'],
+    leadership: ['overview', 'audit'],
+    admin: ['overview', 'intake', 'documents', 'doctor-review', 'verification', 'approval', 'workflow-extensions', 'settlement', 'installments', 'monitoring', 'followups', 'audit'],
+  };
+
+  const base = role ? roleMap[role] || roleMap.admin : roleMap.admin;
+  if (showPostApproval) {
+    return base;
+  }
+  return base.filter((tabId) => !['settlement', 'installments', 'monitoring', 'followups'].includes(tabId));
+}
 
 export function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -60,6 +95,11 @@ export function CaseDetail() {
   const [latestReturnEvent, setLatestReturnEvent] = useState<CaseWorkflowEvent | null>(null);
   const [latestRejectedEvent, setLatestRejectedEvent] = useState<CaseWorkflowEvent | null>(null);
   const [docsVersion, setDocsVersion] = useState(0);
+  const showPostApproval = caseData?.caseStatus === 'Approved' || caseData?.caseStatus === 'Closed';
+  const visibleTabIds = useMemo(
+    () => getVisibleCaseTabIds(authState.activeRole, showPostApproval),
+    [authState.activeRole, showPostApproval]
+  );
 
   const bumpDocs = () => setDocsVersion(v => v + 1);
 
@@ -120,6 +160,13 @@ export function CaseDetail() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (visibleTabIds.length === 0) return;
+    if (!visibleTabIds.includes(activeTab as CaseTabId)) {
+      setActiveTab(visibleTabIds[0]);
+    }
+  }, [activeTab, visibleTabIds]);
+
   if (isLoading) {
     return (
       <Layout>
@@ -158,8 +205,6 @@ export function CaseDetail() {
   const isHospitalRejectedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Rejected';
   const isHospitalReturnedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Returned';
 
-  const showPostApproval = caseData?.caseStatus === 'Approved' || caseData?.caseStatus === 'Closed';
-
   const caseDataTabs = [
     { id: 'overview', label: 'Overview', icon: <FileText size={16} /> },
     { id: 'intake', label: 'Intake Forms', icon: <FileText size={16} /> },
@@ -193,7 +238,12 @@ export function CaseDetail() {
         { id: 'audit', label: 'Audit', icon: <FileText size={16} />, count: auditEvents.length },
       ],
     },
-  ];
+  ]
+    .map((group) => ({
+      ...group,
+      tabs: group.tabs.filter((tab) => visibleTabIds.includes(tab.id as CaseTabId)),
+    }))
+    .filter((group) => group.tabs.length > 0);
 
   return (
     <Layout>
@@ -340,7 +390,16 @@ function OverviewTab({
 }) {
   const authState = getAuthState();
   const { showToast } = useToast();
+  const { provider } = useAppContext();
   const [isEditing, setIsEditing] = useState(false);
+  const [approvalContext, setApprovalContext] = useState<{
+    spocName?: string;
+    spocPhone?: string;
+    sponsorName?: string;
+    sponsorAmount?: number;
+    sponsorDate?: string;
+    campaignName?: string;
+  } | null>(null);
   const [editData, setEditData] = useState({
     beneficiaryName: caseData.childName || '',
     beneficiaryNo: caseData.beneficiaryNo || '',
@@ -357,6 +416,37 @@ function OverviewTab({
   });
 
   const canEdit = false;
+
+  useEffect(() => {
+    if (authState.activeRole !== 'beni_volunteer') return;
+    let cancelled = false;
+
+    const loadApprovalContext = async () => {
+      try {
+        const [workflowExt, hospitals] = await Promise.all([
+          provider.getWorkflowExt(caseData.caseId).catch(() => null),
+          provider.getHospitals().catch(() => []),
+        ]);
+        if (cancelled) return;
+        const hospital = hospitals.find((h) => h.hospitalId === caseData.hospitalId);
+        setApprovalContext({
+          spocName: hospital?.spocName,
+          spocPhone: hospital?.spocPhone,
+          sponsorName: workflowExt?.funding?.sponsorQuantification?.sponsorName,
+          sponsorAmount: workflowExt?.funding?.sponsorQuantification?.proposedAmount,
+          sponsorDate: workflowExt?.funding?.sponsorQuantification?.submittedAt,
+          campaignName: workflowExt?.funding?.campaign?.campaignName,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load approval context:', error);
+        }
+      }
+    };
+
+    loadApprovalContext();
+    return () => { cancelled = true; };
+  }, [authState.activeRole, caseData.caseId, caseData.hospitalId, provider]);
 
   const handleSave = () => {
 
@@ -517,7 +607,7 @@ function OverviewTab({
               />
             </NfiField>
 
-            <NfiField label="Estimated Amount (â‚¹)" required>
+            <NfiField label="Estimated Amount (₹)" required>
               <input
                 type="number"
                 value={editData.estimateAmount}
@@ -547,6 +637,22 @@ function OverviewTab({
         </div>
       </div>
 
+      {authState.activeRole === 'beni_volunteer' && (
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Approval Summary</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
+            <InfoItem label="Approval Status" value={caseData.caseStatus.replace('_', ' ')} />
+            <InfoItem label="Approved Amount" value={caseData.approvedAmount ? `INR ${caseData.approvedAmount.toLocaleString()}` : 'N/A'} />
+            <InfoItem label="Approval Date" value={(caseData as any).decisionAt ? new Date((caseData as any).decisionAt).toLocaleDateString() : 'N/A'} />
+            <InfoItem label="Sponsor Amount" value={approvalContext?.sponsorAmount ? `INR ${approvalContext.sponsorAmount.toLocaleString()}` : 'N/A'} />
+            <InfoItem label="Sponsor/Campaign" value={approvalContext?.sponsorName || approvalContext?.campaignName || 'N/A'} />
+            <InfoItem label="Sponsorship Date" value={approvalContext?.sponsorDate ? new Date(approvalContext.sponsorDate).toLocaleDateString() : 'N/A'} />
+            <InfoItem label="Hospital SPOC" value={approvalContext?.spocName || 'N/A'} />
+            <InfoItem label="SPOC Contact" value={approvalContext?.spocPhone || 'N/A'} />
+          </div>
+        </div>
+      )}
+
       <KeyDatesCard caseId={caseData.caseId} clinicalDetails={clinicalDetails} onUpdate={onUpdate} />
     </div>
   );
@@ -566,6 +672,7 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
   clinicalDetails: ClinicalCaseDetails | null;
   onUpdate: () => void;
 }) {
+  const authState = getAuthState();
   const { provider } = useAppContext();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -577,6 +684,7 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
     setAdmissionDate(clinicalDetails?.admissionDate || '');
     setDischargeDate(clinicalDetails?.dischargeDate || '');
   }, [clinicalDetails]);
+  const canEditDates = authState.activeRole === 'hospital_spoc' || authState.activeRole === 'verifier' || authState.activeRole === 'admin';
 
   const handleSave = async () => {
     setSaving(true);
@@ -600,7 +708,7 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Key Dates</h3>
-        {!isEditing && (
+        {!isEditing && canEditDates && (
           <button
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-1 text-sm text-[var(--nfi-primary)] hover:underline"
@@ -611,7 +719,7 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
         )}
       </div>
 
-      {isEditing ? (
+      {isEditing && canEditDates ? (
         <div className="p-4 border border-[var(--nfi-border)] rounded-lg space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <NfiField label="Admission Date">
@@ -847,6 +955,10 @@ export function DocumentsTab({
   const isDemoMode = mode === 'DEMO';
   const isCommittee = authState.activeRole === 'committee_member';
   const isRejectedCaseForHospital = authState.activeRole === 'hospital_spoc' && caseStatus === 'Rejected';
+  const canEditDocuments =
+    authState.activeRole === 'hospital_spoc' ||
+    authState.activeRole === 'verifier' ||
+    authState.activeRole === 'admin';
   const canSimulate = isDemoMode && (authState.activeRole === 'admin' || authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc');
   const hasMissingMandatory = checklistReadiness.blockingDocs.length > 0;
   const hasUnverifiedMandatory = hasMissingMandatory;
@@ -865,6 +977,11 @@ export function DocumentsTab({
       {isRejectedCaseForHospital && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-800">Rejected cases are read-only for hospital users. Documents can no longer be edited in this flow.</p>
+        </div>
+      )}
+      {!canEditDocuments && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">Documents are visible in read-only mode for your role.</p>
         </div>
       )}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -957,7 +1074,7 @@ export function DocumentsTab({
                 const isPrimaryFinanceProof =
                   doc.category === 'FINANCE' &&
                   PRIMARY_FINANCE_PROOF_DOC_TYPES.some((docType) => docType === doc.docType);
-                const canMarkNA = !isRejectedCaseForHospital && (authState.activeRole === 'admin' || !doc.mandatoryFlag);
+                const canMarkNA = canEditDocuments && !isRejectedCaseForHospital && (authState.activeRole === 'admin' || !doc.mandatoryFlag);
                 const latestVersion = getLatestVersion(doc);
                 const hasVersions = doc.versions && doc.versions.length > 1;
                 const isExpanded = expandedVersions.has(doc.docId);
@@ -1022,7 +1139,7 @@ export function DocumentsTab({
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {!isNA && !isRejectedCaseForHospital && (
+                        {!isNA && canEditDocuments && !isRejectedCaseForHospital && (
                           <>
                             <input
                               ref={(el) => {
@@ -1120,7 +1237,7 @@ export function DocumentsTab({
                           value={doc.notes || ''}
                           onChange={(e) => handleNotesUpdate(doc.docId, e.target.value)}
                           rows={2}
-                          disabled={isVerified || isRejectedCaseForHospital}
+                          disabled={isVerified || isRejectedCaseForHospital || !canEditDocuments}
                           className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none resize-none disabled:bg-gray-50"
                           placeholder="Add notes about this document..."
                         />
@@ -1320,7 +1437,7 @@ function VerificationTab({
           <div>
             <p className="text-sm text-[var(--nfi-text-secondary)]">Clinical Review</p>
             <p className="text-2xl font-bold" style={{ color: doctorReview?.outcome === 'Approved' || doctorReview?.outcome === 'Approved_With_Comments' ? '#10b981' : '#f59e0b' }}>
-              {doctorReview?.outcome ? 'âœ“' : 'â—¯'}
+              {doctorReview?.outcome ? '✓' : '◯'}
             </p>
           </div>
         </div>
@@ -1551,6 +1668,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const [decision, setDecision] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [rejectionDetails, setRejectionDetails] = useState<any>(null);
+  const [workflowExt, setWorkflowExt] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -1583,17 +1701,19 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
   const loadData = async () => {
     try {
-      const [caseInfo, decisionData, installmentsData, rejectionData] = await Promise.all([
+      const [caseInfo, decisionData, installmentsData, rejectionData, workflowExtData] = await Promise.all([
         caseService.getCaseById(caseId),
         provider.getCommitteeReview(caseId).catch(() => null),
         caseService.getInstallments(caseId).catch(() => []),
         caseService.getRejectionDetails(caseId).catch(() => null),
+        provider.getWorkflowExt(caseId).catch(() => null),
       ]);
 
       setCaseData(caseInfo);
       setDecision(decisionData);
       setInstallments(installmentsData || []);
       setRejectionDetails(rejectionData);
+      setWorkflowExt(workflowExtData);
 
       if (decisionData) {
         setFormData({
@@ -1655,7 +1775,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       const approvedAmount = parseFloat(formData.approvedAmount);
 
       if (Math.abs(totalInstallments - approvedAmount) > 0.01) {
-        showToast(`Warning: Installments total (â‚¹${totalInstallments.toLocaleString()}) does not match approved amount (â‚¹${approvedAmount.toLocaleString()})`, 'error');
+        showToast(`Warning: Installments total (₹${totalInstallments.toLocaleString()}) does not match approved amount (₹${approvedAmount.toLocaleString()})`, 'error');
         return;
       }
     }
@@ -1726,6 +1846,33 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
   return (
     <div className="space-y-6">
+      {(authState.activeRole === 'committee_member' || authState.activeRole === 'admin') && workflowExt && (
+        <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Decision Context</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <InfoItem label="Interview Status" value={workflowExt?.interview?.status || 'Not available'} />
+            <InfoItem label="Interview Outcome" value={workflowExt?.interview?.outcome || 'Not available'} />
+            <InfoItem label="Sponsor Name" value={workflowExt?.funding?.sponsorQuantification?.sponsorName || 'Not available'} />
+            <InfoItem
+              label="Sponsor Amount"
+              value={
+                workflowExt?.funding?.sponsorQuantification?.proposedAmount
+                  ? `INR ${Number(workflowExt.funding.sponsorQuantification.proposedAmount).toLocaleString()}`
+                  : 'Not available'
+              }
+            />
+            <InfoItem label="Sponsor Status" value={workflowExt?.funding?.sponsorQuantification?.status || 'Not available'} />
+            <InfoItem label="Campaign" value={workflowExt?.funding?.campaign?.campaignName || 'Not available'} />
+          </div>
+          {workflowExt?.interview?.notes && (
+            <div className="mt-3 p-3 rounded bg-white border border-[var(--nfi-border)]">
+              <p className="text-xs font-semibold text-[var(--nfi-text-secondary)] mb-1">Interview Notes</p>
+              <p className="text-sm text-[var(--nfi-text)]">{workflowExt.interview.notes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {caseData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Decision Timeline</h3>
@@ -1781,7 +1928,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </NfiField>
 
               {formData.outcome === 'Approved' && (
-                <NfiField label="Approved Amount (â‚¹)" required>
+                <NfiField label="Approved Amount (₹)" required>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
@@ -1855,14 +2002,14 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 {installmentRows.length > 0 && (
                   <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
                     <p className="text-[var(--nfi-text-secondary)]">
-                      Total: â‚¹{installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toLocaleString()}
+                      Total: ₹{installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toLocaleString()}
                       {formData.approvedAmount && (
                         <span className={
                           Math.abs(installmentRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0) - parseFloat(formData.approvedAmount)) < 0.01
                             ? 'text-green-600 ml-2'
                             : 'text-red-600 ml-2'
                         }>
-                          (Approved: â‚¹{parseFloat(formData.approvedAmount).toLocaleString()})
+                          (Approved: ₹{parseFloat(formData.approvedAmount).toLocaleString()})
                         </span>
                       )}
                     </p>
@@ -1970,7 +2117,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               {decision.approvedAmount && (
                 <div>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">Approved Amount</p>
-                  <p className="font-semibold text-lg text-[var(--nfi-text)]">â‚¹{decision.approvedAmount.toLocaleString()}</p>
+                  <p className="font-semibold text-lg text-[var(--nfi-text)]">₹{decision.approvedAmount.toLocaleString()}</p>
                 </div>
               )}
               <div>
@@ -1999,7 +2146,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 <div className="flex-1">
                   <p className="font-medium text-[var(--nfi-text)]">{inst.label}</p>
                   <p className="text-sm text-[var(--nfi-text-secondary)]">
-                    â‚¹{inst.amount.toLocaleString()}
+                    ₹{inst.amount.toLocaleString()}
                     {inst.dueDate && `${CASE_SUBTITLE_SEPARATOR}Due: ${new Date(inst.dueDate).toLocaleDateString()}`}
                   </p>
                 </div>
@@ -2163,19 +2310,19 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Approved Amount</p>
-            <p className="text-2xl font-bold text-[var(--nfi-primary)]">â‚¹{summary.totalApproved.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-[var(--nfi-primary)]">₹{summary.totalApproved.toLocaleString()}</p>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Total Planned</p>
-            <p className="text-2xl font-bold text-purple-600">â‚¹{summary.totalPlanned.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-purple-600">₹{summary.totalPlanned.toLocaleString()}</p>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Total Disbursed</p>
-            <p className="text-2xl font-bold text-green-600">â‚¹{summary.totalPaid.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-green-600">₹{summary.totalPaid.toLocaleString()}</p>
           </div>
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
             <p className="text-sm text-[var(--nfi-text-secondary)]">Balance</p>
-            <p className="text-2xl font-bold text-orange-600">â‚¹{summary.balance.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-orange-600">₹{summary.balance.toLocaleString()}</p>
           </div>
         </div>
       )}
@@ -2183,7 +2330,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
       {summary && summary.totalPlanned !== summary.totalApproved && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Total planned amount (â‚¹{summary.totalPlanned.toLocaleString()}) differs from approved amount (â‚¹{summary.totalApproved.toLocaleString()})
+            <strong>Note:</strong> Total planned amount (₹{summary.totalPlanned.toLocaleString()}) differs from approved amount (₹{summary.totalApproved.toLocaleString()})
           </p>
         </div>
       )}
@@ -2220,7 +2367,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
                 {installments.map((inst) => (
                   <tr key={inst.installmentId} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-[var(--nfi-text)]">{inst.label}</td>
-                    <td className="py-3 px-4 text-right text-[var(--nfi-text)]">â‚¹{inst.amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right text-[var(--nfi-text)]">₹{inst.amount.toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <select
                         value={inst.status}
@@ -2261,7 +2408,7 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
               <NfiField label="Label" required>
                 <input type="text" value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]" placeholder="e.g., Installment 1" />
               </NfiField>
-              <NfiField label="Amount (â‚¹)" required>
+              <NfiField label="Amount (₹)" required>
                 <input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]" placeholder="0" />
               </NfiField>
               <NfiField label="Planned Date">
@@ -2550,5 +2697,6 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
     </div>
   );
 }
+
 
 

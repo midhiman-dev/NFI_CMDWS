@@ -31,12 +31,15 @@ export function getVisibleCategories(userRole: UserRole | null): string[] {
   switch (userRole) {
     case 'hospital_spoc':
     case 'verifier':
-    case 'committee_member':
     case 'accounts':
     case 'admin':
     case 'leadership':
       return ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
+    case 'committee_member':
+      return ['MEDICAL'];
     case 'clinical':
+    case 'clinical_reviewer':
+    case 'hospital_doctor':
       return ['MEDICAL'];
     case 'beni_volunteer':
       return ['GENERAL', 'MEDICAL', 'FINAL'];
