@@ -33,6 +33,10 @@ const TEMPLATE_BINDINGS_STORAGE_KEY = 'nfi_demo_template_bindings_v1';
 const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
 const SETTLEMENTS_STORAGE_KEY = 'nfi_demo_settlements_v1';
 const DOCTOR_REVIEWS_STORAGE_KEY = 'nfi_demo_doctor_reviews_v1';
+const OPTIONAL_SUPPORTING_DOC_TYPES = new Set([
+  'Signed Fund Application Copy (Optional)',
+  'Signed Interim Summary Copy (Optional)',
+]);
 
 interface MockData {
   hospitals: Hospital[];
@@ -609,9 +613,9 @@ export class MockProvider implements DataProvider {
   private getBuiltInTemplates(): DocumentRequirementTemplate[] {
     const categories = ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
     const docTypes: Record<string, string[]> = {
-      GENERAL: ['NFI Fund Application Form', 'Aadhaar Card - Mother', 'Aadhaar Card - Father', 'Family Photo'],
+      GENERAL: ['Signed Fund Application Copy (Optional)', 'Aadhaar Card - Mother', 'Aadhaar Card - Father', 'Family Photo'],
       FINANCE: ['Bank Statement', 'Income Certificate', 'Talati/Govt Economic Card', 'BPL Card'],
-      MEDICAL: ['Interim Summary Document', 'Lab Report', 'Internal Case Papers', 'Investigation Reports (All)'],
+      MEDICAL: ['Signed Interim Summary Copy (Optional)', 'Lab Report', 'Internal Case Papers', 'Investigation Reports (All)'],
       FINAL: ['Final Bill', 'Payment Receipt', 'Discharge Certificate'],
     };
 
@@ -627,8 +631,12 @@ export class MockProvider implements DataProvider {
             processType,
             category: category as any,
             docType,
-            mandatoryFlag: (category === 'GENERAL' || category === 'FINANCE' || category === 'MEDICAL'),
-            conditionNotes: undefined,
+            mandatoryFlag:
+              (category === 'GENERAL' || category === 'FINANCE' || category === 'MEDICAL')
+              && !OPTIONAL_SUPPORTING_DOC_TYPES.has(docType),
+            conditionNotes: OPTIONAL_SUPPORTING_DOC_TYPES.has(docType)
+              ? 'Supporting signed/scanned copy. Optional when structured intake is complete.'
+              : undefined,
           });
         }
       }

@@ -53,7 +53,7 @@ const cities = ['New Delhi', 'Mumbai', 'Bangalore', 'Hyderabad', 'Chennai', 'Pun
 const states = ['Delhi', 'Maharashtra', 'Karnataka', 'Telangana', 'Tamil Nadu', 'Gujarat', 'West Bengal'];
 
 const docTypes = [
-  { type: 'NFI Fund Application Form', category: 'GENERAL', mandatory: true },
+  { type: 'Signed Fund Application Copy (Optional)', category: 'GENERAL', mandatory: false },
   { type: 'Aadhaar Cards (Mother & Father)', category: 'GENERAL', mandatory: true },
   { type: 'Parents Photo', category: 'GENERAL', mandatory: true },
   { type: 'Baby Photo', category: 'GENERAL', mandatory: true },
@@ -63,7 +63,7 @@ const docTypes = [
   { type: 'Talati / Govt Economic Card', category: 'FINANCE', mandatory: true },
   { type: 'BPL Card', category: 'FINANCE', mandatory: true },
 
-  { type: 'Interim Summary Document', category: 'MEDICAL', mandatory: true },
+  { type: 'Signed Interim Summary Copy (Optional)', category: 'MEDICAL', mandatory: false },
   { type: 'Lab Report', category: 'MEDICAL', mandatory: true },
   { type: 'Internal Case Papers', category: 'MEDICAL', mandatory: true },
   { type: 'Investigation Reports (All)', category: 'MEDICAL', mandatory: true },

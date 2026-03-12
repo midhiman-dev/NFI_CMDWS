@@ -56,6 +56,18 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
     canonicalType: 'Discharge Summary',
     canonicalCategory: 'FINAL',
   },
+  'NFI Fund Application Form': {
+    legacyCode: 'NFI Fund Application Form',
+    legacyCategory: 'GENERAL',
+    canonicalType: 'Signed Fund Application Copy (Optional)',
+    canonicalCategory: 'GENERAL',
+  },
+  'Interim Summary Document': {
+    legacyCode: 'Interim Summary Document',
+    legacyCategory: 'MEDICAL',
+    canonicalType: 'Signed Interim Summary Copy (Optional)',
+    canonicalCategory: 'MEDICAL',
+  },
 };
 
 export function resolveDocTypeAlias(docType: string, category: DocumentCategory): { docType: string; category: DocumentCategory } {

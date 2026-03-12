@@ -776,7 +776,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
 
   const verifiedCount = allDocs.filter(d => d.status === 'Verified').length;
   const mandatoryDocs = allDocs.filter(d => d.mandatoryFlag);
-  const mandatoryCount = 12;
+  const mandatoryCount = mandatoryDocs.length;
   const mandatoryCompleteCount = mandatoryDocs.filter(isDocSatisfied).length;
   const totalCount = allDocs.length;
 
@@ -844,7 +844,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
       {mandatoryCompleteCount === mandatoryCount && mandatoryCount > 0 && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            Readiness check: All 12 mandatory documents complete and ready for committee review.
+            Readiness check: All mandatory documents complete and ready for committee review.
           </p>
         </div>
       )}
