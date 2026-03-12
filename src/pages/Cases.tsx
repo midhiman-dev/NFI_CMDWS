@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiBadge } from '../components/design-system/NfiBadge';
@@ -7,15 +7,21 @@ import { NfiButton } from '../components/design-system/NfiButton';
 import { Search, Filter, PlusCircle, Eye, Edit, CheckSquare, FileCheck, Heart, AlertTriangle } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getScopedHospitalId } from '../utils/roleAccess';
+import { getHospitalDisplayStatus, getLatestRejectedEvent, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
 import { useAppContext } from '../App';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
+import type { CaseStatus } from '../types';
 
 interface CaseRow extends CaseWithDetails {
   checklistProgress: number;
+  displayStatus: CaseStatus;
+  returnReason?: string;
+  rejectionReason?: string;
 }
 
 export function Cases() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { provider } = useAppContext();
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [filteredCases, setFilteredCases] = useState<CaseRow[]>([]);
@@ -28,14 +34,22 @@ export function Cases() {
   const authState = getAuthState();
   const scopedHospitalId = getScopedHospitalId(authState);
   const canFilterHospital = !scopedHospitalId;
+  const isHospitalUser = authState.activeRole === 'hospital_spoc';
 
   useEffect(() => {
     loadCases();
   }, [provider]);
 
   useEffect(() => {
+    const requestedStatus = searchParams.get('status');
+    if (requestedStatus && ['Draft', 'Submitted', 'Returned', 'Rejected', 'Approved'].includes(requestedStatus)) {
+      setStatusFilter(requestedStatus);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     applyFilters();
-  }, [cases, searchTerm, statusFilter, processFilter, hospitalFilter]);
+  }, [cases, searchTerm, statusFilter, processFilter, hospitalFilter, isHospitalUser]);
 
   const loadCases = async () => {
     try {
@@ -44,10 +58,18 @@ export function Cases() {
 
       const allCases = await provider.listCases();
 
-      const enrichedCases: CaseRow[] = allCases.map((c) => ({
-        ...c,
-        checklistProgress: 0,
-      }));
+      const enrichedCases: CaseRow[] = allCases.map((c) => {
+        const workflow = listCaseWorkflowEvents(c.caseId);
+        const latestReturn = getLatestReturnedEvent(workflow);
+        const latestReject = getLatestRejectedEvent(workflow);
+        return {
+          ...c,
+          checklistProgress: 0,
+          displayStatus: getHospitalDisplayStatus(c.caseStatus, workflow),
+          returnReason: latestReturn?.reason,
+          rejectionReason: latestReject?.reason,
+        };
+      });
 
       setCases(enrichedCases);
     } catch (err) {
@@ -73,7 +95,7 @@ export function Cases() {
     }
 
     if (statusFilter !== 'all') {
-      filtered = filtered.filter((c) => c.caseStatus === statusFilter);
+      filtered = filtered.filter((c) => (isHospitalUser ? c.displayStatus : c.caseStatus) === statusFilter);
     }
 
     if (processFilter !== 'all') {
@@ -88,7 +110,7 @@ export function Cases() {
   };
 
   const getCaseOpenPath = (caseItem: CaseRow) => {
-    if (authState.activeRole === 'hospital_spoc' && (caseItem.caseStatus === 'Draft' || caseItem.caseStatus === 'Returned')) {
+    if (isHospitalUser && (caseItem.displayStatus === 'Draft' || caseItem.displayStatus === 'Returned')) {
       return `/cases/${caseItem.caseId}/wizard`;
     }
     return `/cases/${caseItem.caseId}`;
@@ -99,9 +121,9 @@ export function Cases() {
 
     switch (role) {
       case 'hospital_spoc':
-        if (caseItem.caseStatus === 'Draft' || caseItem.caseStatus === 'Returned') {
+        if (caseItem.displayStatus === 'Draft' || caseItem.displayStatus === 'Returned') {
           return {
-            label: 'Continue',
+            label: caseItem.displayStatus === 'Returned' ? 'Fix & Resubmit' : 'Continue',
             icon: <Edit size={16} />,
             variant: 'primary' as const,
             onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -195,6 +217,17 @@ export function Cases() {
     return acc;
   }, [] as any[]);
 
+  const hospitalBuckets = useMemo(
+    () => ({
+      Draft: cases.filter((c) => c.displayStatus === 'Draft').length,
+      Submitted: cases.filter((c) => c.displayStatus === 'Submitted').length,
+      Returned: cases.filter((c) => c.displayStatus === 'Returned').length,
+      Rejected: cases.filter((c) => c.displayStatus === 'Rejected').length,
+      Approved: cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed').length,
+    }),
+    [cases]
+  );
+
   if (loading) {
     return (
       <Layout>
@@ -250,6 +283,37 @@ export function Cases() {
                 className="w-full pl-10 pr-4 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
               />
             </div>
+
+            {isHospitalUser && (
+              <div className="flex flex-wrap items-center gap-2">
+                {(['Draft', 'Submitted', 'Returned', 'Rejected', 'Approved'] as const).map((bucket) => {
+                  const active = statusFilter === bucket;
+                  return (
+                    <button
+                      key={bucket}
+                      onClick={() => setStatusFilter(bucket)}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        active
+                          ? 'bg-[var(--nfi-primary)] text-white border-[var(--nfi-primary)]'
+                          : 'bg-white text-[var(--nfi-text)] border-[var(--nfi-border)] hover:bg-[var(--nfi-bg-light)]'
+                      }`}
+                    >
+                      {bucket} ({hospitalBuckets[bucket]})
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    statusFilter === 'all'
+                      ? 'bg-[var(--nfi-primary)] text-white border-[var(--nfi-primary)]'
+                      : 'bg-white text-[var(--nfi-text)] border-[var(--nfi-border)] hover:bg-[var(--nfi-bg-light)]'
+                  }`}
+                >
+                  All ({cases.length})
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
@@ -395,17 +459,28 @@ export function Cases() {
                         <td className="py-3 px-4">
                           <NfiBadge
                             tone={
-                              caseItem.caseStatus === 'Approved' || caseItem.caseStatus === 'Closed'
+                              (isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus) === 'Approved' ||
+                              (isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus) === 'Closed'
                                 ? 'success'
-                                : caseItem.caseStatus === 'Rejected'
+                                : (isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus) === 'Rejected'
                                 ? 'error'
-                                : caseItem.caseStatus === 'Draft'
+                                : (isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus) === 'Draft'
                                 ? 'neutral'
                                 : 'warning'
                             }
                           >
-                            {caseItem.caseStatus.replace('_', ' ')}
+                            {(isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus).replace('_', ' ')}
                           </NfiBadge>
+                          {isHospitalUser && caseItem.displayStatus === 'Returned' && caseItem.returnReason && (
+                            <p className="text-xs text-amber-700 mt-1 max-w-[280px] truncate" title={caseItem.returnReason}>
+                              Reason: {caseItem.returnReason}
+                            </p>
+                          )}
+                          {isHospitalUser && caseItem.displayStatus === 'Rejected' && caseItem.rejectionReason && (
+                            <p className="text-xs text-red-700 mt-1 max-w-[280px] truncate" title={caseItem.rejectionReason}>
+                              Rejected: {caseItem.rejectionReason}
+                            </p>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">

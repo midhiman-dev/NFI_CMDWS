@@ -30,6 +30,8 @@ import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
 import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
 import { normalizeSeparator } from '../utils/textNormalize';
+import { type CaseWorkflowEvent, getHospitalDisplayStatus, getLatestRejectedEvent, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
+import { formatDateTimeFriendly } from '../utils/dateFormat';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
@@ -53,6 +55,10 @@ export function CaseDetail() {
   const [financialDetails, setFinancialDetails] = useState<FinancialCaseDetails | null>(null);
   const [documents, setDocuments] = useState<DocumentWithTemplate[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [workflowEvents, setWorkflowEvents] = useState<CaseWorkflowEvent[]>([]);
+  const [displayStatus, setDisplayStatus] = useState<Case['caseStatus']>('Draft');
+  const [latestReturnEvent, setLatestReturnEvent] = useState<CaseWorkflowEvent | null>(null);
+  const [latestRejectedEvent, setLatestRejectedEvent] = useState<CaseWorkflowEvent | null>(null);
   const [docsVersion, setDocsVersion] = useState(0);
 
   const bumpDocs = () => setDocsVersion(v => v + 1);
@@ -69,6 +75,15 @@ export function CaseDetail() {
             return;
           }
           setCaseData(caseInfo);
+
+          const wfEvents = listCaseWorkflowEvents(caseId);
+          const resolvedStatus = authState.activeRole === 'hospital_spoc'
+            ? getHospitalDisplayStatus(caseInfo.caseStatus, wfEvents)
+            : caseInfo.caseStatus;
+          setDisplayStatus(resolvedStatus);
+          setWorkflowEvents(wfEvents);
+          setLatestReturnEvent(getLatestReturnedEvent(wfEvents));
+          setLatestRejectedEvent(getLatestRejectedEvent(wfEvents));
 
           const [docs, events, clinical] = await Promise.all([
             provider.listCaseDocuments(caseId).catch(() => [] as DocumentWithTemplate[]),
@@ -140,6 +155,8 @@ export function CaseDetail() {
   }
 
   const hospitalName = caseData.hospitalName || 'Unknown Hospital';
+  const isHospitalRejectedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Rejected';
+  const isHospitalReturnedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Returned';
 
   const showPostApproval = caseData?.caseStatus === 'Approved' || caseData?.caseStatus === 'Closed';
 
@@ -196,18 +213,47 @@ export function CaseDetail() {
           </div>
           <NfiBadge
             tone={
-              caseData.caseStatus === 'Approved' || caseData.caseStatus === 'Closed'
+              displayStatus === 'Approved' || displayStatus === 'Closed'
                 ? 'success'
-                : caseData.caseStatus === 'Rejected'
+                : displayStatus === 'Rejected'
                 ? 'error'
-                : caseData.caseStatus === 'Draft'
+                : displayStatus === 'Draft'
                 ? 'neutral'
                 : 'warning'
             }
           >
-            {t(`case.status.${caseData.caseStatus}`)}
+            {t(`case.status.${displayStatus}`)}
           </NfiBadge>
         </div>
+
+        {isHospitalReturnedView && (
+          <NfiCard className="bg-amber-50 border border-amber-200">
+            <h2 className="text-base font-semibold text-amber-900 mb-1">This case was returned for updates</h2>
+            {latestReturnEvent?.reason && (
+              <p className="text-sm text-amber-900 mb-2"><span className="font-medium">Reason:</span> {latestReturnEvent.reason}</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-amber-800">
+              <p><span className="font-medium">Returned by:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">When:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
+              <p><span className="font-medium">Stage:</span> {latestReturnEvent?.source || 'Verification'}</p>
+            </div>
+          </NfiCard>
+        )}
+
+        {isHospitalRejectedView && (
+          <NfiCard className="bg-red-50 border border-red-200">
+            <h2 className="text-base font-semibold text-red-900 mb-1">This case was rejected</h2>
+            {latestRejectedEvent?.reason && (
+              <p className="text-sm text-red-900 mb-2"><span className="font-medium">Reason:</span> {latestRejectedEvent.reason}</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-red-800">
+              <p><span className="font-medium">Rejected by:</span> {latestRejectedEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">When:</span> {formatDateTimeFriendly(latestRejectedEvent?.changedAt)}</p>
+              <p><span className="font-medium">Stage:</span> {latestRejectedEvent?.source || 'Committee'}</p>
+            </div>
+            <p className="text-xs text-red-700 mt-2">Rejected cases are read-only for hospital users in the current workflow.</p>
+          </NfiCard>
+        )}
 
         <div className="lg:hidden mb-2">
           <CaseDetailNav groups={navGroups} activeTab={activeTab} onChange={setActiveTab} />
@@ -233,7 +279,14 @@ export function CaseDetail() {
               {activeTab === 'family' && <FamilyTab caseId={caseId!} />}
               {activeTab === 'clinical' && <ClinicalTab caseId={caseId!} onDatesChanged={bumpDocs} />}
               {activeTab === 'financial' && <FinancialTab caseId={caseId!} />}
-              {activeTab === 'documents' && <DocumentsTab documents={documents} caseId={caseId!} onDocumentsChanged={bumpDocs} />}
+              {activeTab === 'documents' && (
+                <DocumentsTab
+                  documents={documents}
+                  caseId={caseId!}
+                  onDocumentsChanged={bumpDocs}
+                  caseStatus={displayStatus}
+                />
+              )}
               {activeTab === 'doctor-review' && (
                 <DoctorReviewTab
                   caseId={caseId!}
@@ -261,7 +314,7 @@ export function CaseDetail() {
               {activeTab === 'installments' && <InstallmentsTab caseId={caseId!} caseData={caseData} onUpdate={() => {}} />}
               {activeTab === 'monitoring' && <MonitoringTab caseId={caseId!} />}
               {activeTab === 'followups' && <FollowupsTab caseId={caseId!} caseData={caseData} />}
-              {activeTab === 'audit' && <AuditTab events={auditEvents} />}
+              {activeTab === 'audit' && <AuditTab events={auditEvents} workflowEvents={workflowEvents} />}
             </div>
           </div>
         </div>
@@ -609,7 +662,17 @@ function KeyDatesCard({ caseId, clinicalDetails, onUpdate }: {
   );
 }
 
-export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { documents: DocumentWithTemplate[]; caseId: string; onDocumentsChanged: () => void }) {
+export function DocumentsTab({
+  documents,
+  caseId,
+  onDocumentsChanged,
+  caseStatus,
+}: {
+  documents: DocumentWithTemplate[];
+  caseId: string;
+  onDocumentsChanged: () => void;
+  caseStatus?: Case['caseStatus'];
+}) {
   const authState = getAuthState();
   const { showToast } = useToast();
   const { provider, mode } = useAppContext();
@@ -783,6 +846,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
 
   const isDemoMode = mode === 'DEMO';
   const isCommittee = authState.activeRole === 'committee_member';
+  const isRejectedCaseForHospital = authState.activeRole === 'hospital_spoc' && caseStatus === 'Rejected';
   const canSimulate = isDemoMode && (authState.activeRole === 'admin' || authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc');
   const hasMissingMandatory = checklistReadiness.blockingDocs.length > 0;
   const hasUnverifiedMandatory = hasMissingMandatory;
@@ -798,6 +862,11 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
   return (
     <div className="space-y-6">
       {committeeMessage}
+      {isRejectedCaseForHospital && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-800">Rejected cases are read-only for hospital users. Documents can no longer be edited in this flow.</p>
+        </div>
+      )}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Checklist Readiness</h3>
@@ -888,7 +957,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
                 const isPrimaryFinanceProof =
                   doc.category === 'FINANCE' &&
                   PRIMARY_FINANCE_PROOF_DOC_TYPES.some((docType) => docType === doc.docType);
-                const canMarkNA = authState.activeRole === 'admin' || !doc.mandatoryFlag;
+                const canMarkNA = !isRejectedCaseForHospital && (authState.activeRole === 'admin' || !doc.mandatoryFlag);
                 const latestVersion = getLatestVersion(doc);
                 const hasVersions = doc.versions && doc.versions.length > 1;
                 const isExpanded = expandedVersions.has(doc.docId);
@@ -953,7 +1022,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {!isNA && (
+                        {!isNA && !isRejectedCaseForHospital && (
                           <>
                             <input
                               ref={(el) => {
@@ -1051,7 +1120,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
                           value={doc.notes || ''}
                           onChange={(e) => handleNotesUpdate(doc.docId, e.target.value)}
                           rows={2}
-                          disabled={isVerified}
+                          disabled={isVerified || isRejectedCaseForHospital}
                           className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none resize-none disabled:bg-gray-50"
                           placeholder="Add notes about this document..."
                         />
@@ -2433,24 +2502,47 @@ function FollowupsTab({ caseId, caseData }: { caseId: string; caseData: any }) {
   );
 }
 
-function AuditTab({ events }: { events: AuditEvent[] }) {
+function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEvents: CaseWorkflowEvent[] }) {
+  const timeline = [
+    ...workflowEvents.map((event) => ({
+      id: event.eventId,
+      timestamp: event.changedAt,
+      title: `${event.fromStatus || 'Start'} -> ${event.toStatus}`,
+      actor: event.changedBy || event.changedByRole || 'System',
+      note: event.reason,
+      source: event.source || 'Workflow',
+    })),
+    ...events.map((event) => ({
+      id: event.eventId,
+      timestamp: event.timestamp,
+      title: event.action,
+      actor: event.userId,
+      note: event.notes,
+      source: 'Audit',
+    })),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  if (timeline.length === 0) {
+    return <p className="text-sm text-[var(--nfi-text-secondary)]">No workflow history available yet.</p>;
+  }
+
   return (
     <div className="space-y-4">
-      {events.map((event, idx) => (
-        <div key={event.eventId} className="relative pl-8 pb-6 border-l-2 border-gray-200 last:border-0">
+      {timeline.map((event) => (
+        <div key={event.id} className="relative pl-8 pb-6 border-l-2 border-gray-200 last:border-0">
           <div className="absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full bg-[var(--nfi-primary)]" />
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <p className="font-medium text-[var(--nfi-text)]">{event.action}</p>
+              <p className="font-medium text-[var(--nfi-text)]">{event.title}</p>
               <span className="text-xs text-[var(--nfi-text-secondary)]">
-                {new Date(event.timestamp).toLocaleString()}
+                {formatDateTimeFriendly(event.timestamp)}
               </span>
             </div>
             <p className="text-sm text-[var(--nfi-text-secondary)] mb-1">
-              by {event.userId}
+              by {event.actor} ({event.source})
             </p>
-            {event.notes && (
-              <p className="text-sm text-[var(--nfi-text)] mt-2 p-3 bg-gray-50 rounded">{event.notes}</p>
+            {event.note && (
+              <p className="text-sm text-[var(--nfi-text)] mt-2 p-3 bg-gray-50 rounded">{event.note}</p>
             )}
           </div>
         </div>

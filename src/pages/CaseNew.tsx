@@ -13,6 +13,9 @@ import { normalizeHospitalId } from '../utils/roleAccess';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import type { DocumentWithTemplate } from '../data/providers/DataProvider';
+import type { CaseWorkflowEvent } from '../utils/caseWorkflow';
+import { getHospitalDisplayStatus, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
+import { formatDateTimeFriendly } from '../utils/dateFormat';
 
 const TOTAL_STEPS = 5;
 const STEP_TITLES = [
@@ -53,6 +56,12 @@ interface CaseFormData {
   diagnosis: string;
   summary: string;
   estimateAmount: string;
+}
+
+interface AttentionItem {
+  label: string;
+  status: 'Missing' | 'Replace' | 'Needs update' | 'Incomplete';
+  group: 'documents' | 'fund' | 'interim' | 'other';
 }
 
 function getProcessTypeLabel(processType: ProcessType | ''): string {
@@ -97,6 +106,10 @@ export function CaseNew() {
   const [readiness, setReadiness] = useState<CaseSubmitReadiness | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [documents, setDocuments] = useState<DocumentWithTemplate[]>([]);
+  const [caseDisplayStatus, setCaseDisplayStatus] = useState<CaseStatus | null>(null);
+  const [latestReturnEvent, setLatestReturnEvent] = useState<CaseWorkflowEvent | null>(null);
+  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
+  const [attentionLoading, setAttentionLoading] = useState(false);
   const [documentStats, setDocumentStats] = useState<{ total: number; uploaded: number; verified: number }>({
     total: 0,
     uploaded: 0,
@@ -128,6 +141,51 @@ export function CaseNew() {
     ? buildDerivedBabyName(formData.motherName)
     : formData.beneficiaryName;
   const isResumedDraft = Boolean(routeCaseId);
+  const isReturnedCase = isResumedDraft && caseDisplayStatus === 'Returned';
+  const isRejectedCase = isResumedDraft && caseDisplayStatus === 'Rejected';
+
+  const loadReturnedAttention = async (caseId: string, returnEvent: CaseWorkflowEvent | null) => {
+    setAttentionLoading(true);
+    try {
+      const [submitReadiness, docs] = await Promise.all([
+        provider.getCaseSubmitReadiness(caseId),
+        provider.listCaseDocuments(caseId),
+      ]);
+      const nextItems: AttentionItem[] = [];
+
+      submitReadiness.missingDocuments.forEach((docType) => {
+        nextItems.push({ label: docType, status: 'Missing', group: 'documents' });
+      });
+      docs
+        .filter((d) => d.status === 'Rejected')
+        .forEach((d) => nextItems.push({ label: d.docType, status: 'Replace', group: 'documents' }));
+      submitReadiness.missingSections.forEach((sectionLabel) => {
+        if (sectionLabel.startsWith('Fund Application -> ')) {
+          nextItems.push({
+            label: sectionLabel.replace('Fund Application -> ', ''),
+            status: 'Incomplete',
+            group: 'fund',
+          });
+          return;
+        }
+        if (sectionLabel.startsWith('Interim Summary -> ')) {
+          nextItems.push({
+            label: sectionLabel.replace('Interim Summary -> ', ''),
+            status: 'Incomplete',
+            group: 'interim',
+          });
+          return;
+        }
+        nextItems.push({ label: sectionLabel, status: 'Incomplete', group: 'other' });
+      });
+      setAttentionItems(nextItems);
+    } catch (error) {
+      console.error('Failed to load returned case attention list:', error);
+      setAttentionItems([]);
+    } finally {
+      setAttentionLoading(false);
+    }
+  };
 
   useEffect(() => {
     const loadHospitals = async () => {
@@ -204,6 +262,12 @@ export function CaseNew() {
 
         if (!caseInfo || cancelled) return;
 
+        const workflowEvents = listCaseWorkflowEvents(routeCaseId);
+        const resolvedDisplayStatus = getHospitalDisplayStatus(caseInfo.caseStatus, workflowEvents);
+        const resolvedReturn = getLatestReturnedEvent(workflowEvents);
+        setCaseDisplayStatus(resolvedDisplayStatus);
+        setLatestReturnEvent(resolvedReturn);
+
         setCreatedCaseId(routeCaseId);
         setFormData((prev) => ({
           ...prev,
@@ -227,6 +291,12 @@ export function CaseNew() {
         const stepFromQuery = Number(searchParams.get('step') || '');
         if (!Number.isNaN(stepFromQuery) && stepFromQuery >= 1 && stepFromQuery <= TOTAL_STEPS) {
           setCurrentStep(stepFromQuery);
+        }
+
+        if (resolvedDisplayStatus === 'Returned') {
+          await loadReturnedAttention(routeCaseId, resolvedReturn);
+        } else {
+          setAttentionItems([]);
         }
       } catch (error) {
         console.error('Failed to load draft for wizard:', error);
@@ -506,7 +576,7 @@ export function CaseNew() {
     try {
       await persistRegistrationDetails(createdCaseId);
       await provider.updateCaseStatus(createdCaseId, 'Submitted');
-      showToast('Case submitted successfully', 'success');
+      showToast(isReturnedCase ? 'Case resubmitted successfully' : 'Case submitted successfully', 'success');
       navigate('/cases');
     } catch (error) {
       console.error('Failed to submit case:', error);
@@ -569,6 +639,30 @@ export function CaseNew() {
     );
   }
 
+  if (isRejectedCase) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto space-y-4">
+          <NfiCard className="bg-red-50 border border-red-200">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-red-700 mt-0.5" />
+              <div>
+                <h2 className="text-lg font-semibold text-red-900">Rejected case is read-only</h2>
+                <p className="text-sm text-red-800 mt-1">
+                  This case was rejected and cannot be edited in the hospital wizard. Open the case detail page to review the rejection outcome and notes.
+                </p>
+              </div>
+            </div>
+          </NfiCard>
+          <NfiButton variant="secondary" onClick={() => navigate(`/cases/${routeCaseId}`)}>
+            <ArrowLeft size={16} className="mr-2" />
+            Open Case Detail
+          </NfiButton>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -580,10 +674,71 @@ export function CaseNew() {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{isResumedDraft ? 'Draft Case' : 'New Case'}</h1>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">
+              {isReturnedCase ? 'Returned Case' : isResumedDraft ? 'Draft Case' : 'New Case'}
+            </h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">Step {currentStep} of {TOTAL_STEPS}: {STEP_TITLES[currentStep - 1]}</p>
           </div>
         </div>
+
+        {isReturnedCase && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+            <h2 className="text-base font-semibold text-amber-900">This case was returned for updates</h2>
+            {latestReturnEvent?.reason && (
+              <p className="text-sm text-amber-900"><span className="font-medium">Reason:</span> {latestReturnEvent.reason}</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-amber-800">
+              <p><span className="font-medium">Returned by:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">Returned on:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
+              <p><span className="font-medium">Stage:</span> {latestReturnEvent?.source || 'Verification'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-900 mb-2">Needs Attention</p>
+              {attentionLoading ? (
+                <p className="text-sm text-amber-800">Loading correction checklist...</p>
+              ) : attentionItems.length === 0 ? (
+                <p className="text-sm text-amber-800">No specific item-level issues were found. Review the return reason and verify all sections before resubmission.</p>
+              ) : (
+                <div className="space-y-4">
+                  {latestReturnEvent?.reason && (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-800">Return Reason</h3>
+                      <p className="text-sm text-amber-900">{latestReturnEvent.reason}</p>
+                    </div>
+                  )}
+
+                  {(['documents', 'fund', 'interim', 'other'] as const).map((group) => {
+                    const groupItems = attentionItems.filter((item) => item.group === group);
+                    if (groupItems.length === 0) return null;
+                    const heading =
+                      group === 'documents'
+                        ? 'Missing Documents'
+                        : group === 'fund'
+                        ? 'Incomplete Fund Application'
+                        : group === 'interim'
+                        ? 'Incomplete Interim Summary'
+                        : 'Other Notes / Verification Notes';
+                    return (
+                      <div key={group} className="space-y-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-800">{heading}</h3>
+                        <div className="space-y-2">
+                          {groupItems.map((item, idx) => (
+                            <div key={`${group}-${idx}`} className="flex items-start gap-2 text-sm text-amber-900">
+                              <span className="inline-flex px-2 py-0.5 rounded-full border border-amber-400 text-xs font-medium min-w-[88px] justify-center">
+                                {item.status}
+                              </span>
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {warnings.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -885,7 +1040,7 @@ export function CaseNew() {
               ) : (
                 <NfiButton onClick={handleSubmit} disabled={saving || processMappingMissing || reviewLoading}>
                   {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Send size={16} className="mr-2" />}
-                  Submit Case
+                  {isReturnedCase ? 'Resubmit Case' : 'Submit Case'}
                 </NfiButton>
               )}
             </div>

@@ -34,3 +34,16 @@ export function formatDateTimeDMY(value: string | Date | null | undefined): stri
   if (!d) return '\u2014';
   return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
+
+export function formatDateTimeFriendly(value: string | Date | null | undefined): string {
+  const d = parseFlexibleDate(value);
+  if (!d) return '\u2014';
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}

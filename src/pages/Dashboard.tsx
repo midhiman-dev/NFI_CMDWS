@@ -20,12 +20,18 @@ import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
 import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
 import { normalizeSeparator } from '../utils/textNormalize';
+import { getHospitalDisplayStatus, listCaseWorkflowEvents } from '../utils/caseWorkflow';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
+import type { CaseStatus } from '../types';
+
+interface DashboardCase extends CaseWithDetails {
+  displayStatus: CaseStatus;
+}
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { provider, mode } = useAppContext();
-  const [cases, setCases] = useState<CaseWithDetails[]>([]);
+  const [cases, setCases] = useState<DashboardCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const authState = getAuthState();
@@ -39,8 +45,12 @@ export function Dashboard() {
       try {
         setError(null);
         const casesData = await provider.listCases();
+        const withDisplayStatus: DashboardCase[] = casesData.map((c) => ({
+          ...c,
+          displayStatus: getHospitalDisplayStatus(c.caseStatus, listCaseWorkflowEvents(c.caseId)),
+        }));
         if (!cancelled) {
-          setCases(casesData);
+          setCases(withDisplayStatus);
           loadedRef.current = true;
           setLoading(false);
         }
@@ -58,8 +68,8 @@ export function Dashboard() {
   }, [provider]);
 
   const queueMetrics = getRoleQueueMetrics(authState.activeRole || 'admin', cases);
-  const getCaseOpenPath = (caseItem: CaseWithDetails) => {
-    if (authState.activeRole === 'hospital_spoc' && (caseItem.caseStatus === 'Draft' || caseItem.caseStatus === 'Returned')) {
+  const getCaseOpenPath = (caseItem: DashboardCase) => {
+    if (authState.activeRole === 'hospital_spoc' && (caseItem.displayStatus === 'Draft' || caseItem.displayStatus === 'Returned')) {
       return `/cases/${caseItem.caseId}/wizard`;
     }
     return `/cases/${caseItem.caseId}`;
@@ -158,7 +168,9 @@ export function Dashboard() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-medium text-[var(--nfi-text)]">{c.caseRef}</p>
-                      <NfiBadge tone={getStatusTone(c.caseStatus)}>{c.caseStatus.replace(/_/g, ' ')}</NfiBadge>
+                      <NfiBadge tone={getStatusTone(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus)}>
+                        {(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus).replace(/_/g, ' ')}
+                      </NfiBadge>
                     </div>
                     <p className="text-sm text-[var(--nfi-text-secondary)]">
                       {normalizeSeparator(
@@ -179,45 +191,53 @@ export function Dashboard() {
   );
 }
 
-function getStatusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+function getStatusTone(status: string): 'success' | 'warning' | 'error' | 'status' | 'neutral' {
   switch (status) {
     case 'Approved': return 'success';
     case 'Under_Verification':
     case 'Under_Review': return 'warning';
-    case 'Rejected': return 'danger';
-    case 'Submitted': return 'info';
+    case 'Returned': return 'warning';
+    case 'Rejected': return 'error';
+    case 'Submitted': return 'status';
     default: return 'neutral';
   }
 }
 
-function getRoleQueueMetrics(role: UserRole, cases: CaseWithDetails[]) {
+function getRoleQueueMetrics(role: UserRole, cases: DashboardCase[]) {
   switch (role) {
     case 'hospital_spoc':
       return [
         {
           label: 'Draft Cases',
-          value: cases.filter((c) => c.caseStatus === 'Draft').length,
+          value: cases.filter((c) => c.displayStatus === 'Draft').length,
           icon: <FileText className="text-gray-600" size={24} />,
           color: 'bg-gray-50',
-          onClick: '/cases',
+          onClick: '/cases?status=Draft',
         },
         {
           label: 'Submitted',
-          value: cases.filter((c) => c.caseStatus === 'Submitted').length,
+          value: cases.filter((c) => c.displayStatus === 'Submitted').length,
           icon: <TrendingUp className="text-blue-600" size={24} />,
           color: 'bg-blue-50',
-          onClick: '/cases',
+          onClick: '/cases?status=Submitted',
         },
         {
           label: 'Returned',
-          value: cases.filter((c) => c.caseStatus === 'Returned').length,
+          value: cases.filter((c) => c.displayStatus === 'Returned').length,
           icon: <AlertCircle className="text-yellow-600" size={24} />,
           color: 'bg-yellow-50',
-          onClick: '/cases',
+          onClick: '/cases?status=Returned',
+        },
+        {
+          label: 'Rejected',
+          value: cases.filter((c) => c.displayStatus === 'Rejected').length,
+          icon: <XCircle className="text-red-600" size={24} />,
+          color: 'bg-red-50',
+          onClick: '/cases?status=Rejected',
         },
         {
           label: 'Approved',
-          value: cases.filter((c) => c.caseStatus === 'Approved').length,
+          value: cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed').length,
           icon: <CheckCircle className="text-green-600" size={24} />,
           color: 'bg-green-50',
         },

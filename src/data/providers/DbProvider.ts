@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
+import { appendCaseWorkflowEvent } from '../../utils/caseWorkflow';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -15,6 +16,27 @@ import {
 
 export class DbProvider implements DataProvider {
   private static readonly DOC_VERSIONS_STORAGE_KEY = 'nfi_db_document_versions_v1';
+
+  private getActorMeta(): { by: string; role: string } {
+    const auth = getAuthState();
+    return {
+      by: auth.activeUser?.fullName || auth.activeUser?.userId || 'System',
+      role: auth.activeRole || 'admin',
+    };
+  }
+
+  private async appendWorkflowTransition(caseId: string, fromStatus: CaseStatus | undefined, toStatus: CaseStatus, reason?: string, source?: string): Promise<void> {
+    const actor = this.getActorMeta();
+    appendCaseWorkflowEvent(caseId, {
+      fromStatus,
+      toStatus,
+      changedAt: new Date().toISOString(),
+      changedBy: actor.by,
+      changedByRole: actor.role,
+      reason: reason || undefined,
+      source: source || undefined,
+    });
+  }
 
   private getStoredDocVersions(): Record<string, DocVersion[]> {
     try {
@@ -152,7 +174,7 @@ export class DbProvider implements DataProvider {
     const hospitals = await this.getHospitals();
     const hospital = hospitals.find(h => h.hospitalId === payload.hospitalId);
 
-    return {
+    const createdCase = {
       caseId,
       caseRef: caseNumber,
       processType: payload.processType,
@@ -166,6 +188,8 @@ export class DbProvider implements DataProvider {
       childName: payload.beneficiaryName,
       beneficiaryNo: payload.beneficiaryNo,
     };
+    await this.appendWorkflowTransition(caseId, undefined, payload.caseStatus, payload.caseStatus === 'Draft' ? 'Case created in wizard' : undefined, 'Intake');
+    return createdCase;
   }
 
   async listCaseDocuments(caseId: string): Promise<DocumentWithTemplate[]> {
@@ -385,14 +409,14 @@ export class DbProvider implements DataProvider {
     });
   }
 
-  async returnToHospital(caseId: string, data: {
+  async returnToHospital(caseId: string, _data: {
     reason: string;
     comment: string;
   }): Promise<void> {
     await this.updateCaseStatus(caseId, 'Returned');
   }
 
-  async sendToCommittee(caseId: string, data: {
+  async sendToCommittee(caseId: string, _data: {
     comment: string;
   }): Promise<void> {
     await this.updateCaseStatus(caseId, 'Under_Review');
@@ -443,7 +467,17 @@ export class DbProvider implements DataProvider {
   }
 
   async updateCaseStatus(caseId: string, status: CaseStatus): Promise<void> {
+    const currentCase = await this.getCaseById(caseId);
     await caseService.updateCaseStatus(caseId, status);
+    await this.appendWorkflowTransition(
+      caseId,
+      currentCase?.caseStatus,
+      status,
+      status === 'Submitted' && currentCase?.caseStatus === 'Returned'
+        ? 'Returned corrections updated and resubmitted'
+        : undefined,
+      currentCase?.caseStatus === 'Returned' && status === 'Submitted' ? 'Hospital Resubmission' : 'Case Update'
+    );
   }
 
   async listInstallments(caseId: string): Promise<FundingInstallment[]> {
@@ -1750,8 +1784,17 @@ export class DbProvider implements DataProvider {
   }
 
   private formatSectionName(sectionKey: string): string {
-    return sectionKey
-      .replace(/Section$/, '')
+    const normalized = sectionKey.replace(/Section$/, '');
+    const labelMap: Record<string, string> = {
+      nicuFinancial: 'NICU & Financial',
+      feedingRespiration: 'Feeding & Respiration',
+      dischargePlanInvestigations: 'Discharge Plan & Investigations',
+      remarksSignature: 'Remarks & Signature',
+    };
+    if (labelMap[normalized]) {
+      return labelMap[normalized];
+    }
+    return normalized
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');

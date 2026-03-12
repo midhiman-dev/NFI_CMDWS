@@ -4,6 +4,7 @@ import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { mockStore } from '../../store/mockStore';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
+import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, saveWorkflowStore } from '../../utils/caseWorkflow';
 import { getChecklistReadinessFromDocuments } from '../../utils/documentChecklistRules';
 import {
   FUND_APPLICATION_FIELDS,
@@ -149,6 +150,7 @@ export class MockProvider implements DataProvider {
     this.reportTemplates = this.loadOrGenerateReportTemplates();
     this.reportRuns = this.loadOrGenerateReportRuns();
     this.doctorReviews = this.loadOrGenerateDoctorReviews();
+    this.seedWorkflowHistoryIfNeeded();
     this.seedInstallmentsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
     this.seedClinicalIfNeeded();
@@ -733,6 +735,80 @@ export class MockProvider implements DataProvider {
     return templates;
   }
 
+  private getActorMeta(): { by: string; role: string } {
+    const auth = getAuthState();
+    return {
+      by: auth.activeUser?.fullName || auth.activeUser?.userId || 'System',
+      role: auth.activeRole || 'admin',
+    };
+  }
+
+  private recordStatusTransition(caseId: string, fromStatus: CaseStatus | undefined, toStatus: CaseStatus, reason?: string, source?: string): void {
+    const actor = this.getActorMeta();
+    appendCaseWorkflowEvent(caseId, {
+      fromStatus,
+      toStatus,
+      changedAt: new Date().toISOString(),
+      changedBy: actor.by,
+      changedByRole: actor.role,
+      reason: reason || undefined,
+      source: source || undefined,
+    });
+  }
+
+  private seedWorkflowHistoryIfNeeded(): void {
+    const store = loadWorkflowStore();
+    let updated = false;
+
+    for (const caseItem of this.data.cases) {
+      if (store[caseItem.caseId]?.length) continue;
+
+      const createdAt = caseItem.intakeDate
+        ? new Date(`${caseItem.intakeDate}T09:00:00`).toISOString()
+        : caseItem.updatedAt;
+      const createdBy = caseItem.createdBy || 'Hospital SPOC';
+
+      const seededEvents: CaseWorkflowEvent[] = [{
+        eventId: `wf-seed-${caseItem.caseId}-draft`,
+        caseId: caseItem.caseId,
+        fromStatus: undefined,
+        toStatus: 'Draft' as const,
+        changedAt: createdAt,
+        changedBy: createdBy,
+        changedByRole: 'hospital_spoc',
+        reason: 'Case created in wizard',
+        source: 'Intake',
+      }];
+
+      if (caseItem.caseStatus !== 'Draft') {
+        const reason =
+          caseItem.caseStatus === 'Returned'
+            ? 'Returned for updates to intake/documents'
+            : caseItem.caseStatus === 'Rejected'
+            ? 'Case rejected after review'
+            : `Moved to ${caseItem.caseStatus.replace(/_/g, ' ')}`;
+        seededEvents.push({
+          eventId: `wf-seed-${caseItem.caseId}-${caseItem.caseStatus.toLowerCase()}`,
+          caseId: caseItem.caseId,
+          fromStatus: 'Draft',
+          toStatus: caseItem.caseStatus,
+          changedAt: caseItem.updatedAt || createdAt,
+          changedBy: 'System',
+          changedByRole: 'admin',
+          reason,
+          source: caseItem.caseStatus === 'Returned' ? 'Verification' : caseItem.caseStatus === 'Rejected' ? 'Committee' : 'Workflow',
+        });
+      }
+
+      store[caseItem.caseId] = seededEvents;
+      updated = true;
+    }
+
+    if (updated) {
+      saveWorkflowStore(store);
+    }
+  }
+
   async listCases(): Promise<CaseWithDetails[]> {
     return filterCasesForAuth(getAuthState(), this.data.cases).sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -793,6 +869,7 @@ export class MockProvider implements DataProvider {
     this.data.cases.push(newCase);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
     await this.ensureDocumentChecklist(caseId, payload.processType);
+    this.recordStatusTransition(caseId, undefined, payload.caseStatus, payload.caseStatus === 'Draft' ? 'Case created in wizard' : undefined, 'Intake');
 
     return newCase;
   }
@@ -970,9 +1047,12 @@ export class MockProvider implements DataProvider {
   }): Promise<void> {
     const caseItem = this.data.cases.find(c => c.caseId === caseId);
     if (caseItem) {
+      const previousStatus = caseItem.caseStatus;
       caseItem.caseStatus = 'Returned';
       caseItem.updatedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      const combinedReason = [data.reason, data.comment].filter(Boolean).join(': ');
+      this.recordStatusTransition(caseId, previousStatus, 'Returned', combinedReason, 'Verification');
     }
   }
 
@@ -981,9 +1061,11 @@ export class MockProvider implements DataProvider {
   }): Promise<void> {
     const caseItem = this.data.cases.find(c => c.caseId === caseId);
     if (caseItem) {
+      const previousStatus = caseItem.caseStatus;
       caseItem.caseStatus = 'Under_Review';
       caseItem.updatedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      this.recordStatusTransition(caseId, previousStatus, 'Under_Review', data.comment, 'Verification');
     }
   }
 
@@ -1010,6 +1092,7 @@ export class MockProvider implements DataProvider {
       decidedAt: new Date().toISOString(),
     };
 
+    const previousStatus = caseItem.caseStatus;
     if (data.outcome === 'Approved') {
       caseItem.caseStatus = 'Approved';
     } else if (data.outcome === 'Rejected') {
@@ -1021,14 +1104,19 @@ export class MockProvider implements DataProvider {
     caseItem.updatedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
     this.saveCommitteeReviews();
+    this.recordStatusTransition(caseId, previousStatus, caseItem.caseStatus, data.comments, 'Committee');
   }
 
   async updateCaseStatus(caseId: string, status: CaseStatus): Promise<void> {
     const caseItem = this.data.cases.find(c => c.caseId === caseId);
     if (caseItem) {
+      const previousStatus = caseItem.caseStatus;
       caseItem.caseStatus = status;
       caseItem.updatedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      this.recordStatusTransition(caseId, previousStatus, status, status === 'Submitted' && previousStatus === 'Returned'
+        ? 'Returned corrections updated and resubmitted'
+        : undefined, previousStatus === 'Returned' && status === 'Submitted' ? 'Hospital Resubmission' : 'Case Update');
     }
   }
 
@@ -2016,8 +2104,17 @@ export class MockProvider implements DataProvider {
   }
 
   private formatSectionName(sectionKey: string): string {
-    return sectionKey
-      .replace(/Section$/, '')
+    const normalized = sectionKey.replace(/Section$/, '');
+    const labelMap: Record<string, string> = {
+      nicuFinancial: 'NICU & Financial',
+      feedingRespiration: 'Feeding & Respiration',
+      dischargePlanInvestigations: 'Discharge Plan & Investigations',
+      remarksSignature: 'Remarks & Signature',
+    };
+    if (labelMap[normalized]) {
+      return labelMap[normalized];
+    }
+    return normalized
       .split(/(?=[A-Z])/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
