@@ -23,7 +23,7 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
   'Admission_Records': {
     legacyCode: 'Admission_Records',
     legacyCategory: 'MEDICAL',
-    canonicalType: 'Internal Case Papers',
+    canonicalType: 'Internal Case Papers / Doctor Notes',
     canonicalCategory: 'MEDICAL',
   },
   'Birth_Certificate': {
@@ -35,7 +35,7 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
   'Hospital_Bills': {
     legacyCode: 'Hospital_Bills',
     legacyCategory: 'FINANCE',
-    canonicalType: 'Bank Statement',
+    canonicalType: 'Father Bank Statement',
     canonicalCategory: 'FINANCE',
   },
   'Pharmacy_Bills': {
@@ -47,7 +47,7 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
   'Proof_of_Income': {
     legacyCode: 'Proof_of_Income',
     legacyCategory: 'FINANCE',
-    canonicalType: 'Talati / Govt Economic Card',
+    canonicalType: 'Talati/Govt Economic Card',
     canonicalCategory: 'FINANCE',
   },
   'Discharge_Summary': {
@@ -67,6 +67,54 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
     legacyCategory: 'MEDICAL',
     canonicalType: 'Signed Interim Summary Copy (Optional)',
     canonicalCategory: 'MEDICAL',
+  },
+  'Family Photo': {
+    legacyCode: 'Family Photo',
+    legacyCategory: 'GENERAL',
+    canonicalType: 'Parents with Baby in NICU / Hospital',
+    canonicalCategory: 'GENERAL',
+  },
+  'Parents Photo': {
+    legacyCode: 'Parents Photo',
+    legacyCategory: 'GENERAL',
+    canonicalType: 'Parents with Baby in NICU / Hospital',
+    canonicalCategory: 'GENERAL',
+  },
+  'Baby Photo': {
+    legacyCode: 'Baby Photo',
+    legacyCategory: 'GENERAL',
+    canonicalType: 'Baby Photo in NICU',
+    canonicalCategory: 'GENERAL',
+  },
+  'Bank Statement': {
+    legacyCode: 'Bank Statement',
+    legacyCategory: 'FINANCE',
+    canonicalType: 'Father Bank Statement',
+    canonicalCategory: 'FINANCE',
+  },
+  'Internal Case Papers': {
+    legacyCode: 'Internal Case Papers',
+    legacyCategory: 'MEDICAL',
+    canonicalType: 'Internal Case Papers / Doctor Notes',
+    canonicalCategory: 'MEDICAL',
+  },
+  'Talati / Govt Economic Card': {
+    legacyCode: 'Talati / Govt Economic Card',
+    legacyCategory: 'FINANCE',
+    canonicalType: 'Talati/Govt Economic Card',
+    canonicalCategory: 'FINANCE',
+  },
+  'Payment Receipt': {
+    legacyCode: 'Payment Receipt',
+    legacyCategory: 'FINAL',
+    canonicalType: 'Payment Requisition',
+    canonicalCategory: 'FINAL',
+  },
+  'Discharge Certificate': {
+    legacyCode: 'Discharge Certificate',
+    legacyCategory: 'FINAL',
+    canonicalType: 'Discharge Summary / Report',
+    canonicalCategory: 'FINAL',
   },
 };
 

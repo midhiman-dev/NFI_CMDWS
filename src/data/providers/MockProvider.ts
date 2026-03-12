@@ -1,10 +1,10 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
 import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions } from '../../types';
-import { MANDATORY_DOCUMENTS, MANDATORY_DOC_COUNT } from '../mandatoryDocuments';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { mockStore } from '../../store/mockStore';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
+import { getChecklistReadinessFromDocuments } from '../../utils/documentChecklistRules';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -36,6 +36,15 @@ const DOCTOR_REVIEWS_STORAGE_KEY = 'nfi_demo_doctor_reviews_v1';
 const OPTIONAL_SUPPORTING_DOC_TYPES = new Set([
   'Signed Fund Application Copy (Optional)',
   'Signed Interim Summary Copy (Optional)',
+  'Mother Bank Statement (Optional)',
+  'BPL Card (Optional Supporting)',
+  'Pregnancy / Birth / Initial Treatment Records from Other Hospitals',
+  'Final Bill',
+  'Payment Requisition',
+  'Discharge Summary / Report',
+  'Post-Discharge Baby Photo',
+  'Post-Discharge Parents with Baby Photo',
+  'Testimonial / Video (Optional)',
 ]);
 
 interface MockData {
@@ -611,34 +620,113 @@ export class MockProvider implements DataProvider {
   }
 
   private getBuiltInTemplates(): DocumentRequirementTemplate[] {
-    const categories = ['GENERAL', 'FINANCE', 'MEDICAL', 'FINAL'];
-    const docTypes: Record<string, string[]> = {
-      GENERAL: ['Signed Fund Application Copy (Optional)', 'Aadhaar Card - Mother', 'Aadhaar Card - Father', 'Family Photo'],
-      FINANCE: ['Bank Statement', 'Income Certificate', 'Talati/Govt Economic Card', 'BPL Card'],
-      MEDICAL: ['Signed Interim Summary Copy (Optional)', 'Lab Report', 'Internal Case Papers', 'Investigation Reports (All)'],
-      FINAL: ['Final Bill', 'Payment Receipt', 'Discharge Certificate'],
-    };
+    const templateSpecs: Array<{
+      category: 'GENERAL' | 'FINANCE' | 'MEDICAL' | 'FINAL';
+      docType: string;
+      mandatoryFlag: boolean;
+      conditionNotes?: string;
+    }> = [
+      { category: 'GENERAL', docType: 'Aadhaar Card - Mother', mandatoryFlag: true },
+      { category: 'GENERAL', docType: 'Aadhaar Card - Father', mandatoryFlag: true },
+      { category: 'GENERAL', docType: 'Baby Photo in NICU', mandatoryFlag: true },
+      { category: 'GENERAL', docType: 'Parents with Baby in NICU / Hospital', mandatoryFlag: true },
+      {
+        category: 'GENERAL',
+        docType: 'Signed Fund Application Copy (Optional)',
+        mandatoryFlag: false,
+        conditionNotes: 'Supporting signed/scanned copy. Optional when structured intake is complete.',
+      },
+      {
+        category: 'FINANCE',
+        docType: 'Father Bank Statement',
+        mandatoryFlag: false,
+        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
+      },
+      {
+        category: 'FINANCE',
+        docType: 'Mother Bank Statement (Optional)',
+        mandatoryFlag: false,
+      },
+      {
+        category: 'FINANCE',
+        docType: 'Income Certificate',
+        mandatoryFlag: false,
+        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
+      },
+      {
+        category: 'FINANCE',
+        docType: 'Talati/Govt Economic Card',
+        mandatoryFlag: false,
+        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
+      },
+      {
+        category: 'FINANCE',
+        docType: 'BPL Card (Optional Supporting)',
+        mandatoryFlag: false,
+      },
+      { category: 'MEDICAL', docType: 'Lab Report', mandatoryFlag: true },
+      { category: 'MEDICAL', docType: 'Internal Case Papers / Doctor Notes', mandatoryFlag: true },
+      { category: 'MEDICAL', docType: 'Investigation Reports (All)', mandatoryFlag: true },
+      {
+        category: 'MEDICAL',
+        docType: 'Pregnancy / Birth / Initial Treatment Records from Other Hospitals',
+        mandatoryFlag: false,
+        conditionNotes: 'Upload when outborn or prior outside-hospital treatment records are available.',
+      },
+      {
+        category: 'MEDICAL',
+        docType: 'Signed Interim Summary Copy (Optional)',
+        mandatoryFlag: false,
+        conditionNotes: 'Supporting signed/scanned copy. Optional when structured intake is complete.',
+      },
+      {
+        category: 'FINAL',
+        docType: 'Final Bill',
+        mandatoryFlag: false,
+        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
+      },
+      {
+        category: 'FINAL',
+        docType: 'Payment Requisition',
+        mandatoryFlag: false,
+        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
+      },
+      {
+        category: 'FINAL',
+        docType: 'Discharge Summary / Report',
+        mandatoryFlag: false,
+        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
+      },
+      {
+        category: 'FINAL',
+        docType: 'Post-Discharge Baby Photo',
+        mandatoryFlag: false,
+      },
+      {
+        category: 'FINAL',
+        docType: 'Post-Discharge Parents with Baby Photo',
+        mandatoryFlag: false,
+      },
+      {
+        category: 'FINAL',
+        docType: 'Testimonial / Video (Optional)',
+        mandatoryFlag: false,
+      },
+    ];
 
     const templates: DocumentRequirementTemplate[] = [];
     const processTypes = ['BRC', 'BRRC', 'BGRC', 'BCRC', 'NON_BRC'] as const;
 
     for (const processType of processTypes) {
-      for (const category of categories) {
-        const docs = docTypes[category] || [];
-        for (const docType of docs) {
-          templates.push({
-            templateId: `tpl-${processType}-${category}-${docType}`,
-            processType,
-            category: category as any,
-            docType,
-            mandatoryFlag:
-              (category === 'GENERAL' || category === 'FINANCE' || category === 'MEDICAL')
-              && !OPTIONAL_SUPPORTING_DOC_TYPES.has(docType),
-            conditionNotes: OPTIONAL_SUPPORTING_DOC_TYPES.has(docType)
-              ? 'Supporting signed/scanned copy. Optional when structured intake is complete.'
-              : undefined,
-          });
-        }
+      for (const spec of templateSpecs) {
+        templates.push({
+          templateId: `tpl-${processType}-${spec.category}-${spec.docType}`,
+          processType,
+          category: spec.category,
+          docType: spec.docType,
+          mandatoryFlag: spec.mandatoryFlag && !OPTIONAL_SUPPORTING_DOC_TYPES.has(spec.docType),
+          conditionNotes: spec.conditionNotes,
+        });
       }
     }
 
@@ -851,39 +939,9 @@ export class MockProvider implements DataProvider {
     return this.getBuiltInTemplates().filter(t => t.processType === processType);
   }
 
-  private isDocSatisfied(doc: DocumentWithTemplate): boolean {
-    const latestVersion = doc.versions?.[doc.versions.length - 1];
-    const status = latestVersion?.status || doc.status;
-    return status === 'Verified' || status === 'Not_Applicable' || status === 'Uploaded';
-  }
-
-  private getMandatoryDocIds(): Set<string> {
-    const set = new Set<string>();
-    for (const mandDoc of MANDATORY_DOCUMENTS) {
-      const docId = `${mandDoc.category}-${mandDoc.docType}`;
-      set.add(docId);
-    }
-    return set;
-  }
-
   async getChecklistReadiness(caseId: string): Promise<ChecklistReadiness> {
     const docs = await this.listCaseDocuments(caseId);
-    const mandatoryDocIds = this.getMandatoryDocIds();
-
-    const mandatoryDocs = docs.filter(d => {
-      const docId = `${d.category}-${d.docType}`;
-      return mandatoryDocIds.has(docId);
-    });
-
-    const mandatoryComplete = mandatoryDocs.filter(d => this.isDocSatisfied(d)).length;
-    const blockingDocs = mandatoryDocs.filter(d => !this.isDocSatisfied(d));
-
-    return {
-      mandatoryTotal: MANDATORY_DOC_COUNT,
-      mandatoryComplete,
-      blockingDocs,
-      isReady: blockingDocs.length === 0 && mandatoryDocs.length === MANDATORY_DOC_COUNT,
-    };
+    return getChecklistReadinessFromDocuments(docs);
   }
 
   async getVerification(caseId: string): Promise<VerificationRecord | null> {
@@ -1873,7 +1931,7 @@ export class MockProvider implements DataProvider {
     if (!completeness.fundAppIsComplete) {
       Object.entries(completeness.fundAppSections).forEach(([sectionKey, isComplete]) => {
         if (!isComplete) {
-          missingSections.push(`Fund Application → ${this.formatSectionName(sectionKey)}`);
+          missingSections.push(`Fund Application -> ${this.formatSectionName(sectionKey)}`);
         }
       });
     }
@@ -1881,7 +1939,7 @@ export class MockProvider implements DataProvider {
     if (!completeness.interimSummaryIsComplete) {
       Object.entries(completeness.interimSummarySections).forEach(([sectionKey, isComplete]) => {
         if (!isComplete) {
-          missingSections.push(`Interim Summary → ${this.formatSectionName(sectionKey)}`);
+          missingSections.push(`Interim Summary -> ${this.formatSectionName(sectionKey)}`);
         }
       });
     }
@@ -2087,3 +2145,4 @@ export class MockProvider implements DataProvider {
     }
   }
 }
+

@@ -9,15 +9,11 @@ export interface MandatoryDocSpec {
 export const MANDATORY_DOCUMENTS: MandatoryDocSpec[] = [
   { docType: 'Aadhaar Card - Mother', category: 'GENERAL', description: 'Mother\'s Aadhaar card' },
   { docType: 'Aadhaar Card - Father', category: 'GENERAL', description: 'Father\'s Aadhaar card' },
-  { docType: 'Family Photo', category: 'GENERAL', description: 'Family photograph' },
-
-  { docType: 'Bank Statement', category: 'FINANCE', description: 'Bank account statement' },
-  { docType: 'Income Certificate', category: 'FINANCE', description: 'Government income certificate' },
-  { docType: 'Talati/Govt Economic Card', category: 'FINANCE', description: 'Talati or Government economic status card' },
-  { docType: 'BPL Card', category: 'FINANCE', description: 'Below Poverty Line card' },
+  { docType: 'Baby Photo in NICU', category: 'GENERAL', description: 'Baby photo in NICU' },
+  { docType: 'Parents with Baby in NICU / Hospital', category: 'GENERAL', description: 'Parents with baby in NICU or hospital' },
 
   { docType: 'Lab Report', category: 'MEDICAL', description: 'Laboratory test reports' },
-  { docType: 'Internal Case Papers', category: 'MEDICAL', description: 'Internal case documentation' },
+  { docType: 'Internal Case Papers / Doctor Notes', category: 'MEDICAL', description: 'Internal case documentation and doctor notes' },
   { docType: 'Investigation Reports (All)', category: 'MEDICAL', description: 'All investigation reports' },
 ];
 

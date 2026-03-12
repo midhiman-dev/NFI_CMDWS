@@ -22,8 +22,9 @@ import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDe
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, PlusCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
-import { getLatestVersion, isDocSatisfied, getVisibleCategories } from '../utils/docVersioning';
+import { getLatestVersion, getVisibleCategories } from '../utils/docVersioning';
 import { getDoctorReviewGatingInfo } from '../utils/submitGating';
+import { PRIMARY_FINANCE_PROOF_DOC_TYPES, getChecklistReadinessFromDocuments, getHospitalFacingFolderLabel } from '../utils/documentChecklistRules';
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
@@ -775,16 +776,16 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
   };
 
   const verifiedCount = allDocs.filter(d => d.status === 'Verified').length;
-  const mandatoryDocs = allDocs.filter(d => d.mandatoryFlag);
-  const mandatoryCount = mandatoryDocs.length;
-  const mandatoryCompleteCount = mandatoryDocs.filter(isDocSatisfied).length;
+  const checklistReadiness = getChecklistReadinessFromDocuments(allDocs);
+  const mandatoryCount = checklistReadiness.mandatoryTotal;
+  const mandatoryCompleteCount = checklistReadiness.mandatoryComplete;
   const totalCount = allDocs.length;
 
   const isDemoMode = mode === 'DEMO';
   const isCommittee = authState.activeRole === 'committee_member';
   const canSimulate = isDemoMode && (authState.activeRole === 'admin' || authState.activeRole === 'verifier' || authState.activeRole === 'hospital_spoc');
-  const hasMissingMandatory = allDocs.some(d => d.mandatoryFlag && !isDocSatisfied(d));
-  const hasUnverifiedMandatory = allDocs.some(d => d.mandatoryFlag && !isDocSatisfied(d));
+  const hasMissingMandatory = checklistReadiness.blockingDocs.length > 0;
+  const hasUnverifiedMandatory = hasMissingMandatory;
 
   const committeeMessage = isCommittee && isDemoMode ? (
     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -866,18 +867,47 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
           <div key={category}>
             <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3 flex items-center gap-2">
               <FileText size={20} className="text-[var(--nfi-primary)]" />
-              {category}
+              {getHospitalFacingFolderLabel(category)}
             </h3>
+            {category === 'FINANCE' && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                At least one primary financial proof is required: Father Bank Statement OR Income Certificate OR Talati/Govt Economic Card.
+              </div>
+            )}
+            {category === 'FINAL' && (
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                These documents are uploaded after discharge and do not affect initial case submission.
+              </div>
+            )}
             <div className="space-y-3">
               {categoryDocs.map((doc) => {
                 const isVerified = doc.status === 'Verified';
                 const isNA = doc.status === 'Not_Applicable';
                 const isRejected = doc.status === 'Rejected';
+                const isOptionalSupporting = !doc.mandatoryFlag;
+                const isPrimaryFinanceProof =
+                  doc.category === 'FINANCE' &&
+                  PRIMARY_FINANCE_PROOF_DOC_TYPES.some((docType) => docType === doc.docType);
                 const canMarkNA = authState.activeRole === 'admin' || !doc.mandatoryFlag;
                 const latestVersion = getLatestVersion(doc);
                 const hasVersions = doc.versions && doc.versions.length > 1;
                 const isExpanded = expandedVersions.has(doc.docId);
                 const uploadButtonLabel = doc.status === 'Uploaded' ? 'Re-upload' : isRejected || isVerified ? 'Upload New Version' : 'Upload';
+                const hideBadge = isPrimaryFinanceProof && doc.status === 'Missing';
+                const badgeTone =
+                  doc.status === 'Verified'
+                    ? 'success'
+                    : doc.status === 'Uploaded'
+                    ? 'warning'
+                    : doc.status === 'Not_Applicable'
+                    ? 'neutral'
+                    : isOptionalSupporting
+                    ? 'neutral'
+                    : 'error';
+                const badgeLabel =
+                  doc.status === 'Missing' && isOptionalSupporting
+                    ? 'Optional'
+                    : t(`doc.status.${doc.status}`);
 
                 return (
                   <div key={doc.docId} className="border border-[var(--nfi-border)] rounded-lg p-4">
@@ -893,7 +923,7 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
                           )}
                           {doc.conditionNotes && (
                             <span className="text-xs text-[var(--nfi-text-secondary)] italic" title={doc.conditionNotes}>
-                              â“˜ {doc.conditionNotes}
+                              i {doc.conditionNotes}
                             </span>
                           )}
                         </div>
@@ -908,19 +938,11 @@ export function DocumentsTab({ documents, caseId, onDocumentsChanged }: { docume
                           </p>
                         )}
                       </div>
-                      <NfiBadge
-                        tone={
-                          doc.status === 'Verified'
-                            ? 'success'
-                            : doc.status === 'Uploaded'
-                            ? 'warning'
-                            : doc.status === 'Not_Applicable'
-                            ? 'neutral'
-                            : 'error'
-                        }
-                      >
-                        {t(`doc.status.${doc.status}`)}
-                      </NfiBadge>
+                      {!hideBadge && (
+                        <NfiBadge tone={badgeTone}>
+                          {badgeLabel}
+                        </NfiBadge>
+                      )}
                     </div>
 
                     {isRejected && latestVersion?.rejectionReason && (

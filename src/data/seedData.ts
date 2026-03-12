@@ -53,25 +53,30 @@ const cities = ['New Delhi', 'Mumbai', 'Bangalore', 'Hyderabad', 'Chennai', 'Pun
 const states = ['Delhi', 'Maharashtra', 'Karnataka', 'Telangana', 'Tamil Nadu', 'Gujarat', 'West Bengal'];
 
 const docTypes = [
+  { type: 'Aadhaar Card - Mother', category: 'GENERAL', mandatory: true },
+  { type: 'Aadhaar Card - Father', category: 'GENERAL', mandatory: true },
+  { type: 'Baby Photo in NICU', category: 'GENERAL', mandatory: true },
+  { type: 'Parents with Baby in NICU / Hospital', category: 'GENERAL', mandatory: true },
   { type: 'Signed Fund Application Copy (Optional)', category: 'GENERAL', mandatory: false },
-  { type: 'Aadhaar Cards (Mother & Father)', category: 'GENERAL', mandatory: true },
-  { type: 'Parents Photo', category: 'GENERAL', mandatory: true },
-  { type: 'Baby Photo', category: 'GENERAL', mandatory: true },
 
-  { type: 'Bank Statement', category: 'FINANCE', mandatory: true },
-  { type: 'Income Certificate', category: 'FINANCE', mandatory: true },
-  { type: 'Talati / Govt Economic Card', category: 'FINANCE', mandatory: true },
-  { type: 'BPL Card', category: 'FINANCE', mandatory: true },
+  { type: 'Father Bank Statement', category: 'FINANCE', mandatory: false },
+  { type: 'Mother Bank Statement (Optional)', category: 'FINANCE', mandatory: false },
+  { type: 'Income Certificate', category: 'FINANCE', mandatory: false },
+  { type: 'Talati/Govt Economic Card', category: 'FINANCE', mandatory: false },
+  { type: 'BPL Card (Optional Supporting)', category: 'FINANCE', mandatory: false },
 
-  { type: 'Signed Interim Summary Copy (Optional)', category: 'MEDICAL', mandatory: false },
   { type: 'Lab Report', category: 'MEDICAL', mandatory: true },
-  { type: 'Internal Case Papers', category: 'MEDICAL', mandatory: true },
+  { type: 'Internal Case Papers / Doctor Notes', category: 'MEDICAL', mandatory: true },
   { type: 'Investigation Reports (All)', category: 'MEDICAL', mandatory: true },
+  { type: 'Pregnancy / Birth / Initial Treatment Records from Other Hospitals', category: 'MEDICAL', mandatory: false },
+  { type: 'Signed Interim Summary Copy (Optional)', category: 'MEDICAL', mandatory: false },
 
-  { type: 'Imaging Reports', category: 'MEDICAL', mandatory: false },
-  { type: 'Prescription', category: 'MEDICAL', mandatory: false },
-  { type: 'Insurance Document', category: 'FINANCE', mandatory: false },
-  { type: 'Photo ID', category: 'GENERAL', mandatory: false },
+  { type: 'Final Bill', category: 'FINAL', mandatory: false },
+  { type: 'Payment Requisition', category: 'FINAL', mandatory: false },
+  { type: 'Discharge Summary / Report', category: 'FINAL', mandatory: false },
+  { type: 'Post-Discharge Baby Photo', category: 'FINAL', mandatory: false },
+  { type: 'Post-Discharge Parents with Baby Photo', category: 'FINAL', mandatory: false },
+  { type: 'Testimonial / Video (Optional)', category: 'FINAL', mandatory: false },
 ];
 
 const rejectionReasons = [

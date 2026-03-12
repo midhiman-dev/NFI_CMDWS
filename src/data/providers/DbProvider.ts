@@ -1665,7 +1665,7 @@ export class DbProvider implements DataProvider {
     if (!completeness.fundAppIsComplete) {
       Object.entries(completeness.fundAppSections).forEach(([sectionKey, isComplete]) => {
         if (!isComplete) {
-          missingSections.push(`Fund Application → ${this.formatSectionName(sectionKey)}`);
+          missingSections.push(`Fund Application -> ${this.formatSectionName(sectionKey)}`);
         }
       });
     }
@@ -1673,7 +1673,7 @@ export class DbProvider implements DataProvider {
     if (!completeness.interimSummaryIsComplete) {
       Object.entries(completeness.interimSummarySections).forEach(([sectionKey, isComplete]) => {
         if (!isComplete) {
-          missingSections.push(`Interim Summary → ${this.formatSectionName(sectionKey)}`);
+          missingSections.push(`Interim Summary -> ${this.formatSectionName(sectionKey)}`);
         }
       });
     }
@@ -1970,3 +1970,4 @@ export class DbProvider implements DataProvider {
     }
   }
 }
+

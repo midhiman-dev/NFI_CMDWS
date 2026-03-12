@@ -788,7 +788,7 @@ export function CaseNew() {
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Documents</h2>
               <p className="text-sm text-[var(--nfi-text-secondary)]">
-                Upload and verify mandatory documents before final submission.
+                Upload pre-approval required documents. Post-discharge documents can be added later.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
