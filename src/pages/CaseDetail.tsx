@@ -8,6 +8,7 @@ import { CaseDetailNav } from '../components/case-tabs/CaseDetailNav';
 import type { NavGroup } from '../components/case-tabs/CaseDetailNav';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiField } from '../components/design-system/NfiField';
+import { CompactMilestoneModal } from '../components/CompactMilestoneModal';
 import { MonitoringTab } from '../components/MonitoringTab';
 import { BeneficiaryTab } from '../components/case-tabs/BeneficiaryTab';
 import { FamilyTab } from '../components/case-tabs/FamilyTab';
@@ -18,7 +19,7 @@ import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
-import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, DocVersion, UserRole } from '../types';
+import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, FollowupMilestone, DocVersion, UserRole } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
@@ -364,7 +365,7 @@ export function CaseDetail() {
               {activeTab === 'settlement' && <SettlementTab caseId={caseId!} caseData={caseData} onStatusChange={() => {}} />}
               {activeTab === 'installments' && <InstallmentsTab caseId={caseId!} caseData={caseData} onUpdate={() => {}} />}
               {activeTab === 'monitoring' && <MonitoringTab caseId={caseId!} />}
-              {activeTab === 'followups' && <FollowupsTab caseId={caseId!} caseData={caseData} />}
+              {activeTab === 'followups' && <FollowupsTab caseId={caseId!} />}
               {activeTab === 'audit' && <AuditTab events={auditEvents} workflowEvents={workflowEvents} />}
             </div>
           </div>
@@ -2537,17 +2538,13 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
   );
 }
 
-function FollowupsTab({ caseId, caseData }: { caseId: string; caseData: any }) {
+function FollowupsTab({ caseId }: { caseId: string }) {
   const authState = getAuthState();
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const [milestones, setMilestones] = useState<FollowupMilestone[]>([]);
-  const [metricDefs, setMetricDefs] = useState<Record<number, FollowupMetricDef[]>>({});
-  const [metricValues, setMetricValues] = useState<Record<number, FollowupMetricValue[]>>({});
   const [loading, setLoading] = useState(true);
-  const [showQuestionnaire, setShowQuestionnaire] = useState<number | null>(null);
-  const [questionnaireData, setQuestionnaireData] = useState<Record<string, any>>({});
-  const [lastSavedAt, setLastSavedAt] = useState<string>('');
+  const [selectedMilestone, setSelectedMilestone] = useState<FollowupMilestone | null>(null);
 
   const canEdit = authState.activeRole === 'beni_volunteer' || authState.activeRole === 'admin';
 
@@ -2560,52 +2557,11 @@ function FollowupsTab({ caseId, caseData }: { caseId: string; caseData: any }) {
       setLoading(true);
       const milestonesData = await provider.ensureFollowupMilestones(caseId, new Date().toISOString().split('T')[0]);
       setMilestones(milestonesData);
-
-      const defsMap: Record<number, FollowupMetricDef[]> = {};
-      for (const months of [3, 6, 9, 12, 18, 24] as const) {
-        defsMap[months] = await provider.listFollowupMetricDefs(months);
-      }
-      setMetricDefs(defsMap);
-
-      const valuesMap: Record<string, FollowupMetricValue[]> = {};
-      for (const milestone of milestonesData) {
-        const vals = await provider.getFollowupMetricValues(caseId, milestone.milestoneMonths);
-        valuesMap[milestone.milestoneMonths] = vals;
-      }
-      setMetricValues(valuesMap);
     } catch (error) {
       console.error('Error loading follow-ups:', error);
       showToast('Failed to load follow-ups', 'error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSaveQuestionnaire = async () => {
-    if (!showQuestionnaire) return;
-
-    try {
-      const values: Omit<FollowupMetricValue, 'valueId'>[] = Object.entries(questionnaireData).map(([key, value]) => {
-        const [metricKey, isNA] = key.split('::');
-        return {
-          caseId,
-          milestoneMonths: showQuestionnaire as any,
-          metricKey,
-          valueBoolean: typeof value === 'boolean' ? value : undefined,
-          valueText: typeof value === 'string' && value !== '' ? value : undefined,
-          isNA: isNA === 'na',
-          capturedBy: authState.activeUser?.userId,
-        };
-      });
-
-      await provider.saveFollowupMetricValues(caseId, showQuestionnaire, values);
-      const now = new Date().toLocaleString();
-      setLastSavedAt(now);
-      await loadData();
-      showToast('Questionnaire saved', 'success');
-    } catch (error) {
-      console.error('Error saving questionnaire:', error);
-      showToast('Failed to save questionnaire', 'error');
     }
   };
 
@@ -2682,14 +2638,8 @@ function FollowupsTab({ caseId, caseData }: { caseId: string; caseData: any }) {
                       {canEdit && (
                         <>
                           <button onClick={() => {
-                            setShowQuestionnaire(milestone.milestoneMonths);
-                            const existing = metricValues[milestone.milestoneMonths] || [];
-                            const data: Record<string, any> = {};
-                            existing.forEach(v => {
-                              data[`${v.metricKey}${v.isNA ? '::na' : ''}`] = v.isNA ? true : (v.valueBoolean ?? v.valueText ?? '');
-                            });
-                            setQuestionnaireData(data);
-                          }} className="text-blue-600 hover:text-blue-700 text-sm">Questionnaire</button>
+                            setSelectedMilestone(milestone);
+                          }} className="text-blue-600 hover:text-blue-700 text-sm">Update</button>
                           {milestone.status !== 'Completed' && (
                             <button onClick={() => handleMarkFollowupDone(milestone.milestoneMonths)} className="text-green-600 hover:text-green-700 text-sm">Mark Done</button>
                           )}
@@ -2704,43 +2654,15 @@ function FollowupsTab({ caseId, caseData }: { caseId: string; caseData: any }) {
         </div>
       </div>
 
-      {showQuestionnaire && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-            <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-2">{showQuestionnaire}-Month Follow-up Questionnaire</h3>
-            {lastSavedAt && <p className="text-xs text-[var(--nfi-text-secondary)] mb-4">Last saved: {lastSavedAt}</p>}
-            <div className="space-y-4 mb-6">
-              {(metricDefs[showQuestionnaire] || []).map((metric) => (
-                <NfiField key={metric.metricId} label={metric.metricLabel}>
-                  {metric.valueType === 'BOOLEAN' ? (
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2">
-                        <input type="radio" name={metric.metricKey} value="yes" checked={questionnaireData[metric.metricKey] === true} onChange={() => setQuestionnaireData({...questionnaireData, [metric.metricKey]: true})} className="w-4 h-4" />
-                        <span>Yes</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="radio" name={metric.metricKey} value="no" checked={questionnaireData[metric.metricKey] === false} onChange={() => setQuestionnaireData({...questionnaireData, [metric.metricKey]: false})} className="w-4 h-4" />
-                        <span>No</span>
-                      </label>
-                      {metric.allowNA && (
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name={metric.metricKey} value="na" checked={questionnaireData[`${metric.metricKey}::na`] === true} onChange={() => setQuestionnaireData({...questionnaireData, [`${metric.metricKey}::na`]: true, [metric.metricKey]: undefined})} className="w-4 h-4" />
-                          <span>N.A.</span>
-                        </label>
-                      )}
-                    </div>
-                  ) : (
-                    <textarea value={questionnaireData[metric.metricKey] || ''} onChange={(e) => setQuestionnaireData({...questionnaireData, [metric.metricKey]: e.target.value})} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none" rows={3} placeholder="Enter response..." />
-                  )}
-                </NfiField>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <NfiButton variant="secondary" onClick={() => { setShowQuestionnaire(null); setQuestionnaireData({}); }}>Cancel</NfiButton>
-              <NfiButton onClick={handleSaveQuestionnaire}>Save Responses</NfiButton>
-            </div>
-          </div>
-        </div>
+      {selectedMilestone && (
+        <CompactMilestoneModal
+          caseId={caseId}
+          milestone={selectedMilestone}
+          title={`${selectedMilestone.milestoneMonths}-Month Follow-up`}
+          mode="followup"
+          onSaved={loadData}
+          onClose={() => setSelectedMilestone(null)}
+        />
       )}
     </div>
   );

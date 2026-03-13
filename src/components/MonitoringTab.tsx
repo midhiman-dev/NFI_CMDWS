@@ -3,12 +3,12 @@ import { Calendar, CheckCircle, Clock, Edit2, FileText, Play } from 'lucide-reac
 import { NfiBadge } from './design-system/NfiBadge';
 import { NfiButton } from './design-system/NfiButton';
 import { NfiField } from './design-system/NfiField';
-import { NfiModal } from './design-system/NfiModal';
 import { useToast } from './design-system/Toast';
+import { CompactMilestoneModal } from './CompactMilestoneModal';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
 import { formatDateDMY } from '../utils/dateFormat';
-import type { Case, User, ClinicalCaseDetails } from '../types';
+import type { Case, User, ClinicalCaseDetails, FollowupMilestone } from '../types';
 import type { BeniProgramOpsData } from '../data/providers/DataProvider';
 
 interface MonitoringTabProps {
@@ -21,11 +21,11 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
   const { provider } = useAppContext();
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [beniOps, setBeniOps] = useState<BeniProgramOpsData | null>(null);
-  const [milestones, setMilestones] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<FollowupMilestone[]>([]);
   const [volunteers, setVolunteers] = useState<User[]>([]);
   const [clinicalDetails, setClinicalDetails] = useState<ClinicalCaseDetails | null>(null);
   const [isEditingBeni, setIsEditingBeni] = useState(false);
-  const [selectedMilestone, setSelectedMilestone] = useState<any>(null);
+  const [selectedMilestone, setSelectedMilestone] = useState<FollowupMilestone | null>(null);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -375,17 +375,17 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                       </td>
                       <td className="py-3 px-4">
                         {isCompleted ? (
-                          <NfiBadge tone="success" size="sm">
+                          <NfiBadge tone="success">
                             <CheckCircle size={14} className="mr-1" />
                             Completed
                           </NfiBadge>
                         ) : milestone.status === 'Due' ? (
-                          <NfiBadge tone="warning" size="sm">
+                          <NfiBadge tone="warning">
                             <Clock size={14} className="mr-1" />
                             Due
                           </NfiBadge>
                         ) : (
-                          <NfiBadge tone="neutral" size="sm">
+                          <NfiBadge tone="neutral">
                             <Clock size={14} className="mr-1" />
                             Upcoming
                           </NfiBadge>
@@ -398,7 +398,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
                           onClick={() => handleOpenQuestionnaire(milestone)}
                         >
                           <FileText size={14} className="mr-1" />
-                          Questionnaire
+                          Update
                         </NfiButton>
                       </td>
                     </tr>
@@ -411,192 +411,18 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
       </div>
 
       {showQuestionnaire && selectedMilestone && (
-        <QuestionnaireModal
+        <CompactMilestoneModal
           caseId={caseId}
           milestone={selectedMilestone}
+          title={`${selectedMilestone.milestoneMonths} Month Monitoring`}
+          mode="monitoring"
+          onSaved={loadData}
           onClose={() => {
             setShowQuestionnaire(false);
             setSelectedMilestone(null);
-            loadData();
           }}
         />
       )}
     </div>
-  );
-}
-
-interface QuestionnaireModalProps {
-  caseId: string;
-  milestone: any;
-  onClose: () => void;
-}
-
-function QuestionnaireModal({ caseId, milestone, onClose }: QuestionnaireModalProps) {
-  const { showToast } = useToast();
-  const { provider } = useAppContext();
-  const [metrics, setMetrics] = useState<any[]>([]);
-  const [responses, setResponses] = useState<Record<string, any>>({});
-  const [followupDate, setFollowupDate] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    loadQuestionnaire();
-  }, [milestone]);
-
-  const loadQuestionnaire = async () => {
-    try {
-      const [metricDefs, metricVals] = await Promise.all([
-        provider.listFollowupMetricDefs(milestone.milestoneMonths),
-        provider.getFollowupMetricValues(caseId, milestone.milestoneMonths),
-      ]);
-
-      setMetrics(metricDefs);
-
-      const initialResponses: Record<string, any> = {};
-      metricVals.forEach((val) => {
-        if (val.valueBoolean !== null && val.valueBoolean !== undefined) {
-          initialResponses[val.metricKey] = val.valueBoolean === true ? 'yes' : val.valueBoolean === false ? 'no' : 'na';
-        } else if (val.valueText) {
-          initialResponses[val.metricKey] = val.valueText;
-        }
-      });
-      setResponses(initialResponses);
-
-      if (milestone.followupDate) {
-        setFollowupDate(milestone.followupDate.split('T')[0]);
-      }
-    } catch (err) {
-      console.error('Error loading questionnaire:', err);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!followupDate) {
-      showToast('Please set the follow-up date', 'error');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const values = Object.entries(responses).map(([metricKey, value]) => {
-        const metric = metrics.find(m => m.metricKey === metricKey);
-        if (metric?.valueType === 'BOOLEAN') {
-          return {
-            caseId,
-            milestoneMonths: milestone.milestoneMonths,
-            metricKey,
-            valueBoolean: value === 'yes' ? true : value === 'no' ? false : undefined,
-          };
-        }
-        return {
-          caseId,
-          milestoneMonths: milestone.milestoneMonths,
-          metricKey,
-          valueText: value,
-        };
-      });
-
-      await provider.saveFollowupMetricValues(caseId, milestone.milestoneMonths, values);
-      await provider.setFollowupDate(caseId, milestone.milestoneMonths, new Date(followupDate).toISOString());
-
-      showToast('Questionnaire saved successfully', 'success');
-      onClose();
-    } catch (err) {
-      console.error('Error saving questionnaire:', err);
-      showToast('Failed to save questionnaire', 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <NfiModal
-      isOpen={true}
-      onClose={onClose}
-      title={`${milestone.milestoneMonths} Month Follow-up Questionnaire`}
-      size="large"
-    >
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
-          <NfiField label="Follow-up Date" required>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-              value={followupDate}
-              onChange={(e) => setFollowupDate(e.target.value)}
-            />
-          </NfiField>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-[var(--nfi-text)]">Questionnaire Metrics</h4>
-          {metrics.length === 0 && (
-            <p className="text-[var(--nfi-text-secondary)] text-sm">No metrics defined for this milestone.</p>
-          )}
-          {metrics.map((metric) => (
-            <div key={metric.metricKey} className="p-4 border border-[var(--nfi-border)] rounded-lg">
-              <NfiField label={metric.metricLabel || metric.metricKey}>
-                {metric.valueType === 'BOOLEAN' ? (
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={metric.metricKey}
-                        value="yes"
-                        checked={responses[metric.metricKey] === 'yes'}
-                        onChange={(e) => setResponses({ ...responses, [metric.metricKey]: e.target.value })}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-[var(--nfi-text)]">Yes</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={metric.metricKey}
-                        value="no"
-                        checked={responses[metric.metricKey] === 'no'}
-                        onChange={(e) => setResponses({ ...responses, [metric.metricKey]: e.target.value })}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-[var(--nfi-text)]">No</span>
-                    </label>
-                    {metric.allowNA && (
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={metric.metricKey}
-                          value="na"
-                          checked={responses[metric.metricKey] === 'na'}
-                          onChange={(e) => setResponses({ ...responses, [metric.metricKey]: e.target.value })}
-                          className="w-4 h-4"
-                        />
-                        <span className="text-[var(--nfi-text)]">N/A</span>
-                      </label>
-                    )}
-                  </div>
-                ) : (
-                  <textarea
-                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                    rows={3}
-                    value={responses[metric.metricKey] || ''}
-                    onChange={(e) => setResponses({ ...responses, [metric.metricKey]: e.target.value })}
-                    placeholder="Enter your response..."
-                  />
-                )}
-              </NfiField>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-3 pt-4 border-t border-[var(--nfi-border)]">
-          <NfiButton onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Saving...' : 'Save Questionnaire'}
-          </NfiButton>
-          <NfiButton variant="secondary" onClick={onClose}>
-            Cancel
-          </NfiButton>
-        </div>
-      </div>
-    </NfiModal>
   );
 }
