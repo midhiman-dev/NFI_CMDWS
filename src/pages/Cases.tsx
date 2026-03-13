@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
 import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiBadge } from '../components/design-system/NfiBadge';
@@ -11,6 +12,7 @@ import { getHospitalDisplayStatus, getLatestRejectedEvent, getLatestReturnedEven
 import { useAppContext } from '../App';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
 import type { CaseStatus } from '../types';
+import { translateCaseStatus } from '../i18n/helpers';
 
 interface CaseRow extends CaseWithDetails {
   checklistProgress: number;
@@ -21,6 +23,7 @@ interface CaseRow extends CaseWithDetails {
 
 export function Cases() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { provider } = useAppContext();
   const [cases, setCases] = useState<CaseRow[]>([]);
@@ -73,7 +76,7 @@ export function Cases() {
 
       setCases(enrichedCases);
     } catch (err) {
-      setError('Failed to load cases');
+      setError(t('cases.loadFailed', { defaultValue: 'Failed to load cases' }));
       console.error('Cases load error:', err);
     } finally {
       setLoading(false);
@@ -123,14 +126,14 @@ export function Cases() {
       case 'hospital_spoc':
         if (caseItem.displayStatus === 'Draft' || caseItem.displayStatus === 'Returned') {
           return {
-            label: caseItem.displayStatus === 'Returned' ? 'Fix & Resubmit' : 'Continue',
+            label: caseItem.displayStatus === 'Returned' ? t('common.fixResubmit', { defaultValue: 'Fix & Resubmit' }) : t('common.continue', { defaultValue: 'Continue' }),
             icon: <Edit size={16} />,
             variant: 'primary' as const,
             onClick: () => navigate(getCaseOpenPath(caseItem)),
           };
         }
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -138,7 +141,7 @@ export function Cases() {
 
       case 'clinical':
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -147,14 +150,14 @@ export function Cases() {
       case 'verifier':
         if (caseItem.caseStatus === 'Submitted' || caseItem.caseStatus === 'Under_Verification') {
           return {
-            label: 'Verify',
+            label: t('common.verify', { defaultValue: 'Verify' }),
             icon: <FileCheck size={16} />,
             variant: 'primary' as const,
             onClick: () => navigate(`/cases/${caseItem.caseId}?tab=documents`),
           };
         }
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -163,14 +166,14 @@ export function Cases() {
       case 'committee_member':
         if (caseItem.caseStatus === 'Under_Review') {
           return {
-            label: 'Decide',
+            label: t('common.decide', { defaultValue: 'Decide' }),
             icon: <CheckSquare size={16} />,
             variant: 'primary' as const,
             onClick: () => navigate(`/cases/${caseItem.caseId}?tab=approval`),
           };
         }
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -179,14 +182,14 @@ export function Cases() {
       case 'beni_volunteer':
         if (caseItem.caseStatus === 'Approved' || caseItem.caseStatus === 'Closed') {
           return {
-            label: 'Monitor',
+            label: t('common.monitor', { defaultValue: 'Monitor' }),
             icon: <Heart size={16} />,
             variant: 'primary' as const,
             onClick: () => navigate(`/cases/${caseItem.caseId}?tab=monitoring`),
           };
         }
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -194,7 +197,7 @@ export function Cases() {
 
       case 'admin':
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -202,7 +205,7 @@ export function Cases() {
 
       default:
         return {
-          label: 'View',
+          label: t('common.view', { defaultValue: 'View' }),
           icon: <Eye size={16} />,
           variant: 'secondary' as const,
           onClick: () => navigate(getCaseOpenPath(caseItem)),
@@ -235,7 +238,7 @@ export function Cases() {
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-4"></div>
-              <p className="text-[var(--nfi-text-secondary)]">Loading cases...</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('cases.loading', { defaultValue: 'Loading cases...' })}</p>
             </div>
           </div>
         </div>
@@ -248,16 +251,16 @@ export function Cases() {
       <div className="max-w-[1400px] mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Cases</h1>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('cases.title')}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">
-              Manage and track all cases
+              {t('cases.subtitle')}
             </p>
           </div>
 
           {authState.activeRole === 'hospital_spoc' && (
             <NfiButton onClick={() => navigate('/cases/new')}>
               <PlusCircle size={20} className="mr-2" />
-              New Case
+              {t('nav.newCase')}
             </NfiButton>
           )}
         </div>
@@ -277,7 +280,7 @@ export function Cases() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by case ref, beneficiary no, baby name, or hospital..."
+                placeholder={t('cases.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
@@ -298,7 +301,7 @@ export function Cases() {
                           : 'bg-white text-[var(--nfi-text)] border-[var(--nfi-border)] hover:bg-[var(--nfi-bg-light)]'
                       }`}
                     >
-                      {bucket} ({hospitalBuckets[bucket]})
+                      {translateCaseStatus(bucket)} ({hospitalBuckets[bucket]})
                     </button>
                   );
                 })}
@@ -310,7 +313,7 @@ export function Cases() {
                       : 'bg-white text-[var(--nfi-text)] border-[var(--nfi-border)] hover:bg-[var(--nfi-bg-light)]'
                   }`}
                 >
-                  All ({cases.length})
+                  {t('common.all')} ({cases.length})
                 </button>
               </div>
             )}
@@ -318,7 +321,7 @@ export function Cases() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Filter size={18} className="text-gray-400" />
-                <span className="text-sm font-medium text-[var(--nfi-text)]">Filters:</span>
+                <span className="text-sm font-medium text-[var(--nfi-text)]">{t('common.filters')}:</span>
               </div>
 
               <select
@@ -326,7 +329,7 @@ export function Cases() {
                 onChange={(e) => setProcessFilter(e.target.value)}
                 className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
               >
-                <option value="all">All Process Types</option>
+                <option value="all">{t('common.allProcessTypes')}</option>
                 <option value="New">New</option>
                 <option value="Renewal">Renewal</option>
                 <option value="Revision">Revision</option>
@@ -337,15 +340,15 @@ export function Cases() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
               >
-                <option value="all">All Status</option>
-                <option value="Draft">Draft</option>
-                <option value="Submitted">Submitted</option>
-                <option value="Under_Verification">Under Verification</option>
-                <option value="Under_Review">Under Review</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Closed">Closed</option>
-                <option value="Returned">Returned</option>
+                <option value="all">{t('common.allStatus')}</option>
+                <option value="Draft">{translateCaseStatus('Draft')}</option>
+                <option value="Submitted">{translateCaseStatus('Submitted')}</option>
+                <option value="Under_Verification">{translateCaseStatus('Under_Verification')}</option>
+                <option value="Under_Review">{translateCaseStatus('Under_Review')}</option>
+                <option value="Approved">{translateCaseStatus('Approved')}</option>
+                <option value="Rejected">{translateCaseStatus('Rejected')}</option>
+                <option value="Closed">{translateCaseStatus('Closed')}</option>
+                <option value="Returned">{translateCaseStatus('Returned')}</option>
               </select>
 
               {canFilterHospital && (
@@ -354,7 +357,7 @@ export function Cases() {
                   onChange={(e) => setHospitalFilter(e.target.value)}
                   className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                 >
-                  <option value="all">All Hospitals</option>
+                  <option value="all">{t('common.allHospitals')}</option>
                   {hospitals.map((h) => (
                     <option key={h.id} value={h.id}>
                       {h.name}
@@ -375,7 +378,7 @@ export function Cases() {
                   }}
                   className="text-sm text-[var(--nfi-primary)] hover:underline"
                 >
-                  Clear filters
+                  {t('common.clearFilters')}
                 </button>
               )}
             </div>
@@ -384,9 +387,9 @@ export function Cases() {
           {filteredCases.length === 0 ? (
             <div className="text-center py-12">
               <FileCheck size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-[var(--nfi-text-secondary)]">No cases found</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('cases.noCasesFound')}</p>
               <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
-                Try adjusting your filters or search criteria
+                {t('cases.adjustFilters')}
               </p>
             </div>
           ) : (
@@ -395,31 +398,31 @@ export function Cases() {
                 <thead>
                   <tr className="border-b border-[var(--nfi-border)]">
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Case Ref
+                      {t('cases.caseRef')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Beneficiary No
+                      {t('cases.beneficiaryNo')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Baby Name
+                      {t('cases.babyName')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Hospital
+                      {t('cases.hospital')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Process
+                      {t('cases.process')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Status
+                      {t('common.status')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Checklist
+                      {t('cases.checklist')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Last Updated
+                      {t('cases.lastUpdated')}
                     </th>
                     <th className="text-right py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      Actions
+                      {t('common.actions')}
                     </th>
                   </tr>
                 </thead>
@@ -447,9 +450,9 @@ export function Cases() {
                         </td>
                         <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
                           <div>
-                            <p className="font-medium">{caseItem.hospitalName || 'Unknown'}</p>
+                            <p className="font-medium">{caseItem.hospitalName || t('common.unknownHospital', { defaultValue: 'Unknown' })}</p>
                             <p className="text-xs text-[var(--nfi-text-secondary)]">
-                              Location details
+                              {t('cases.locationDetails')}
                             </p>
                           </div>
                         </td>
@@ -469,16 +472,16 @@ export function Cases() {
                                 : 'warning'
                             }
                           >
-                            {(isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus).replace('_', ' ')}
+                            {translateCaseStatus(isHospitalUser ? caseItem.displayStatus : caseItem.caseStatus)}
                           </NfiBadge>
                           {isHospitalUser && caseItem.displayStatus === 'Returned' && caseItem.returnReason && (
                             <p className="text-xs text-amber-700 mt-1 max-w-[280px] truncate" title={caseItem.returnReason}>
-                              Reason: {caseItem.returnReason}
+                              {t('cases.returnedReason', { defaultValue: 'Reason: {{reason}}', reason: caseItem.returnReason })}
                             </p>
                           )}
                           {isHospitalUser && caseItem.displayStatus === 'Rejected' && caseItem.rejectionReason && (
                             <p className="text-xs text-red-700 mt-1 max-w-[280px] truncate" title={caseItem.rejectionReason}>
-                              Rejected: {caseItem.rejectionReason}
+                              {t('cases.rejectedReason', { defaultValue: 'Rejected: {{reason}}', reason: caseItem.rejectionReason })}
                             </p>
                           )}
                         </td>
@@ -525,7 +528,11 @@ export function Cases() {
 
           {!loading && filteredCases.length > 0 && (
             <div className="mt-4 text-sm text-[var(--nfi-text-secondary)] text-center">
-              Showing {filteredCases.length} of {cases.length} cases
+              {t('cases.showingCount', {
+                defaultValue: 'Showing {{filtered}} of {{total}} cases',
+                filtered: filteredCases.length,
+                total: cases.length,
+              })}
             </div>
           )}
         </NfiCard>

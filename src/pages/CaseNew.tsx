@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
 import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiButton } from '../components/design-system/NfiButton';
@@ -16,6 +17,7 @@ import type { DocumentWithTemplate } from '../data/providers/DataProvider';
 import type { CaseWorkflowEvent } from '../utils/caseWorkflow';
 import { getHospitalDisplayStatus, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
 import { formatDateTimeFriendly } from '../utils/dateFormat';
+import { translateGender, translateLiteral, translateProcessType } from '../i18n/helpers';
 
 const TOTAL_STEPS = 5;
 const STEP_TITLES = [
@@ -65,14 +67,7 @@ interface AttentionItem {
 }
 
 function getProcessTypeLabel(processType: ProcessType | ''): string {
-  switch (processType) {
-    case 'BRC': return 'BRC - Birth & Resuscitation Care';
-    case 'BRRC': return 'BRRC - Birth & Re-admission Resuscitation Care';
-    case 'BGRC': return 'BGRC - Birth & Growth Care';
-    case 'BCRC': return 'BCRC - Birth & Closure/Completion Care';
-    case 'NON_BRC': return 'NON_BRC - Non-BRC Case';
-    default: return 'Not mapped';
-  }
+  return translateProcessType(processType);
 }
 
 function buildDerivedBabyName(motherName: string): string {
@@ -87,6 +82,7 @@ function normalizeDateForInput(value?: string | null): string {
 
 export function CaseNew() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { caseId: routeCaseId } = useParams<{ caseId: string }>();
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
@@ -414,7 +410,7 @@ export function CaseNew() {
         : { ...formData, intakeDate: value };
 
       if (newData.admissionDate && newData.intakeDate && newData.intakeDate < newData.admissionDate) {
-        setIntakeDateError('Intake date cannot be before admission date');
+        setIntakeDateError(t('wizard.intakeBeforeAdmission'));
       } else {
         setIntakeDateError('');
       }
@@ -439,15 +435,15 @@ export function CaseNew() {
     const missing = required.filter((field) => !formData[field]);
     if (missing.length > 0) {
       if (processMappingMissing) {
-        showToast('Hospital process setup is missing. Please contact NFI Admin before creating a case.', 'error');
+        showToast(t('wizard.processSetupMissing'), 'error');
       } else {
-        showToast('Please complete all required registration fields.', 'error');
+        showToast(t('wizard.completeRequiredFields'), 'error');
       }
       return false;
     }
 
     if (formData.intakeDate < formData.admissionDate) {
-      showToast('Intake date cannot be before admission date', 'error');
+      showToast(t('wizard.intakeBeforeAdmission'), 'error');
       return false;
     }
 
@@ -458,17 +454,17 @@ export function CaseNew() {
     if (!validateStep1()) return false;
 
     if (!formData.fatherName.trim()) {
-      showToast('Father name is required before final submission.', 'error');
+      showToast(t('wizard.fatherRequiredFinal'), 'error');
       return false;
     }
 
     if (!readiness) {
-      showToast('Submit readiness is still loading. Please wait a moment.', 'error');
+      showToast(t('wizard.readinessLoading'), 'error');
       return false;
     }
 
     if (!readiness.canSubmit) {
-      showToast('Please complete intake and required documents before submission.', 'error');
+      showToast(t('wizard.completeIntakeDocs'), 'error');
       return false;
     }
 
@@ -688,21 +684,21 @@ export function CaseNew() {
               <p className="text-sm text-amber-900"><span className="font-medium">Reason:</span> {latestReturnEvent.reason}</p>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-amber-800">
-              <p><span className="font-medium">Returned by:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
-              <p><span className="font-medium">Returned on:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
-              <p><span className="font-medium">Stage:</span> {latestReturnEvent?.source || 'Verification'}</p>
+              <p><span className="font-medium">{t('common.returnedBy')}:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">{t('common.when')}:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
+              <p><span className="font-medium">{t('common.stage')}:</span> {latestReturnEvent?.source || 'Verification'}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-amber-900 mb-2">Needs Attention</p>
+              <p className="text-sm font-medium text-amber-900 mb-2">{t('wizard.needsAttention')}</p>
               {attentionLoading ? (
-                <p className="text-sm text-amber-800">Loading correction checklist...</p>
+                <p className="text-sm text-amber-800">{t('wizard.loadingCorrections')}</p>
               ) : attentionItems.length === 0 ? (
                 <p className="text-sm text-amber-800">No specific item-level issues were found. Review the return reason and verify all sections before resubmission.</p>
               ) : (
                 <div className="space-y-4">
                   {latestReturnEvent?.reason && (
                     <div className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-800">Return Reason</h3>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-800">{t('wizard.returnReason')}</h3>
                       <p className="text-sm text-amber-900">{latestReturnEvent.reason}</p>
                     </div>
                   )}
@@ -712,12 +708,12 @@ export function CaseNew() {
                     if (groupItems.length === 0) return null;
                     const heading =
                       group === 'documents'
-                        ? 'Missing Documents'
+                        ? t('wizard.missingDocsGroup')
                         : group === 'fund'
-                        ? 'Incomplete Fund Application'
+                        ? t('wizard.incompleteFundGroup')
                         : group === 'interim'
-                        ? 'Incomplete Interim Summary'
-                        : 'Other Notes / Verification Notes';
+                        ? t('wizard.incompleteInterimGroup')
+                        : t('wizard.otherNotesGroup');
                     return (
                       <div key={group} className="space-y-2">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-800">{heading}</h3>
@@ -770,21 +766,21 @@ export function CaseNew() {
         <NfiCard>
           {currentStep === 1 && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-2">Basic Registration</h2>
-              <p className="text-sm text-[var(--nfi-text-secondary)] mb-2">Enter minimum registration details to start intake.</p>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-2">{t('wizard.steps.basicRegistration')}</h2>
+              <p className="text-sm text-[var(--nfi-text-secondary)] mb-2">{t('wizard.minimumDetails')}</p>
 
               {!isHospitalSpoc && (
                 <NfiField label="Hospital" required>
                   {hospitalsLoading ? (
                     <div className="flex items-center gap-2 px-3 py-2 text-[var(--nfi-text-secondary)]">
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Loading hospitals...</span>
+                      <span>{t('wizard.loadingHospitals')}</span>
                     </div>
                   ) : hospitals.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-amber-700 bg-amber-50 rounded-lg border border-amber-200">
                       {mode === 'DEMO'
-                        ? 'No hospitals available. Please reset demo data.'
-                        : 'No hospitals found. Please add hospitals in Admin > Hospitals.'}
+                        ? t('wizard.noHospitalsDemo')
+                        : t('wizard.noHospitalsAdmin')}
                     </div>
                   ) : (
                     <select
@@ -792,7 +788,7 @@ export function CaseNew() {
                       onChange={(e) => updateField('hospitalId', e.target.value)}
                       className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                     >
-                      <option value="">Select hospital</option>
+                      <option value="">{t('wizard.selectHospital')}</option>
                       {hospitals.map((h) => (
                         <option key={h.hospitalId} value={h.hospitalId}>
                           {h.name} - {h.city}
@@ -805,27 +801,27 @@ export function CaseNew() {
 
               {isHospitalSpoc && (
                 <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-2 text-sm">
-                  <span className="font-medium text-[var(--nfi-text)]">Hospital:</span>{' '}
+                  <span className="font-medium text-[var(--nfi-text)]">{t('wizard.hospitalLabel')}:</span>{' '}
                   <span className="text-[var(--nfi-text-secondary)]">{selectedHospital?.name || 'Scoped hospital'}</span>
                 </div>
               )}
 
               <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-2 text-sm">
-                <span className="font-medium text-[var(--nfi-text)]">Process Type:</span>{' '}
-                <span className="text-[var(--nfi-text-secondary)]">{processingTypeLoading ? 'Deriving...' : getProcessTypeLabel(formData.processType)}</span>
+                <span className="font-medium text-[var(--nfi-text)]">{t('wizard.processTypeLabel')}:</span>{' '}
+                <span className="text-[var(--nfi-text-secondary)]">{processingTypeLoading ? t('wizard.deriving') : getProcessTypeLabel(formData.processType)}</span>
               </div>
 
               <NfiField label="Baby Name" required>
                 {isHospitalSpoc ? (
                   <div className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)] text-[var(--nfi-text)]">
-                    {derivedHospitalBabyName || 'Will be auto-generated from Mother Name'}
+                    {derivedHospitalBabyName || t('wizard.autoBabyName')}
                   </div>
                 ) : (
                   <input
                     type="text"
                     value={formData.beneficiaryName}
                     onChange={(e) => updateField('beneficiaryName', e.target.value)}
-                    placeholder="e.g., Baby Aanya"
+                    placeholder={t('wizard.babyNamePlaceholder', { defaultValue: 'e.g., Baby Aanya' })}
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                   />
                 )}
@@ -847,10 +843,10 @@ export function CaseNew() {
                     onChange={(e) => updateField('gender', e.target.value)}
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                   >
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    <option value="">{t('wizard.selectGender')}</option>
+                    <option value="Male">{translateGender('Male')}</option>
+                    <option value="Female">{translateGender('Female')}</option>
+                    <option value="Other">{translateGender('Other')}</option>
                   </select>
                 </NfiField>
               </div>
@@ -881,7 +877,7 @@ export function CaseNew() {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => updateField('phone', e.target.value)}
-                    placeholder="+91-9876543210"
+                    placeholder={t('wizard.phonePlaceholder', { defaultValue: '+91-9876543210' })}
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                   />
                 </NfiField>
@@ -892,7 +888,7 @@ export function CaseNew() {
                     onChange={(e) => updateField('city', e.target.value)}
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                   >
-                    <option value="">Select city</option>
+                    <option value="">{t('wizard.selectCity')}</option>
                     {cityOptions.map((city) => (
                       <option key={city} value={city}>{city}</option>
                     ))}
@@ -910,7 +906,7 @@ export function CaseNew() {
                   />
                 </NfiField>
 
-                <NfiField label="Intake Date" required hint="Date when case was registered with NFI">
+                <NfiField label="Intake Date" required hint={t('wizard.intakeDateHint')}>
                   <input
                     type="date"
                     value={formData.intakeDate}
@@ -927,36 +923,36 @@ export function CaseNew() {
 
           {currentStep === 2 && createdCaseId && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Fund Application</h2>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('wizard.steps.fundApplication')}</h2>
               <IntakeFormsTab caseId={createdCaseId} variant="wizard" section="fund" />
             </div>
           )}
 
           {currentStep === 3 && createdCaseId && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Interim Summary</h2>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('wizard.steps.interimSummary')}</h2>
               <IntakeFormsTab caseId={createdCaseId} variant="wizard" section="interim" />
             </div>
           )}
 
           {currentStep === 4 && createdCaseId && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Documents</h2>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('wizard.steps.documents')}</h2>
               <p className="text-sm text-[var(--nfi-text-secondary)]">
-                Upload pre-approval required documents. Post-discharge documents can be added later.
+                {t('wizard.documentsHint')}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="p-4 rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)]">
-                  <p className="text-xs text-[var(--nfi-text-secondary)]">Checklist Items</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{t('wizard.checklistItems')}</p>
                   <p className="text-2xl font-semibold text-[var(--nfi-text)]">{documentStats.total}</p>
                 </div>
                 <div className="p-4 rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)]">
-                  <p className="text-xs text-[var(--nfi-text-secondary)]">Uploaded/Verified</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{t('wizard.uploadedVerified')}</p>
                   <p className="text-2xl font-semibold text-[var(--nfi-text)]">{documentStats.uploaded}</p>
                 </div>
                 <div className="p-4 rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)]">
-                  <p className="text-xs text-[var(--nfi-text-secondary)]">Verified</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{t('wizard.verified')}</p>
                   <p className="text-2xl font-semibold text-[var(--nfi-text)]">{documentStats.verified}</p>
                 </div>
               </div>
@@ -973,39 +969,39 @@ export function CaseNew() {
 
           {currentStep === 5 && createdCaseId && (
             <div className="space-y-5">
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Review & Submit</h2>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('wizard.steps.reviewSubmit')}</h2>
 
               <div className="border border-[var(--nfi-border)] rounded-lg p-4 bg-[var(--nfi-bg-light)]">
-                <h3 className="font-semibold text-[var(--nfi-text)] mb-3">Registration Summary</h3>
+                <h3 className="font-semibold text-[var(--nfi-text)] mb-3">{t('wizard.registrationSummary')}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <p><span className="font-medium">Baby Name:</span> {(isHospitalSpoc ? derivedHospitalBabyName : formData.beneficiaryName) || '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('Baby Name')}:</span> {(isHospitalSpoc ? derivedHospitalBabyName : formData.beneficiaryName) || '-'}</p>
                   <p><span className="font-medium">DOB:</span> {formData.dob || '-'}</p>
-                  <p><span className="font-medium">Gender:</span> {formData.gender || '-'}</p>
-                  <p><span className="font-medium">Father Name:</span> {formData.fatherName || '-'}</p>
-                  <p><span className="font-medium">Mother Name:</span> {formData.motherName || '-'}</p>
-                  <p><span className="font-medium">Phone:</span> {formData.phone || '-'}</p>
-                  <p><span className="font-medium">City:</span> {formData.city || '-'}</p>
-                  <p><span className="font-medium">Process:</span> {getProcessTypeLabel(formData.processType)}</p>
+                  <p><span className="font-medium">{translateLiteral('Gender')}:</span> {formData.gender ? translateGender(formData.gender) : '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('Father Name')}:</span> {formData.fatherName || '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('Mother Name')}:</span> {formData.motherName || '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('Primary Phone')}:</span> {formData.phone || '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('City')}:</span> {formData.city || '-'}</p>
+                  <p><span className="font-medium">{translateLiteral('Process')}:</span> {getProcessTypeLabel(formData.processType)}</p>
                 </div>
               </div>
 
               <div className="border border-[var(--nfi-border)] rounded-lg p-4">
-                <h3 className="font-semibold text-[var(--nfi-text)] mb-3">Submission Readiness</h3>
+                <h3 className="font-semibold text-[var(--nfi-text)] mb-3">{t('wizard.submissionReadiness')}</h3>
                 {reviewLoading ? (
                   <div className="flex items-center gap-2 text-[var(--nfi-text-secondary)]">
                     <Loader2 size={16} className="animate-spin" />
-                    Checking readiness...
+                    {t('wizard.checkingReadiness')}
                   </div>
                 ) : readiness ? (
                   <div className="space-y-2 text-sm">
-                    <p>Fund Application: <span className={readiness.fundAppComplete ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.fundAppComplete ? 'Complete' : 'Incomplete'}</span></p>
-                    <p>Interim Summary: <span className={readiness.interimSummaryComplete ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.interimSummaryComplete ? 'Complete' : 'Incomplete'}</span></p>
-                    <p>Documents: <span className={readiness.documentsReady ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.documentsReady ? 'Ready' : 'Not Ready'}</span></p>
+                    <p>{t('wizard.steps.fundApplication')}: <span className={readiness.fundAppComplete ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.fundAppComplete ? t('common.complete') : t('common.incomplete')}</span></p>
+                    <p>{t('wizard.steps.interimSummary')}: <span className={readiness.interimSummaryComplete ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.interimSummaryComplete ? t('common.complete') : t('common.incomplete')}</span></p>
+                    <p>{t('wizard.steps.documents')}: <span className={readiness.documentsReady ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>{readiness.documentsReady ? t('common.ready') : t('common.notReady')}</span></p>
                     {!readiness.canSubmit && readiness.missingFields.length > 0 && (
-                      <p className="text-amber-800">Missing Fields: {readiness.missingFields.join(', ')}</p>
+                      <p className="text-amber-800">{t('wizard.missingFields')}: {readiness.missingFields.join(', ')}</p>
                     )}
                     {!readiness.canSubmit && readiness.missingDocuments.length > 0 && (
-                      <p className="text-amber-800">Missing Documents: {readiness.missingDocuments.join(', ')}</p>
+                      <p className="text-amber-800">{t('wizard.missingDocuments')}: {readiness.missingDocuments.join(', ')}</p>
                     )}
                   </div>
                 ) : (
@@ -1020,7 +1016,7 @@ export function CaseNew() {
               {currentStep > 1 && (
                 <NfiButton variant="secondary" onClick={handlePrev}>
                   <ArrowLeft size={16} className="mr-2" />
-                  Previous
+                  {t('common.previous')}
                 </NfiButton>
               )}
             </div>
@@ -1028,19 +1024,19 @@ export function CaseNew() {
             <div className="flex gap-3">
               <NfiButton variant="secondary" onClick={handleSaveDraft} disabled={saving || processMappingMissing}>
                 {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
-                Save Draft
+                {t('wizard.saveDraft')}
               </NfiButton>
 
               {currentStep < TOTAL_STEPS ? (
                 <NfiButton onClick={handleNext} disabled={saving || processMappingMissing || processingTypeLoading}>
                   {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
-                  Next
+                  {t('common.next')}
                   <ArrowRight size={16} className="ml-2" />
                 </NfiButton>
               ) : (
                 <NfiButton onClick={handleSubmit} disabled={saving || processMappingMissing || reviewLoading}>
                   {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Send size={16} className="mr-2" />}
-                  {isReturnedCase ? 'Resubmit Case' : 'Submit Case'}
+                  {isReturnedCase ? t('wizard.resubmitCase') : t('wizard.submitCase')}
                 </NfiButton>
               )}
             </div>

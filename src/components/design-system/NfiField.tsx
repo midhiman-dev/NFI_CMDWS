@@ -1,5 +1,6 @@
 import { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { inputBase, inputError, textareaBase, selectBase } from '../ui/formStyles';
+import { translateLiteral } from '../../i18n/helpers';
 
 interface NfiFieldProps {
   label: string;
@@ -43,7 +44,7 @@ export function NfiField({
   return (
     <div className="space-y-1">
       <label className="block text-sm font-medium text-slate-700">
-        {label}
+        {translateLiteral(label)}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
@@ -54,6 +55,7 @@ export function NfiField({
           {type === 'input' && (
             <input
               className={resolvedInputClass}
+              placeholder={translateLiteral(inputProps?.placeholder)}
               {...inputProps}
             />
           )}
@@ -64,6 +66,7 @@ export function NfiField({
               rows={4}
               value={value}
               onChange={onChange}
+              placeholder={translateLiteral(textareaProps?.placeholder)}
               {...textareaProps}
             />
           )}
@@ -77,7 +80,7 @@ export function NfiField({
         </>
       )}
 
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
+      {hint && !error && <p className="text-xs text-slate-500">{translateLiteral(hint)}</p>}
       {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { intakeService } from '../../services/intakeService';
 import { IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness } from '../../types';
@@ -42,6 +43,7 @@ function createEmptyInterimSummary(): IntakeInterimSummary {
 }
 
 export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }: IntakeFormsTabProps) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const authState = getAuthState();
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
@@ -125,7 +127,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       setCompleteness(completenessData);
     } catch (error) {
       console.error('Failed to load intake data:', error);
-      showToast('Failed to load intake data', 'error');
+      showToast(t('intake.loadFailed', { defaultValue: 'Failed to load intake data' }), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -288,10 +290,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       const completenessData = await intakeService.getCompleteness(caseId);
       setCompleteness(completenessData);
 
-      showToast('Fund Application section saved', 'success');
+      showToast(t('intake.fundSaved', { defaultValue: 'Fund Application section saved' }), 'success');
     } catch (error) {
       console.error('Failed to save section:', error);
-      showToast('Failed to save section', 'error');
+      showToast(t('intake.saveFailed', { defaultValue: 'Failed to save section' }), 'error');
     }
   };
 
@@ -307,17 +309,17 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       const completenessData = await intakeService.getCompleteness(caseId);
       setCompleteness(completenessData);
 
-      showToast('Interim Summary section saved', 'success');
+      showToast(t('intake.interimSaved', { defaultValue: 'Interim Summary section saved' }), 'success');
     } catch (error) {
       console.error('Failed to save section:', error);
-      showToast('Failed to save section', 'error');
+      showToast(t('intake.saveFailed', { defaultValue: 'Failed to save section' }), 'error');
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-[var(--nfi-text-light)]">Loading intake forms...</p>
+        <p className="text-[var(--nfi-text-light)]">{t('intake.loadingForms')}</p>
       </div>
     );
   }
@@ -328,7 +330,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-            <p className="text-sm text-blue-700">You are viewing intake forms in read-only mode.</p>
+            <p className="text-sm text-blue-700">{t('intake.readOnly')}</p>
           </div>
         </div>
       )}
@@ -337,7 +339,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
         <div className="bg-white border border-[var(--nfi-border)] rounded-lg p-6">
           <div className="space-y-4">
             <div>
-              <h3 className="font-semibold text-[var(--nfi-text)] mb-2">Overall Progress</h3>
+              <h3 className="font-semibold text-[var(--nfi-text)] mb-2">{t('intake.overallProgress')}</h3>
               <div className="w-full bg-[var(--nfi-bg-light)] rounded-full h-3 overflow-hidden">
                 <div
                   className="h-full transition-all duration-300"
@@ -350,7 +352,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
                 />
               </div>
               <p className="text-sm text-[var(--nfi-text-light)] mt-2">
-                {completeness.overallPercent}% complete
+                {t('intake.percentComplete', { defaultValue: '{{percent}}% complete', percent: completeness.overallPercent })}
               </p>
             </div>
 
@@ -374,10 +376,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
                           ? 'text-[var(--nfi-success)]'
                           : 'text-[var(--nfi-warning)]'
                       }`}>
-                        Fund Application
+                        {t('wizard.steps.fundApplication')}
                       </h4>
                       <p className="text-sm text-[var(--nfi-text-light)]">
-                        {completeness.fundAppTotalPercent}% complete
+                        {t('intake.percentComplete', { defaultValue: '{{percent}}% complete', percent: completeness.fundAppTotalPercent })}
                       </p>
                     </div>
                   </div>
@@ -403,10 +405,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
                           ? 'text-[var(--nfi-success)]'
                           : 'text-[var(--nfi-warning)]'
                       }`}>
-                        Interim Summary
+                        {t('wizard.steps.interimSummary')}
                       </h4>
                       <p className="text-sm text-[var(--nfi-text-light)]">
-                        {completeness.interimSummaryTotalPercent}% complete
+                        {t('intake.percentComplete', { defaultValue: '{{percent}}% complete', percent: completeness.interimSummaryTotalPercent })}
                       </p>
                     </div>
                   </div>
@@ -420,7 +422,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       <div className="space-y-6">
         {section !== 'interim' && (
           <div>
-            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Fund Application</h2>
+            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">{t('wizard.steps.fundApplication')}</h2>
             <FundApplicationForm
               caseId={caseId}
               initialData={fundApplication}
@@ -434,7 +436,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
 
         {section !== 'fund' && (
           <div className={section === 'both' ? 'border-t border-[var(--nfi-border)] pt-6' : ''}>
-            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">Interim Summary</h2>
+            <h2 className="text-2xl font-bold text-[var(--nfi-text)] mb-4">{t('wizard.steps.interimSummary')}</h2>
             <InterimSummaryForm
               caseId={caseId}
               initialData={interimSummary}
@@ -452,7 +454,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
           <div className="flex items-start gap-2">
             <AlertCircle size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-800">
-              Complete required sections now to avoid submit blockers in the final step.
+              {t('intake.completeRequiredNow')}
             </p>
           </div>
         </div>

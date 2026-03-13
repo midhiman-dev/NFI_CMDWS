@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { NfiCard } from '../../components/design-system/NfiCard';
@@ -29,6 +30,7 @@ import type { CaseWithDetails } from '../../data/providers/DataProvider';
 
 export function LeadershipMonthly() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { provider } = useAppContext();
   const { showToast } = useToast();
   const authState = getAuthState();
@@ -50,7 +52,7 @@ export function LeadershipMonthly() {
         setLastRefresh(new Date().toISOString());
       } catch (error) {
         console.error('Error loading Leadership MIS:', error);
-        showToast('Failed to load Monthly MIS - Leadership Team', 'error');
+        showToast(t('reports.loadFailed', { defaultValue: 'Failed to load Monthly MIS - Leadership Team' }), 'error');
       } finally {
         setLoading(false);
       }
@@ -128,11 +130,11 @@ export function LeadershipMonthly() {
         ),
         `Leadership_Monthly_MIS_${formatDownloadTimestamp()}`,
       );
-      showToast('Download started', 'success');
+      showToast(t('reports.downloadStarted', { defaultValue: 'Download started' }), 'success');
       navigate('/reports/runs');
     } catch (error) {
       console.error('Error exporting Leadership MIS:', error);
-      showToast('Failed to export report', 'error');
+      showToast(t('reports.exportFailed', { defaultValue: 'Failed to export report' }), 'error');
     } finally {
       setExporting(false);
     }
@@ -142,11 +144,11 @@ export function LeadershipMonthly() {
     <Layout>
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back to Reports">
+          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title={t('reports.backToReports', { defaultValue: 'Back to Reports' })}>
             <ArrowLeft size={20} className="text-[var(--nfi-text)]" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Monthly MIS - Leadership Team</h1>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.MONTHLY_MIS_LEADERSHIP.title', { defaultValue: 'Monthly MIS - Leadership Team' })}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">Donor-safe monthly rollup with aggregate-only KPIs for leadership review.</p>
           </div>
         </div>
@@ -154,7 +156,7 @@ export function LeadershipMonthly() {
         <NfiCard>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Fiscal Year</label>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('reports.fiscalYear', { defaultValue: 'Fiscal Year' })}</label>
               <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]">
                 {FISCAL_YEAR_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -162,21 +164,21 @@ export function LeadershipMonthly() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Month</label>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('reports.month', { defaultValue: 'Month' })}</label>
               <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]">
                 {MONTH_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>{t(`reports.months.${option.value}`, { defaultValue: option.label })}</option>
                 ))}
               </select>
             </div>
             <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Data as of</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{t('common.dataAsOf')}</p>
               <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">
-                {MONTH_OPTIONS.find((option) => option.value === selectedMonth)?.label} {selectedFY}
+                {t(`reports.months.${selectedMonth}`, { defaultValue: MONTH_OPTIONS.find((option) => option.value === selectedMonth)?.label || selectedMonth })} {selectedFY}
               </p>
               <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
                 <RefreshCw size={14} />
-                Last refresh: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
+                {t('common.lastRefresh')}: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
               </div>
             </div>
             <div className="flex items-end">
@@ -186,17 +188,17 @@ export function LeadershipMonthly() {
                 className="w-full px-4 py-2 bg-[var(--nfi-primary)] text-white rounded-lg hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 <Download size={16} />
-                {exporting ? 'Exporting...' : 'Export / Download'}
+                {exporting ? t('common.exporting', { defaultValue: 'Exporting...' }) : t('common.exportDownload', { defaultValue: 'Export / Download' })}
               </button>
             </div>
           </div>
         </NfiCard>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MisMetricCard label={MIS_KPI_LABELS.totalEnquires} value={summary.totalEnquires} />
-          <MisMetricCard label={MIS_KPI_LABELS.approvedCases} value={summary.approvedCases} />
-          <MisMetricCard label={MIS_KPI_LABELS.rejectedCases} value={summary.rejectedCases} />
-          <MisMetricCard label={MIS_KPI_LABELS.conversionRatio} value={`${summary.conversionRatio}%`} />
+          <MisMetricCard label={t('reports.kpis.totalEnquires', { defaultValue: MIS_KPI_LABELS.totalEnquires })} value={summary.totalEnquires} />
+          <MisMetricCard label={t('reports.kpis.approvedCases', { defaultValue: MIS_KPI_LABELS.approvedCases })} value={summary.approvedCases} />
+          <MisMetricCard label={t('reports.kpis.rejectedCases', { defaultValue: MIS_KPI_LABELS.rejectedCases })} value={summary.rejectedCases} />
+          <MisMetricCard label={t('reports.kpis.conversionRatio', { defaultValue: MIS_KPI_LABELS.conversionRatio })} value={`${summary.conversionRatio}%`} />
         </div>
 
         <NfiCard>
@@ -208,7 +210,7 @@ export function LeadershipMonthly() {
           {loading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
-              <p className="text-[var(--nfi-text-secondary)]">Loading data...</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('common.loadingData')}</p>
             </div>
           ) : rows.length === 0 ? (
             <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No monthly rollup data is available for the selected period.</div>

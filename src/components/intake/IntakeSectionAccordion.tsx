@@ -1,7 +1,9 @@
 ﻿import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NfiButton } from '../design-system/NfiButton';
 import { SectionStatus } from '../../utils/intakeValidation';
+import { translateLiteral } from '../../i18n/helpers';
 
 interface IntakeSectionAccordionProps {
   title: string;
@@ -24,6 +26,7 @@ export function IntakeSectionAccordion({
   errors = {},
   isDirty = false,
 }: IntakeSectionAccordionProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -53,21 +56,23 @@ export function IntakeSectionAccordion({
             style={{ color: 'var(--nfi-text)' }}
           />
           <div className="flex-1">
-            <h3 className="font-semibold text-[var(--nfi-text)]">{title}</h3>
-            <p className="text-sm text-[var(--nfi-text-light)]">{completionPercent}% complete</p>
+            <h3 className="font-semibold text-[var(--nfi-text)]">{translateLiteral(title)}</h3>
+            <p className="text-sm text-[var(--nfi-text-light)]">
+              {t('intake.percentComplete', { defaultValue: '{{percent}}% complete', percent: completionPercent })}
+            </p>
           </div>
           {isComplete ? (
             <div className="flex items-center gap-2">
               <CheckCircle2 size={20} style={{ color: 'var(--nfi-success)' }} />
-              <span className="text-sm font-medium text-[var(--nfi-success)]">Complete</span>
+              <span className="text-sm font-medium text-[var(--nfi-success)]">{t('common.complete')}</span>
             </div>
           ) : isInProgress ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-amber-700">In progress</span>
+              <span className="text-sm font-medium text-amber-700">{t('common.inProgress')}</span>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-[var(--nfi-text-light)]">Not started</span>
+              <span className="text-sm font-medium text-[var(--nfi-text-light)]">{t('common.notStarted')}</span>
             </div>
           )}
         </div>
@@ -80,7 +85,7 @@ export function IntakeSectionAccordion({
 
             {hasErrors && (
               <div className="mt-4 p-4 bg-[var(--nfi-error-bg)] border border-[var(--nfi-error-border)] rounded-lg">
-                <p className="text-sm font-medium text-[var(--nfi-error)]">Validation errors:</p>
+                <p className="text-sm font-medium text-[var(--nfi-error)]">{t('intake.validationErrors')}</p>
                 <ul className="mt-2 space-y-1">
                   {Object.entries(errors).map(([field, message]) => (
                     <li key={field} className="text-sm text-[var(--nfi-error)]">
@@ -97,7 +102,7 @@ export function IntakeSectionAccordion({
                 onClick={() => setIsOpen(false)}
                 disabled={isSaving}
               >
-                Close
+                {t('common.close')}
               </NfiButton>
               <NfiButton
                 variant="primary"
@@ -105,7 +110,7 @@ export function IntakeSectionAccordion({
                 disabled={isSaving || !isDirty}
                 loading={isSaving}
               >
-                {isSaving ? 'Saving...' : 'Save Section'}
+                {isSaving ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.saveSection', { defaultValue: 'Save Section' })}
               </NfiButton>
             </div>
           </div>

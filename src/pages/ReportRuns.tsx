@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
 import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiBadge } from '../components/design-system/NfiBadge';
@@ -8,9 +9,11 @@ import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import type { ReportRun } from '../types';
 import { formatMISDate, formatMISDateTime } from '../utils/misReporting';
+import { translateReportRunStatus } from '../i18n/helpers';
 
 export function ReportRuns() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const [runs, setRuns] = useState<ReportRun[]>([]);
@@ -27,7 +30,7 @@ export function ReportRuns() {
       setRuns(runsData);
     } catch (error) {
       console.error('Error loading runs:', error);
-      showToast('Failed to load report runs', 'error');
+      showToast(t('reports.loadFailed', { defaultValue: 'Failed to load report runs' }), 'error');
     } finally {
       setLoading(false);
     }
@@ -91,7 +94,7 @@ export function ReportRuns() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast('Download started', 'success');
+    showToast(t('reports.downloadStarted', { defaultValue: 'Download started' }), 'success');
   };
 
   const getStatusIcon = (status: string) => {
@@ -131,13 +134,13 @@ export function ReportRuns() {
           <button
             onClick={() => navigate('/reports')}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Back to Reports"
+            title={t('reports.backToReports', { defaultValue: 'Back to Reports' })}
           >
             <ArrowLeft size={20} className="text-[var(--nfi-text)]" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Report Runs</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">View and download report execution history</p>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.recentRuns')}</h1>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">{t('reports.runHistorySubtitle')}</p>
           </div>
         </div>
 
@@ -145,27 +148,27 @@ export function ReportRuns() {
           <NfiCard>
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
-              <p className="text-[var(--nfi-text-secondary)]">Loading report runs...</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('reports.loadingRuns')}</p>
             </div>
           </NfiCard>
         ) : (
           <NfiCard>
             {runs.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-[var(--nfi-text-secondary)]">No report runs yet. Generate a report to see history.</p>
+                <p className="text-[var(--nfi-text-secondary)]">{t('reports.noRuns')}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[var(--nfi-border)]">
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Run ID</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Template</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Parameters</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Generated At</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Data As Of</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Action</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.runId')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.template')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.parameters')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('common.status')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.generatedAt')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('common.dataAsOf')}</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.action')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -186,7 +189,7 @@ export function ReportRuns() {
                           <div className="flex items-center gap-2">
                             {getStatusIcon(run.status)}
                             <NfiBadge tone={getStatusBadgeTone(run.status)}>
-                              {run.status}
+                              {translateReportRunStatus(run.status)}
                             </NfiBadge>
                           </div>
                         </td>
@@ -201,10 +204,10 @@ export function ReportRuns() {
                             onClick={() => generateCSV(run)}
                             disabled={run.status !== 'Succeeded'}
                             className="inline-flex items-center gap-1 px-3 py-2 bg-[var(--nfi-primary)] text-white rounded hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={run.status !== 'Succeeded' ? 'Report must be completed to download' : 'Download as CSV'}
+                            title={run.status !== 'Succeeded' ? t('reports.mustCompleteToDownload', { defaultValue: 'Report must be completed to download' }) : t('reports.downloadCsv', { defaultValue: 'Download as CSV' })}
                           >
                             <Download size={14} />
-                            Download
+                            {t('reports.download')}
                           </button>
                         </td>
                       </tr>
@@ -214,7 +217,7 @@ export function ReportRuns() {
               </div>
             )}
             <div className="mt-4 text-xs text-[var(--nfi-text-secondary)]">
-              Total Runs: {runs.length}
+              {t('reports.totalRuns')}: {runs.length}
             </div>
           </NfiCard>
         )}

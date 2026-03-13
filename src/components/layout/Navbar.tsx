@@ -61,7 +61,9 @@ export function Navbar() {
             />
             <div>
               <h1 className="text-xl font-bold truncate max-w-[320px]">{APP_NAME}</h1>
-              <p className="text-xs text-gray-300">Case Management & Document Workflow System</p>
+              <p className="text-xs text-gray-300">
+                {t('app.shellSubtitle', { defaultValue: 'Case Management & Document Workflow System' })}
+              </p>
             </div>
             <div
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold group relative ${
@@ -71,7 +73,7 @@ export function Navbar() {
                   ? 'bg-blue-600 text-white'
                   : 'bg-orange-500 text-white'
               }`}
-              title={!ENABLE_DB_MODE ? 'Database mode disabled (pilot demo)' : undefined}
+              title={!ENABLE_DB_MODE ? t('app.demoOnlyHint', { defaultValue: 'Database mode disabled (pilot demo)' }) : undefined}
             >
               {!ENABLE_DB_MODE ? (
                 <AlertCircle size={14} />
@@ -81,11 +83,11 @@ export function Navbar() {
                 <Beaker size={14} />
               )}
               <span>
-                {!ENABLE_DB_MODE ? 'Demo Only' : `Mode: ${mode}`}
+                {!ENABLE_DB_MODE ? t('app.demoOnly', { defaultValue: 'Demo Only' }) : t('app.modeLabel', { defaultValue: 'Mode: {{mode}}', mode })}
               </span>
               {!ENABLE_DB_MODE && (
                 <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50">
-                  Database mode disabled (pilot demo)
+                  {t('app.demoOnlyHint', { defaultValue: 'Database mode disabled (pilot demo)' })}
                 </div>
               )}
             </div>
@@ -94,7 +96,7 @@ export function Navbar() {
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors text-xs font-medium"
               >
-                {i18n.language === 'hi' ? 'हिंदी' : 'English'}
+                {i18n.language === 'hi' ? t('common.hindi', { defaultValue: 'हिंदी' }) : t('common.english', { defaultValue: 'English' })}
               </button>
               {showLangMenu && (
                 <>
@@ -109,7 +111,7 @@ export function Navbar() {
                         i18n.language === 'en' ? 'bg-[var(--nfi-primary)] text-white' : 'text-gray-700'
                       }`}
                     >
-                      English
+                      {t('common.english', { defaultValue: 'English' })}
                     </button>
                     <button
                       onClick={() => handleLanguageChange('hi')}
@@ -156,7 +158,7 @@ export function Navbar() {
                     {authState.activeUser.roles.length > 1 && (
                       <div className="py-2">
                         <p className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
-                          Switch Role
+                          {t('common.switchRole', { defaultValue: 'Switch Role' })}
                         </p>
                         {authState.activeUser.roles.map((role) => (
                           <button
@@ -179,7 +181,7 @@ export function Navbar() {
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                       >
                         <LogOut size={16} />
-                        Logout
+                        {t('login.logout')}
                       </button>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Menu, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface NavTab {
   id: string;
@@ -44,10 +45,11 @@ export function CaseDetailNav({ groups, activeTab, onChange }: Props) {
 }
 
 function MobileTrigger({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onOpen}
-      aria-label="Open navigation"
+      aria-label={t('common.openNavigation', { defaultValue: 'Open navigation' })}
       className="lg:hidden flex items-center justify-center w-9 h-9 bg-white border border-[#E5E7EB] rounded-lg text-[#156C78] hover:bg-gray-50 transition-colors"
     >
       <Menu size={18} />
@@ -62,6 +64,7 @@ function MobileDrawer({
   onChange,
   onClose,
 }: Props & { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <>
       <div
@@ -76,7 +79,9 @@ function MobileDrawer({
         }`}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E7EB]">
-          <span className="text-sm font-semibold text-[#111827]">Navigation</span>
+          <span className="text-sm font-semibold text-[#111827]">
+            {t('common.navigation', { defaultValue: 'Navigation' })}
+          </span>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 transition-colors">
             <X size={18} className="text-[#6B7280]" />
           </button>

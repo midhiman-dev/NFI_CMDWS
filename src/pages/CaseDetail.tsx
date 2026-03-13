@@ -35,6 +35,7 @@ import { type CaseWorkflowEvent, getHospitalDisplayStatus, getLatestRejectedEven
 import { formatDateTimeFriendly } from '../utils/dateFormat';
 import { FUNDING_CAMPAIGN_OPTIONS, FUNDING_PROGRAM_OPTIONS, toCurrency } from '../utils/fundingConfig';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
+import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -173,7 +174,7 @@ export function CaseDetail() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-[var(--nfi-text-secondary)]">Loading case...</p>
+          <p className="text-[var(--nfi-text-secondary)]">{t('case.loading', { defaultValue: 'Loading case...' })}</p>
         </div>
       </Layout>
     );
@@ -184,9 +185,9 @@ export function CaseDetail() {
       <Layout>
         <div className="max-w-2xl mx-auto">
           <NfiCard>
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-2">Access denied</h2>
-            <p className="text-[var(--nfi-text-secondary)] mb-4">You do not have access to this case.</p>
-            <NfiButton onClick={() => navigate(getDefaultRouteForAuth(authState))}>Go to home</NfiButton>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)] mb-2">{t('common.accessDenied')}</h2>
+            <p className="text-[var(--nfi-text-secondary)] mb-4">{t('case.noAccess', { defaultValue: 'You do not have access to this case.' })}</p>
+            <NfiButton onClick={() => navigate(getDefaultRouteForAuth(authState))}>{t('common.goHome')}</NfiButton>
           </NfiCard>
         </div>
       </Layout>
@@ -197,7 +198,7 @@ export function CaseDetail() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-[var(--nfi-text-secondary)]">Case not found</p>
+          <p className="text-[var(--nfi-text-secondary)]">{t('case.notFound', { defaultValue: 'Case not found' })}</p>
         </div>
       </Layout>
     );
@@ -208,8 +209,8 @@ export function CaseDetail() {
   const isHospitalReturnedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Returned';
 
   const caseDataTabs = [
-    { id: 'overview', label: 'Overview', icon: <FileText size={16} /> },
-    { id: 'intake', label: 'Intake Forms', icon: <FileText size={16} /> },
+    { id: 'overview', label: translateLiteral('Overview'), icon: <FileText size={16} /> },
+    { id: 'intake', label: t('case.intakeForms', { defaultValue: 'Intake Forms' }), icon: <FileText size={16} /> },
     ...(HIDE_LEGACY_CASE_DATA_TABS ? [] : [
       { id: 'beneficiary', label: 'Beneficiary', icon: <Baby size={16} /> },
       { id: 'family', label: 'Family', icon: <Users size={16} /> },
@@ -220,24 +221,24 @@ export function CaseDetail() {
 
   const navGroups: NavGroup[] = [
     {
-      heading: 'Case Data',
+      heading: t('case.dataHeading', { defaultValue: 'Case Data' }),
       tabs: caseDataTabs,
     },
     {
-      heading: 'Workflow',
+      heading: t('case.workflowHeading', { defaultValue: 'Workflow' }),
       tabs: [
-        { id: 'documents', label: 'Documents', icon: <Upload size={16} />, count: documents.length },
-        { id: 'doctor-review', label: 'Clinical Review', icon: <Stethoscope size={16} /> },
-        { id: 'verification', label: 'Verification', icon: <CheckCircle size={16} /> },
-        { id: 'approval', label: 'Approval', icon: <CheckCircle size={16} /> },
-        { id: 'workflow-extensions', label: 'Workflow Extensions', icon: <CheckCircle size={16} /> },
+        { id: 'documents', label: translateLiteral('Documents'), icon: <Upload size={16} />, count: documents.length },
+        { id: 'doctor-review', label: t('case.clinicalReview', { defaultValue: 'Clinical Review' }), icon: <Stethoscope size={16} /> },
+        { id: 'verification', label: translateLiteral('Verification'), icon: <CheckCircle size={16} /> },
+        { id: 'approval', label: translateLiteral('Approval'), icon: <CheckCircle size={16} /> },
+        { id: 'workflow-extensions', label: t('case.workflowExtensions', { defaultValue: 'Workflow Extensions' }), icon: <CheckCircle size={16} /> },
         ...(showPostApproval ? [
-          { id: 'settlement', label: 'Settlement & Closure', icon: <CheckCircle size={16} /> },
-          { id: 'installments', label: 'Installments', icon: <Clock size={16} /> },
-          { id: 'monitoring', label: 'Monitoring', icon: <Clock size={16} /> },
-          { id: 'followups', label: 'Follow-ups', icon: <Clock size={16} /> },
+          { id: 'settlement', label: t('case.settlementClosure', { defaultValue: 'Settlement & Closure' }), icon: <CheckCircle size={16} /> },
+          { id: 'installments', label: translateLiteral('Installments'), icon: <Clock size={16} /> },
+          { id: 'monitoring', label: translateLiteral('Monitoring'), icon: <Clock size={16} /> },
+          { id: 'followups', label: translateLiteral('Follow-ups'), icon: <Clock size={16} /> },
         ] : []),
-        { id: 'audit', label: 'Audit', icon: <FileText size={16} />, count: auditEvents.length },
+        { id: 'audit', label: translateLiteral('Audit'), icon: <FileText size={16} />, count: auditEvents.length },
       ],
     },
   ]
@@ -280,30 +281,30 @@ export function CaseDetail() {
 
         {isHospitalReturnedView && (
           <NfiCard className="bg-amber-50 border border-amber-200">
-            <h2 className="text-base font-semibold text-amber-900 mb-1">This case was returned for updates</h2>
+            <h2 className="text-base font-semibold text-amber-900 mb-1">{t('case.returnedBanner', { defaultValue: 'This case was returned for updates' })}</h2>
             {latestReturnEvent?.reason && (
-              <p className="text-sm text-amber-900 mb-2"><span className="font-medium">Reason:</span> {latestReturnEvent.reason}</p>
+              <p className="text-sm text-amber-900 mb-2"><span className="font-medium">{t('common.reason')}:</span> {latestReturnEvent.reason}</p>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-amber-800">
-              <p><span className="font-medium">Returned by:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
-              <p><span className="font-medium">When:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
-              <p><span className="font-medium">Stage:</span> {latestReturnEvent?.source || 'Verification'}</p>
+              <p><span className="font-medium">{t('common.returnedBy')}:</span> {latestReturnEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">{t('common.when')}:</span> {formatDateTimeFriendly(latestReturnEvent?.changedAt)}</p>
+              <p><span className="font-medium">{t('common.stage')}:</span> {latestReturnEvent?.source || 'Verification'}</p>
             </div>
           </NfiCard>
         )}
 
         {isHospitalRejectedView && (
           <NfiCard className="bg-red-50 border border-red-200">
-            <h2 className="text-base font-semibold text-red-900 mb-1">This case was rejected</h2>
+            <h2 className="text-base font-semibold text-red-900 mb-1">{t('case.rejectedBanner', { defaultValue: 'This case was rejected' })}</h2>
             {latestRejectedEvent?.reason && (
-              <p className="text-sm text-red-900 mb-2"><span className="font-medium">Reason:</span> {latestRejectedEvent.reason}</p>
+              <p className="text-sm text-red-900 mb-2"><span className="font-medium">{t('common.reason')}:</span> {latestRejectedEvent.reason}</p>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-red-800">
-              <p><span className="font-medium">Rejected by:</span> {latestRejectedEvent?.changedBy || 'N/A'}</p>
-              <p><span className="font-medium">When:</span> {formatDateTimeFriendly(latestRejectedEvent?.changedAt)}</p>
-              <p><span className="font-medium">Stage:</span> {latestRejectedEvent?.source || 'Committee'}</p>
+              <p><span className="font-medium">{t('common.rejectedBy')}:</span> {latestRejectedEvent?.changedBy || 'N/A'}</p>
+              <p><span className="font-medium">{t('common.when')}:</span> {formatDateTimeFriendly(latestRejectedEvent?.changedAt)}</p>
+              <p><span className="font-medium">{t('common.stage')}:</span> {latestRejectedEvent?.source || 'Committee'}</p>
             </div>
-            <p className="text-xs text-red-700 mt-2">Rejected cases are read-only for hospital users in the current workflow.</p>
+            <p className="text-xs text-red-700 mt-2">{t('case.rejectedReadonly', { defaultValue: 'Rejected cases are read-only for hospital users in the current workflow.' })}</p>
           </NfiCard>
         )}
 

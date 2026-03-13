@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { NfiCard } from '../../components/design-system/NfiCard';
@@ -27,6 +28,7 @@ import type { CaseWithDetails } from '../../data/providers/DataProvider';
 
 export function DailyMISPrograms() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { provider } = useAppContext();
   const { showToast } = useToast();
   const authState = getAuthState();
@@ -47,7 +49,7 @@ export function DailyMISPrograms() {
         setLastRefresh(new Date().toISOString());
       } catch (error) {
         console.error('Error loading Daily MIS Programs:', error);
-        showToast('Failed to load Daily MIS - Programs', 'error');
+        showToast(t('reports.loadFailed', { defaultValue: 'Failed to load Daily MIS - Programs' }), 'error');
       } finally {
         setLoading(false);
       }
@@ -126,11 +128,11 @@ export function DailyMISPrograms() {
         ),
         `Daily_MIS_Programs_${formatDownloadTimestamp()}`,
       );
-      showToast('Download started', 'success');
+      showToast(t('reports.downloadStarted', { defaultValue: 'Download started' }), 'success');
       navigate('/reports/runs');
     } catch (error) {
       console.error('Error exporting Daily MIS Programs:', error);
-      showToast('Failed to export report', 'error');
+      showToast(t('reports.exportFailed', { defaultValue: 'Failed to export report' }), 'error');
     } finally {
       setExporting(false);
     }
@@ -140,19 +142,19 @@ export function DailyMISPrograms() {
     <Layout>
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back to Reports">
+          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title={t('reports.backToReports', { defaultValue: 'Back to Reports' })}>
             <ArrowLeft size={20} className="text-[var(--nfi-text)]" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Daily MIS - Programs</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily operational MIS with case-event counts, pending workload, and lightweight funding visibility.</p>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.DAILY_MIS_PROGRAMS.title', { defaultValue: 'Daily MIS - Programs' })}</h1>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">{t('reports.surfaces.DAILY_MIS_PROGRAMS.subtitle', { defaultValue: 'Daily operational MIS with case-event counts, pending workload, and lightweight funding visibility.' })}</p>
           </div>
         </div>
 
         <NfiCard>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Date</label>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('common.date')}</label>
               <input
                 type="date"
                 value={selectedDate}
@@ -161,11 +163,11 @@ export function DailyMISPrograms() {
               />
             </div>
             <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Data as of</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{t('common.dataAsOf')}</p>
                 <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{formatMISDate(selectedDate)}</p>
               <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
                 <RefreshCw size={14} />
-                Last refresh: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
+                {t('common.lastRefresh')}: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
               </div>
             </div>
             <div className="flex items-end">
@@ -175,29 +177,29 @@ export function DailyMISPrograms() {
                 className="w-full px-4 py-2 bg-[var(--nfi-primary)] text-white rounded-lg hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 <Download size={16} />
-                {exporting ? 'Exporting...' : 'Export / Download'}
+                {exporting ? t('common.exporting', { defaultValue: 'Exporting...' }) : t('common.exportDownload', { defaultValue: 'Export / Download' })}
               </button>
             </div>
           </div>
         </NfiCard>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MisMetricCard label={MIS_KPI_LABELS.totalEnquires} value={summary.totalEnquires} />
-          <MisMetricCard label={MIS_KPI_LABELS.approvedCases} value={summary.approvedCases} />
-          <MisMetricCard label={MIS_KPI_LABELS.rejectedCases} value={summary.rejectedCases} />
-          <MisMetricCard label={MIS_KPI_LABELS.conversionRatio} value={`${summary.conversionRatio}%`} />
+          <MisMetricCard label={t('reports.kpis.totalEnquires', { defaultValue: MIS_KPI_LABELS.totalEnquires })} value={summary.totalEnquires} />
+          <MisMetricCard label={t('reports.kpis.approvedCases', { defaultValue: MIS_KPI_LABELS.approvedCases })} value={summary.approvedCases} />
+          <MisMetricCard label={t('reports.kpis.rejectedCases', { defaultValue: MIS_KPI_LABELS.rejectedCases })} value={summary.rejectedCases} />
+          <MisMetricCard label={t('reports.kpis.conversionRatio', { defaultValue: MIS_KPI_LABELS.conversionRatio })} value={`${summary.conversionRatio}%`} />
         </div>
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Operational Grid</h2>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.daily.gridTitle', { defaultValue: 'Operational Grid' })}</h2>
             <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Counts are tied to case activity on the selected date and grouped into daily program buckets.</p>
           </div>
 
           {loading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
-              <p className="text-[var(--nfi-text-secondary)]">Loading data...</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('common.loadingData')}</p>
             </div>
           ) : rows.length === 0 ? (
             <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No daily program activity found for the selected date.</div>

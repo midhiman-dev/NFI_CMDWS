@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/layout/Layout';
 import { NfiBadge } from '../components/design-system/NfiBadge';
 import { NfiCard } from '../components/design-system/NfiCard';
@@ -12,6 +13,7 @@ import type { ReportRun } from '../types';
 
 export function Reports() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const authState = getAuthState();
@@ -25,7 +27,7 @@ export function Reports() {
         setRuns(await provider.listReportRuns(undefined, 100));
       } catch (error) {
         console.error('Error loading reports:', error);
-        showToast('Failed to load reports', 'error');
+        showToast(t('reports.loadFailed', { defaultValue: 'Failed to load reports' }), 'error');
       } finally {
         setLoading(false);
       }
@@ -46,16 +48,16 @@ export function Reports() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">NFI MIS Reports</h1>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.title')}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">
-              Daily and monthly MIS surfaces aligned to NFI reporting templates and donor-safe access.
+              {t('reports.subtitle')}
             </p>
           </div>
           <button
             onClick={() => navigate('/reports/runs')}
             className="px-4 py-2 bg-[var(--nfi-primary)] text-white rounded-lg hover:bg-[var(--nfi-primary-dark)] transition-colors"
           >
-            View Run History
+            {t('reports.viewRunHistory')}
           </button>
         </div>
 
@@ -93,7 +95,7 @@ export function Reports() {
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">MIS Surfaces</h2>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.misSurfaces')}</h2>
             <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
               Old generic report names are retired from the primary UI. Use these MIS-aligned views instead.
             </p>
@@ -107,10 +109,14 @@ export function Reports() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold text-[var(--nfi-text)]">{surface.title}</h3>
-                    <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">{surface.subtitle}</p>
+                    <h3 className="font-semibold text-[var(--nfi-text)]">
+                      {t(`reports.surfaces.${surface.code}.title`, { defaultValue: surface.title })}
+                    </h3>
+                    <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+                      {t(`reports.surfaces.${surface.code}.subtitle`, { defaultValue: surface.subtitle })}
+                    </p>
                   </div>
-                  <NfiBadge tone="status">{surface.cadence}</NfiBadge>
+                  <NfiBadge tone="status">{t(`reports.surfaces.${surface.code}.cadence`, { defaultValue: surface.cadence })}</NfiBadge>
                 </div>
               </button>
             ))}
@@ -120,7 +126,7 @@ export function Reports() {
         <NfiCard>
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Recent Report Runs</h2>
+              <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.recentRuns')}</h2>
               <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
                 Run history is preserved for traceability while exports remain screen-driven in this prototype slice.
               </p>
@@ -130,21 +136,21 @@ export function Reports() {
           {loading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
-              <p className="text-[var(--nfi-text-secondary)]">Loading report runs...</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('reports.loadingRuns')}</p>
             </div>
           ) : recentRuns.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-[var(--nfi-text-secondary)]">No report runs yet. Export any MIS screen to create the first run.</p>
+              <p className="text-[var(--nfi-text-secondary)]">{t('reports.noRuns')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--nfi-border)]">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Template</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Data As Of</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Generated At</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.template')}</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('common.status')}</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('common.dataAsOf')}</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">{t('reports.generatedAt')}</th>
                   </tr>
                 </thead>
                 <tbody>

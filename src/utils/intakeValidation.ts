@@ -1,5 +1,6 @@
 import { IntakeFundApplication, IntakeInterimSummary } from '../types';
 import { isPresentFieldValue } from './fieldValue';
+import i18next from '../i18n';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -216,7 +217,10 @@ const INTERIM_FIELD_LABELS: Record<string, string> = {
 };
 
 function buildErrorMessage(fieldName: string, labels: Record<string, string>): string {
-  return `${labels[fieldName] || fieldName} is required`;
+  return i18next.t('validation.requiredField', {
+    defaultValue: '{{field}} is required',
+    field: labels[fieldName] || fieldName,
+  });
 }
 
 function hasIncomeProofSelection(section: any): boolean {
