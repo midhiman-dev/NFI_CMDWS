@@ -1,28 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
-import { NfiCard } from '../components/design-system/NfiCard';
 import { NfiBadge } from '../components/design-system/NfiBadge';
-import { UserRole } from '../types';
+import { NfiCard } from '../components/design-system/NfiCard';
+import type { CaseWithDetails } from '../data/providers/DataProvider';
+import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
+import { useAppContext } from '../App';
+import { getHospitalDisplayStatus, listCaseWorkflowEvents } from '../utils/caseWorkflow';
+import { getAuthState } from '../utils/auth';
+import { filterCasesForAuth } from '../utils/roleAccess';
+import { normalizeSeparator } from '../utils/textNormalize';
+import { MIS_KPI_LABELS, calculateConversionRatio } from '../utils/misReporting';
+import type { CaseStatus, UserRole } from '../types';
 import {
-  FileText,
-  Clock,
-  CheckCircle,
-  XCircle,
   AlertCircle,
+  AlertTriangle,
+  Building2,
+  CheckCircle,
+  Clock,
+  FileText,
+  Heart,
   TrendingUp,
   Users,
-  Building2,
-  Heart,
-  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
-import { getAuthState } from '../utils/auth';
-import { useAppContext } from '../App';
-import { CASE_SUBTITLE_SEPARATOR } from '../constants/ui';
-import { normalizeSeparator } from '../utils/textNormalize';
-import { getHospitalDisplayStatus, listCaseWorkflowEvents } from '../utils/caseWorkflow';
-import type { CaseWithDetails } from '../data/providers/DataProvider';
-import type { CaseStatus } from '../types';
 
 interface DashboardCase extends CaseWithDetails {
   displayStatus: CaseStatus;
@@ -31,10 +32,11 @@ interface DashboardCase extends CaseWithDetails {
 export function Dashboard() {
   const navigate = useNavigate();
   const { provider, mode } = useAppContext();
+  const authState = getAuthState();
+  const authScopeKey = `${authState.activeRole || 'none'}:${authState.activeUser?.userId || 'anon'}:${authState.activeUser?.hospitalId || 'all'}`;
   const [cases, setCases] = useState<DashboardCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const authState = getAuthState();
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -45,7 +47,8 @@ export function Dashboard() {
       try {
         setError(null);
         const casesData = await provider.listCases();
-        const withDisplayStatus: DashboardCase[] = casesData.map((c) => ({
+        const scopedCases = filterCasesForAuth(authState, casesData);
+        const withDisplayStatus: DashboardCase[] = scopedCases.map((c) => ({
           ...c,
           displayStatus: getHospitalDisplayStatus(c.caseStatus, listCaseWorkflowEvents(c.caseId)),
         }));
@@ -64,10 +67,24 @@ export function Dashboard() {
     };
 
     loadData();
-    return () => { cancelled = true; };
-  }, [provider]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authScopeKey, provider]);
 
   const queueMetrics = getRoleQueueMetrics(authState.activeRole || 'admin', cases);
+  const misMetrics = useMemo(() => {
+    const totalEnquires = cases.length;
+    const approvedCases = cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed' || c.caseStatus === 'Approved').length;
+    const rejectedCases = cases.filter((c) => c.displayStatus === 'Rejected' || c.caseStatus === 'Rejected').length;
+    return [
+      { label: MIS_KPI_LABELS.totalEnquires, value: totalEnquires, color: 'bg-slate-50', icon: <FileText className="text-slate-700" size={24} /> },
+      { label: MIS_KPI_LABELS.approvedCases, value: approvedCases, color: 'bg-emerald-50', icon: <CheckCircle className="text-emerald-700" size={24} /> },
+      { label: MIS_KPI_LABELS.rejectedCases, value: rejectedCases, color: 'bg-rose-50', icon: <XCircle className="text-rose-700" size={24} /> },
+      { label: MIS_KPI_LABELS.conversionRatio, value: `${calculateConversionRatio(approvedCases, totalEnquires)}%`, color: 'bg-blue-50', icon: <TrendingUp className="text-blue-700" size={24} /> },
+    ];
+  }, [cases]);
+
   const getCaseOpenPath = (caseItem: DashboardCase) => {
     if (authState.activeRole === 'hospital_spoc' && (caseItem.displayStatus === 'Draft' || caseItem.displayStatus === 'Returned')) {
       return `/cases/${caseItem.caseId}/wizard`;
@@ -100,9 +117,7 @@ export function Dashboard() {
               Welcome back, {authState.activeUser?.fullName || 'User'}
             </p>
           </div>
-          {mode === 'DEMO' && (
-            <NfiBadge tone="warning">Demo Mode</NfiBadge>
-          )}
+          {mode === 'DEMO' && <NfiBadge tone="warning">Demo Mode</NfiBadge>}
         </div>
 
         {error && (
@@ -113,6 +128,32 @@ export function Dashboard() {
             </div>
           </NfiCard>
         )}
+
+        <div>
+          <div className="flex items-center justify-between mb-3 gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--nfi-text)]">MIS Snapshot</h2>
+              <p className="text-sm text-[var(--nfi-text-secondary)]">Core NFI KPI labels replacing the old generic dashboard summaries.</p>
+            </div>
+            <button
+              onClick={() => navigate('/reports')}
+              className="px-3 py-2 text-sm border border-[var(--nfi-border)] rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Open MIS Reports
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {misMetrics.map((metric) => (
+              <QueueCard
+                key={metric.label}
+                icon={metric.icon}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+              />
+            ))}
+          </div>
+        </div>
 
         <div>
           <h2 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">My Queue</h2>
@@ -174,13 +215,11 @@ export function Dashboard() {
                     </div>
                     <p className="text-sm text-[var(--nfi-text-secondary)]">
                       {normalizeSeparator(
-                        `${c.childName ? `${c.childName}${CASE_SUBTITLE_SEPARATOR}` : ''}${c.hospitalName || 'Unknown Hospital'}${CASE_SUBTITLE_SEPARATOR}${c.processType}`
+                        `${c.childName ? `${c.childName}${CASE_SUBTITLE_SEPARATOR}` : ''}${c.hospitalName || 'Unknown Hospital'}${CASE_SUBTITLE_SEPARATOR}${c.processType}`,
                       )}
                     </p>
                   </div>
-                  <p className="text-xs text-[var(--nfi-text-secondary)]">
-                    {new Date(c.updatedAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{new Date(c.updatedAt).toLocaleDateString()}</p>
                 </div>
               ))}
             </div>
@@ -193,13 +232,19 @@ export function Dashboard() {
 
 function getStatusTone(status: string): 'success' | 'warning' | 'error' | 'status' | 'neutral' {
   switch (status) {
-    case 'Approved': return 'success';
+    case 'Approved':
+      return 'success';
     case 'Under_Verification':
-    case 'Under_Review': return 'warning';
-    case 'Returned': return 'warning';
-    case 'Rejected': return 'error';
-    case 'Submitted': return 'status';
-    default: return 'neutral';
+    case 'Under_Review':
+      return 'warning';
+    case 'Returned':
+      return 'warning';
+    case 'Rejected':
+      return 'error';
+    case 'Submitted':
+      return 'status';
+    default:
+      return 'neutral';
   }
 }
 
@@ -207,111 +252,39 @@ function getRoleQueueMetrics(role: UserRole, cases: DashboardCase[]) {
   switch (role) {
     case 'hospital_spoc':
       return [
-        {
-          label: 'Draft Cases',
-          value: cases.filter((c) => c.displayStatus === 'Draft').length,
-          icon: <FileText className="text-gray-600" size={24} />,
-          color: 'bg-gray-50',
-          onClick: '/cases?status=Draft',
-        },
-        {
-          label: 'Submitted',
-          value: cases.filter((c) => c.displayStatus === 'Submitted').length,
-          icon: <TrendingUp className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-          onClick: '/cases?status=Submitted',
-        },
-        {
-          label: 'Returned',
-          value: cases.filter((c) => c.displayStatus === 'Returned').length,
-          icon: <AlertCircle className="text-yellow-600" size={24} />,
-          color: 'bg-yellow-50',
-          onClick: '/cases?status=Returned',
-        },
-        {
-          label: 'Rejected',
-          value: cases.filter((c) => c.displayStatus === 'Rejected').length,
-          icon: <XCircle className="text-red-600" size={24} />,
-          color: 'bg-red-50',
-          onClick: '/cases?status=Rejected',
-        },
-        {
-          label: 'Approved',
-          value: cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-        },
+        { label: 'Draft Cases', value: cases.filter((c) => c.displayStatus === 'Draft').length, icon: <FileText className="text-gray-600" size={24} />, color: 'bg-gray-50', onClick: '/cases?status=Draft' },
+        { label: 'Submitted', value: cases.filter((c) => c.displayStatus === 'Submitted').length, icon: <TrendingUp className="text-blue-600" size={24} />, color: 'bg-blue-50', onClick: '/cases?status=Submitted' },
+        { label: 'Returned', value: cases.filter((c) => c.displayStatus === 'Returned').length, icon: <AlertCircle className="text-yellow-600" size={24} />, color: 'bg-yellow-50', onClick: '/cases?status=Returned' },
+        { label: 'Rejected', value: cases.filter((c) => c.displayStatus === 'Rejected').length, icon: <XCircle className="text-red-600" size={24} />, color: 'bg-red-50', onClick: '/cases?status=Rejected' },
+        { label: 'Approved', value: cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
       ];
-
     case 'clinical':
       return [
-        {
-          label: 'Total Cases',
-          value: cases.length,
-          icon: <FileText className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Active Cases',
-          value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length,
-          icon: <TrendingUp className="text-teal-600" size={24} />,
-          color: 'bg-teal-50',
-          onClick: '/cases',
-        },
+        { label: 'Total Cases', value: cases.length, icon: <FileText className="text-blue-600" size={24} />, color: 'bg-blue-50', onClick: '/cases' },
+        { label: 'Active Cases', value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length, icon: <TrendingUp className="text-teal-600" size={24} />, color: 'bg-teal-50', onClick: '/cases' },
+        { label: 'Approved', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Rejected', value: cases.filter((c) => c.caseStatus === 'Rejected').length, icon: <XCircle className="text-red-600" size={24} />, color: 'bg-red-50' },
       ];
-
+    case 'clinical_reviewer':
+    case 'hospital_doctor':
+      return [
+        { label: 'Under Review', value: cases.filter((c) => c.caseStatus === 'Under_Review').length, icon: <Clock className="text-orange-600" size={24} />, color: 'bg-orange-50', onClick: '/cases' },
+        { label: 'Approved', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Rejected', value: cases.filter((c) => c.caseStatus === 'Rejected').length, icon: <XCircle className="text-red-600" size={24} />, color: 'bg-red-50' },
+        { label: 'Open Cases', value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length, icon: <TrendingUp className="text-blue-600" size={24} />, color: 'bg-blue-50' },
+      ];
     case 'verifier':
       return [
-        {
-          label: 'Submitted',
-          value: cases.filter((c) => c.caseStatus === 'Submitted').length,
-          icon: <FileText className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Under Verification',
-          value: cases.filter((c) => c.caseStatus === 'Under_Verification').length,
-          icon: <Clock className="text-yellow-600" size={24} />,
-          color: 'bg-yellow-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Verified',
-          value: cases.filter((c) => c.caseStatus === 'Under_Review').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-        },
-        {
-          label: 'Total Active',
-          value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length,
-          icon: <TrendingUp className="text-teal-600" size={24} />,
-          color: 'bg-teal-50',
-        },
+        { label: 'Submitted', value: cases.filter((c) => c.caseStatus === 'Submitted').length, icon: <FileText className="text-blue-600" size={24} />, color: 'bg-blue-50', onClick: '/cases' },
+        { label: 'Under Verification', value: cases.filter((c) => c.caseStatus === 'Under_Verification').length, icon: <Clock className="text-yellow-600" size={24} />, color: 'bg-yellow-50', onClick: '/cases' },
+        { label: 'Verified', value: cases.filter((c) => c.caseStatus === 'Under_Review').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Total Active', value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length, icon: <TrendingUp className="text-teal-600" size={24} />, color: 'bg-teal-50' },
       ];
-
     case 'committee_member':
       return [
-        {
-          label: 'Pending Decision',
-          value: cases.filter((c) => c.caseStatus === 'Under_Review').length,
-          icon: <AlertCircle className="text-orange-600" size={24} />,
-          color: 'bg-orange-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Approved',
-          value: cases.filter((c) => c.caseStatus === 'Approved').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-        },
-        {
-          label: 'Rejected',
-          value: cases.filter((c) => c.caseStatus === 'Rejected').length,
-          icon: <XCircle className="text-red-600" size={24} />,
-          color: 'bg-red-50',
-        },
+        { label: 'Pending Decision', value: cases.filter((c) => c.caseStatus === 'Under_Review').length, icon: <AlertCircle className="text-orange-600" size={24} />, color: 'bg-orange-50', onClick: '/cases' },
+        { label: 'Approved', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Rejected', value: cases.filter((c) => c.caseStatus === 'Rejected').length, icon: <XCircle className="text-red-600" size={24} />, color: 'bg-red-50' },
         {
           label: 'This Month',
           value: cases.filter((c) => {
@@ -323,93 +296,27 @@ function getRoleQueueMetrics(role: UserRole, cases: DashboardCase[]) {
           color: 'bg-blue-50',
         },
       ];
-
     case 'accounts':
       return [
-        {
-          label: 'Approved (Pending Payment)',
-          value: cases.filter((c) => c.caseStatus === 'Approved').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Total Cases',
-          value: cases.length,
-          icon: <FileText className="text-gray-600" size={24} />,
-          color: 'bg-gray-50',
-        },
-        {
-          label: 'Active',
-          value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length,
-          icon: <CheckCircle className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-        },
-        {
-          label: 'Rejected',
-          value: cases.filter((c) => c.caseStatus === 'Rejected').length,
-          icon: <XCircle className="text-red-600" size={24} />,
-          color: 'bg-red-50',
-        },
+        { label: 'Approved (Pending Payment)', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50', onClick: '/cases' },
+        { label: 'Finance Queue', value: cases.filter((c) => ['Approved', 'Rejected'].includes(c.caseStatus)).length, icon: <FileText className="text-gray-600" size={24} />, color: 'bg-gray-50' },
+        { label: 'Active', value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length, icon: <CheckCircle className="text-blue-600" size={24} />, color: 'bg-blue-50' },
+        { label: 'Rejected', value: cases.filter((c) => c.caseStatus === 'Rejected').length, icon: <XCircle className="text-red-600" size={24} />, color: 'bg-red-50' },
       ];
-
     case 'beni_volunteer':
       return [
-        {
-          label: 'Active Monitoring',
-          value: cases.filter((c) => c.caseStatus === 'Approved' || c.caseStatus === 'Closed').length,
-          icon: <Heart className="text-pink-600" size={24} />,
-          color: 'bg-pink-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Total Cases',
-          value: cases.length,
-          icon: <TrendingUp className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-        },
-        {
-          label: 'Approved',
-          value: cases.filter((c) => c.caseStatus === 'Approved').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-        },
-        {
-          label: 'Under Review',
-          value: cases.filter((c) => c.caseStatus === 'Under_Review').length,
-          icon: <Clock className="text-orange-600" size={24} />,
-          color: 'bg-orange-50',
-        },
+        { label: 'Active Monitoring', value: cases.filter((c) => c.caseStatus === 'Approved' || c.caseStatus === 'Closed').length, icon: <Heart className="text-pink-600" size={24} />, color: 'bg-pink-50', onClick: '/cases' },
+        { label: 'Total Cases', value: cases.length, icon: <TrendingUp className="text-blue-600" size={24} />, color: 'bg-blue-50' },
+        { label: 'Approved', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Under Review', value: cases.filter((c) => c.caseStatus === 'Under_Review').length, icon: <Clock className="text-orange-600" size={24} />, color: 'bg-orange-50' },
       ];
-
     case 'admin':
     default:
       return [
-        {
-          label: 'Total Cases',
-          value: cases.length,
-          icon: <FileText className="text-teal-600" size={24} />,
-          color: 'bg-teal-50',
-          onClick: '/cases',
-        },
-        {
-          label: 'Active',
-          value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length,
-          icon: <TrendingUp className="text-blue-600" size={24} />,
-          color: 'bg-blue-50',
-        },
-        {
-          label: 'Approved',
-          value: cases.filter((c) => c.caseStatus === 'Approved').length,
-          icon: <CheckCircle className="text-green-600" size={24} />,
-          color: 'bg-green-50',
-        },
-        {
-          label: 'Pending Review',
-          value: cases.filter((c) => c.caseStatus === 'Under_Review').length,
-          icon: <Clock className="text-orange-600" size={24} />,
-          color: 'bg-orange-50',
-        },
+        { label: 'Total Cases', value: cases.length, icon: <FileText className="text-teal-600" size={24} />, color: 'bg-teal-50', onClick: '/cases' },
+        { label: 'Active', value: cases.filter((c) => !['Closed', 'Rejected'].includes(c.caseStatus)).length, icon: <TrendingUp className="text-blue-600" size={24} />, color: 'bg-blue-50' },
+        { label: 'Approved', value: cases.filter((c) => c.caseStatus === 'Approved').length, icon: <CheckCircle className="text-green-600" size={24} />, color: 'bg-green-50' },
+        { label: 'Pending Review', value: cases.filter((c) => c.caseStatus === 'Under_Review').length, icon: <Clock className="text-orange-600" size={24} />, color: 'bg-orange-50' },
       ];
   }
 }
@@ -423,15 +330,12 @@ function QueueCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number;
+  value: number | string;
   color: string;
   onClick?: () => void;
 }) {
   return (
-    <NfiCard
-      className={`${color} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
-      padding="sm"
-    >
+    <NfiCard className={`${color} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} padding="sm">
       <div className="flex items-center gap-3" onClick={onClick}>
         <div className="p-2 bg-white rounded-lg">{icon}</div>
         <div>

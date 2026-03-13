@@ -7,6 +7,7 @@ import { Download, Clock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-rea
 import { useToast } from '../components/design-system/Toast';
 import { useAppContext } from '../App';
 import type { ReportRun } from '../types';
+import { formatMISDate, formatMISDateTime } from '../utils/misReporting';
 
 export function ReportRuns() {
   const navigate = useNavigate();
@@ -69,8 +70,8 @@ export function ReportRuns() {
       run.status,
       formatParameters(run.filters),
       run.dataAsOf || '',
-      run.generatedAt ? new Date(run.generatedAt).toLocaleString() : '',
-      new Date(run.createdAt).toLocaleString(),
+      run.generatedAt ? formatMISDateTime(run.generatedAt) : '',
+      formatMISDateTime(run.createdAt),
     ];
 
     const csvContent = [
@@ -176,7 +177,6 @@ export function ReportRuns() {
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium text-[var(--nfi-text)]">{run.templateName}</p>
-                            <p className="text-xs text-[var(--nfi-text-secondary)]">{run.templateCode}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-[var(--nfi-text-secondary)] text-sm">
@@ -191,10 +191,10 @@ export function ReportRuns() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-[var(--nfi-text-secondary)] text-sm">
-                          {run.generatedAt ? new Date(run.generatedAt).toLocaleString() : '-'}
+                          {run.generatedAt ? formatMISDateTime(run.generatedAt) : '-'}
                         </td>
                         <td className="py-3 px-4 text-[var(--nfi-text-secondary)] text-sm">
-                          {run.dataAsOf ? new Date(run.dataAsOf).toLocaleDateString() : '-'}
+                          {run.dataAsOf ? formatMISDate(run.dataAsOf) : '-'}
                         </td>
                         <td className="py-3 px-4">
                           <button

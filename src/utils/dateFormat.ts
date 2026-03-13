@@ -29,6 +29,16 @@ export function formatDateDMY(value: string | Date | null | undefined): string {
   return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()}`;
 }
 
+export function formatDateFriendly(value: string | Date | null | undefined): string {
+  const d = parseFlexibleDate(value);
+  if (!d) return '\u2014';
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function formatDateTimeDMY(value: string | Date | null | undefined): string {
   const d = parseFlexibleDate(value);
   if (!d) return '\u2014';

@@ -1,238 +1,183 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { NfiCard } from '../../components/design-system/NfiCard';
-import { Download, ArrowLeft } from 'lucide-react';
 import { useToast } from '../../components/design-system/Toast';
 import { useAppContext } from '../../App';
-
-interface LeadershipData {
-  district: string;
-  totalBeneficiaries: number;
-  casesProcessed: number;
-  casesApproved: number;
-  casesRejected: number;
-  avgApprovalTime: number;
-  totalFundsUtilized: number;
-  utilizationRate: number;
-}
-
-const sampleData: LeadershipData[] = [
-  {
-    district: 'District A',
-    totalBeneficiaries: 1250,
-    casesProcessed: 385,
-    casesApproved: 348,
-    casesRejected: 37,
-    avgApprovalTime: 2.1,
-    totalFundsUtilized: 8540000,
-    utilizationRate: 85.4,
-  },
-  {
-    district: 'District B',
-    totalBeneficiaries: 980,
-    casesProcessed: 298,
-    casesApproved: 267,
-    casesRejected: 31,
-    avgApprovalTime: 2.4,
-    totalFundsUtilized: 6230000,
-    utilizationRate: 82.3,
-  },
-  {
-    district: 'District C',
-    totalBeneficiaries: 1540,
-    casesProcessed: 469,
-    casesApproved: 425,
-    casesRejected: 44,
-    avgApprovalTime: 1.9,
-    totalFundsUtilized: 9850000,
-    utilizationRate: 88.5,
-  },
-  {
-    district: 'District D',
-    totalBeneficiaries: 740,
-    casesProcessed: 225,
-    casesApproved: 198,
-    casesRejected: 27,
-    avgApprovalTime: 2.6,
-    totalFundsUtilized: 4120000,
-    utilizationRate: 79.2,
-  },
-  {
-    district: 'District E',
-    totalBeneficiaries: 1120,
-    casesProcessed: 340,
-    casesApproved: 306,
-    casesRejected: 34,
-    avgApprovalTime: 2.2,
-    totalFundsUtilized: 7640000,
-    utilizationRate: 84.6,
-  },
-  {
-    district: 'District F',
-    totalBeneficiaries: 890,
-    casesProcessed: 272,
-    casesApproved: 242,
-    casesRejected: 30,
-    avgApprovalTime: 2.3,
-    totalFundsUtilized: 5890000,
-    utilizationRate: 81.2,
-  },
-  {
-    district: 'District G',
-    totalBeneficiaries: 1360,
-    casesProcessed: 415,
-    casesApproved: 378,
-    casesRejected: 37,
-    avgApprovalTime: 2.0,
-    totalFundsUtilized: 8920000,
-    utilizationRate: 87.1,
-  },
-];
+import { getAuthState } from '../../utils/auth';
+import { filterCasesForAuth } from '../../utils/roleAccess';
+import {
+  FISCAL_YEAR_OPTIONS,
+  LEADERSHIP_MIS_DEMO_ROWS,
+  MIS_KPI_LABELS,
+  MIS_DEMO_FISCAL_YEAR,
+  MIS_DEMO_LAST_REFRESH,
+  MIS_DEMO_MONTH,
+  MONTH_OPTIONS,
+  calculateConversionRatio,
+  downloadCSV,
+  formatCurrencyCompact,
+  formatDownloadTimestamp,
+  formatMISDateTime,
+  isDemoLeadershipPeriod,
+  sameMonth,
+  toCSV,
+  type LeadershipRow,
+} from '../../utils/misReporting';
+import type { CaseWithDetails } from '../../data/providers/DataProvider';
 
 export function LeadershipMonthly() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const { provider } = useAppContext();
-  const [selectedFY, setSelectedFY] = useState<string>('2024-25');
-  const [selectedMonth, setSelectedMonth] = useState<string>('12');
-  const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
+  const authState = getAuthState();
+  const authScopeKey = `${authState.activeRole || 'none'}:${authState.activeUser?.userId || 'anon'}:${authState.activeUser?.hospitalId || 'all'}`;
+  const [cases, setCases] = useState<CaseWithDetails[]>([]);
+  const [selectedFY, setSelectedFY] = useState<string>(MIS_DEMO_FISCAL_YEAR);
+  const [selectedMonth, setSelectedMonth] = useState<string>(MIS_DEMO_MONTH);
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const dataAsOf = new Date(2024, 11, 15);
+  const [lastRefresh, setLastRefresh] = useState<string>(new Date().toISOString());
 
-  const formatDownloadTimestamp = () => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}_${hh}${min}`;
-  };
+  useEffect(() => {
+    const loadCases = async () => {
+      try {
+        setLoading(true);
+        const allCases = await provider.listCases();
+        const scopedCases = filterCasesForAuth(authState, allCases);
+        setCases(scopedCases);
+        setLastRefresh(new Date().toISOString());
+      } catch (error) {
+        console.error('Error loading Leadership MIS:', error);
+        showToast('Failed to load Monthly MIS - Leadership Team', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCases();
+  }, [authScopeKey, provider, showToast]);
+
+  const filteredCases = useMemo(
+    () => cases.filter((item) => sameMonth(item.intakeDate, selectedFY, selectedMonth)),
+    [cases, selectedFY, selectedMonth],
+  );
+
+  const liveRows = useMemo<LeadershipRow[]>(() => {
+    const grouped = new Map<string, LeadershipRow>();
+    filteredCases.forEach((item) => {
+      const key = item.hospitalName || 'Unassigned Unit';
+      const current = grouped.get(key) || {
+        orgUnit: key,
+        totalEnquires: 0,
+        approvedCases: 0,
+        rejectedCases: 0,
+        approvedValue: 0,
+      };
+      current.totalEnquires += 1;
+      if (item.caseStatus === 'Approved' || item.caseStatus === 'Closed') current.approvedCases += 1;
+      if (item.caseStatus === 'Rejected') current.rejectedCases += 1;
+      current.approvedValue += item.approvedAmount || 0;
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.values()).sort((a, b) => b.totalEnquires - a.totalEnquires);
+  }, [filteredCases]);
+
+  const rows = useMemo(
+    () => (liveRows.length > 0 ? liveRows : isDemoLeadershipPeriod(selectedFY, selectedMonth) ? LEADERSHIP_MIS_DEMO_ROWS : []),
+    [liveRows, selectedFY, selectedMonth],
+  );
+
+  const summary = useMemo(() => {
+    const totalEnquires = rows.reduce((sum, row) => sum + row.totalEnquires, 0);
+    const approvedCases = rows.reduce((sum, row) => sum + row.approvedCases, 0);
+    const rejectedCases = rows.reduce((sum, row) => sum + row.rejectedCases, 0);
+    return {
+      totalEnquires,
+      approvedCases,
+      rejectedCases,
+      conversionRatio: calculateConversionRatio(approvedCases, totalEnquires),
+    };
+  }, [rows]);
 
   const handleExport = async () => {
     try {
       setExporting(true);
       await provider.createReportRun({
         templateId: 'leadership-monthly',
-        templateCode: 'LEADERSHIP_MONTHLY',
-        templateName: 'Leadership Monthly',
+        templateCode: 'MONTHLY_MIS_LEADERSHIP',
+        templateName: 'Monthly MIS - Leadership Team',
         filters: {
           fiscalYear: selectedFY,
-          month: parseInt(selectedMonth),
+          month: Number(selectedMonth),
         },
-        dataAsOf,
+        dataAsOf: new Date(`${selectedFY.slice(0, 4)}-${selectedMonth.padStart(2, '0')}-01`),
       });
-
-      const csv = generateCSV(sampleData);
-      downloadCSV(csv, `Leadership_Monthly_${formatDownloadTimestamp()}`);
+      downloadCSV(
+        toCSV(
+          ['District / Org Unit', MIS_KPI_LABELS.totalEnquires, MIS_KPI_LABELS.approvedCases, MIS_KPI_LABELS.rejectedCases, MIS_KPI_LABELS.conversionRatio, 'Approved Value'],
+          rows.map((row) => [
+            row.orgUnit,
+            row.totalEnquires,
+            row.approvedCases,
+            row.rejectedCases,
+            `${calculateConversionRatio(row.approvedCases, row.totalEnquires)}%`,
+            row.approvedValue,
+          ]),
+        ),
+        `Leadership_Monthly_MIS_${formatDownloadTimestamp()}`,
+      );
       showToast('Download started', 'success');
       navigate('/reports/runs');
     } catch (error) {
-      console.error('Error exporting report:', error);
+      console.error('Error exporting Leadership MIS:', error);
       showToast('Failed to export report', 'error');
     } finally {
       setExporting(false);
     }
   };
 
-  const generateCSV = (data: LeadershipData[]): string => {
-    const headers = [
-      'District',
-      'Total Beneficiaries',
-      'Cases Processed',
-      'Cases Approved',
-      'Cases Rejected',
-      'Avg Approval Time (Days)',
-      'Total Funds Utilized',
-      'Utilization Rate %',
-    ];
-    const rows = data.map(row => [
-      row.district,
-      row.totalBeneficiaries,
-      row.casesProcessed,
-      row.casesApproved,
-      row.casesRejected,
-      row.avgApprovalTime,
-      row.totalFundsUtilized,
-      row.utilizationRate,
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
-    ].join('\n');
-
-    return csvContent;
-  };
-
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <Layout>
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/reports')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Back to Reports"
-          >
+          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back to Reports">
             <ArrowLeft size={20} className="text-[var(--nfi-text)]" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Leadership Monthly</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">District-level program performance summary</p>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Monthly MIS - Leadership Team</h1>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Donor-safe monthly rollup with aggregate-only KPIs for leadership review.</p>
           </div>
         </div>
 
         <NfiCard>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">
-                Fiscal Year
-              </label>
-              <select
-                value={selectedFY}
-                onChange={(e) => setSelectedFY(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]"
-              >
-                <option value="2024-25">FY 2024-25</option>
-                <option value="2023-24">FY 2023-24</option>
-                <option value="2022-23">FY 2022-23</option>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Fiscal Year</label>
+              <select value={selectedFY} onChange={(e) => setSelectedFY(e.target.value)} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]">
+                {FISCAL_YEAR_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">
-                Month
-              </label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]"
-              >
-                <option value="1">January</option>
-                <option value="2">February</option>
-                <option value="3">March</option>
-                <option value="4">April</option>
-                <option value="5">May</option>
-                <option value="6">June</option>
-                <option value="7">July</option>
-                <option value="8">August</option>
-                <option value="9">September</option>
-                <option value="10">October</option>
-                <option value="11">November</option>
-                <option value="12">December</option>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Month</label>
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]">
+                {MONTH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
+            </div>
+            <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Data as of</p>
+              <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">
+                {MONTH_OPTIONS.find((option) => option.value === selectedMonth)?.label} {selectedFY}
+              </p>
+              <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
+                <RefreshCw size={14} />
+                Last refresh: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
+              </div>
             </div>
             <div className="flex items-end">
               <button
@@ -241,13 +186,23 @@ export function LeadershipMonthly() {
                 className="w-full px-4 py-2 bg-[var(--nfi-primary)] text-white rounded-lg hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 <Download size={16} />
-                {exporting ? 'Exporting...' : 'Export & Download'}
+                {exporting ? 'Exporting...' : 'Export / Download'}
               </button>
             </div>
           </div>
+        </NfiCard>
 
-          <div className="text-sm text-[var(--nfi-text-secondary)] mb-4">
-            Data as of: <span className="font-medium">{dataAsOf.toLocaleDateString()}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <MisMetricCard label={MIS_KPI_LABELS.totalEnquires} value={summary.totalEnquires} />
+          <MisMetricCard label={MIS_KPI_LABELS.approvedCases} value={summary.approvedCases} />
+          <MisMetricCard label={MIS_KPI_LABELS.rejectedCases} value={summary.rejectedCases} />
+          <MisMetricCard label={MIS_KPI_LABELS.conversionRatio} value={`${summary.conversionRatio}%`} />
+        </div>
+
+        <NfiCard>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Monthly Rollup Grid</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Aggregate-only monthly MIS intended for leadership review and donor-safe exports.</p>
           </div>
 
           {loading ? (
@@ -255,34 +210,30 @@ export function LeadershipMonthly() {
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
               <p className="text-[var(--nfi-text-secondary)]">Loading data...</p>
             </div>
+          ) : rows.length === 0 ? (
+            <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No monthly rollup data is available for the selected period.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--nfi-border)]">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">District</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Beneficiaries</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Processed</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Approved</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Rejected</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Avg Time</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Funds Used</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Util. %</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">District / Org Unit</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.totalEnquires}</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.approvedCases}</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.rejectedCases}</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.conversionRatio}</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Approved Value</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sampleData.map((row, idx) => (
-                    <tr key={idx} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
-                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.district}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.totalBeneficiaries}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.casesProcessed}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.casesApproved}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.casesRejected}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.avgApprovalTime}d</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">
-                        ₹{(row.totalFundsUtilized / 100000).toFixed(1)}L
-                      </td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.utilizationRate}%</td>
+                  {rows.map((row) => (
+                    <tr key={row.orgUnit} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.orgUnit}</td>
+                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.totalEnquires}</td>
+                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.approvedCases}</td>
+                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.rejectedCases}</td>
+                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{calculateConversionRatio(row.approvedCases, row.totalEnquires)}%</td>
+                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.approvedValue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -292,5 +243,14 @@ export function LeadershipMonthly() {
         </NfiCard>
       </div>
     </Layout>
+  );
+}
+
+function MisMetricCard({ label, value }: { label: string; value: number | string }) {
+  return (
+    <NfiCard className="bg-white border border-[var(--nfi-border)]">
+      <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
+      <p className="text-3xl font-bold text-[var(--nfi-text)] mt-2">{value}</p>
+    </NfiCard>
   );
 }

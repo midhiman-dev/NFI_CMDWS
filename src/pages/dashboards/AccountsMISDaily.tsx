@@ -1,244 +1,155 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { NfiCard } from '../../components/design-system/NfiCard';
-import { Download, ArrowLeft } from 'lucide-react';
 import { useToast } from '../../components/design-system/Toast';
 import { useAppContext } from '../../App';
-
-interface AccountsData {
-  date: string;
-  transactionId: string;
-  type: string;
-  amount: number;
-  account: string;
-  status: string;
-  approver: string;
-  remarks: string;
-}
-
-const sampleData: AccountsData[] = [
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN001',
-    type: 'Approval Voucher',
-    amount: 125000,
-    account: 'Hospital General Fund',
-    status: 'Completed',
-    approver: 'Rajesh Kumar',
-    remarks: 'Standard approval processed',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN002',
-    type: 'Installment Payment',
-    amount: 245000,
-    account: 'Medical Fund',
-    status: 'Completed',
-    approver: 'Priya Singh',
-    remarks: 'First installment released',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN003',
-    type: 'Approval Voucher',
-    amount: 89500,
-    account: 'Emergency Fund',
-    status: 'Completed',
-    approver: 'Amit Patel',
-    remarks: 'Emergency case approved',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN004',
-    type: 'Installment Payment',
-    amount: 156000,
-    account: 'Hospital General Fund',
-    status: 'Completed',
-    approver: 'Rajesh Kumar',
-    remarks: 'Second installment released',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN005',
-    type: 'Adjustment Entry',
-    amount: -23500,
-    account: 'Medical Fund',
-    status: 'Completed',
-    approver: 'Meera Desai',
-    remarks: 'Overpayment adjustment',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN006',
-    type: 'Approval Voucher',
-    amount: 342000,
-    account: 'Hospital General Fund',
-    status: 'Completed',
-    approver: 'Priya Singh',
-    remarks: 'Critical care case approved',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN007',
-    type: 'Installment Payment',
-    amount: 178500,
-    account: 'Emergency Fund',
-    status: 'Completed',
-    approver: 'Amit Patel',
-    remarks: 'Scheduled installment released',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN008',
-    type: 'Approval Voucher',
-    amount: 267000,
-    account: 'Medical Fund',
-    status: 'Completed',
-    approver: 'Rajesh Kumar',
-    remarks: 'Surgery support approved',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN009',
-    type: 'Reversal Entry',
-    amount: -45000,
-    account: 'Hospital General Fund',
-    status: 'Completed',
-    approver: 'Meera Desai',
-    remarks: 'Rejected case reversal',
-  },
-  {
-    date: '2024-12-15',
-    transactionId: 'TXN010',
-    type: 'Installment Payment',
-    amount: 234500,
-    account: 'Emergency Fund',
-    status: 'Completed',
-    approver: 'Priya Singh',
-    remarks: 'Final installment released',
-  },
-];
+import { getAuthState } from '../../utils/auth';
+import { filterCasesForAuth } from '../../utils/roleAccess';
+import {
+  ACCOUNTS_MIS_DEMO_ROWS,
+  downloadCSV,
+  formatCurrencyCompact,
+  formatDownloadTimestamp,
+  formatMISDate,
+  formatMISDateTime,
+  isDemoDailyDate,
+  MIS_DEMO_DATE,
+  MIS_DEMO_LAST_REFRESH,
+  sameDay,
+  toCSV,
+  type AccountsLedgerRow,
+} from '../../utils/misReporting';
+import type { CaseWithDetails } from '../../data/providers/DataProvider';
 
 export function AccountsMISDaily() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const { provider } = useAppContext();
-  const [selectedDate, setSelectedDate] = useState<string>('2024-12-15');
-  const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
+  const authState = getAuthState();
+  const authScopeKey = `${authState.activeRole || 'none'}:${authState.activeUser?.userId || 'anon'}:${authState.activeUser?.hospitalId || 'all'}`;
+  const [cases, setCases] = useState<CaseWithDetails[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(MIS_DEMO_DATE);
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const dataAsOf = new Date(2024, 11, 15);
+  const [lastRefresh, setLastRefresh] = useState<string>(new Date().toISOString());
 
-  const formatDownloadTimestamp = () => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}_${hh}${min}`;
-  };
+  useEffect(() => {
+    const loadCases = async () => {
+      try {
+        setLoading(true);
+        const allCases = await provider.listCases();
+        const scopedCases = filterCasesForAuth(authState, allCases);
+        setCases(scopedCases);
+        setLastRefresh(new Date().toISOString());
+      } catch (error) {
+        console.error('Error loading Accounts MIS:', error);
+        showToast('Failed to load Accounts MIS', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCases();
+  }, [authScopeKey, provider, showToast]);
+
+  const liveLedgerRows = useMemo<AccountsLedgerRow[]>(() => {
+    return cases
+      .filter((item) => sameDay(item.updatedAt || item.lastActionAt || item.intakeDate, selectedDate))
+      .map((item) => {
+        const isApproved = item.caseStatus === 'Approved' || item.caseStatus === 'Closed';
+        const isRejected = item.caseStatus === 'Rejected';
+        const amount = isApproved ? item.approvedAmount || 0 : isRejected ? -(item.approvedAmount || 0) : 0;
+        return {
+          date: selectedDate,
+          voucherId: `VCH-${item.caseRef.split('/').pop() || item.caseId.slice(-4)}`,
+          caseRef: item.caseRef,
+          account: `${item.processType} Fund`,
+          type: isApproved ? 'Approval Voucher' : isRejected ? 'Reversal Entry' : 'Pending Finance Review',
+          amount,
+          status: isApproved ? 'Released' : isRejected ? 'Reversed' : 'Pending',
+          remarks: `${item.hospitalName || 'Hospital'} / ${item.caseStatus.replace(/_/g, ' ')}`,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+  }, [cases, selectedDate]);
+
+  const ledgerRows = useMemo(
+    () => (liveLedgerRows.length > 0 ? liveLedgerRows : isDemoDailyDate(selectedDate) ? ACCOUNTS_MIS_DEMO_ROWS : []),
+    [liveLedgerRows, selectedDate],
+  );
+
+  const totals = useMemo(() => {
+    const approvalVouchers = ledgerRows.filter((row) => row.type === 'Approval Voucher').length;
+    const reversalEntries = ledgerRows.filter((row) => row.type === 'Reversal Entry').length;
+    const netOutflow = ledgerRows.reduce((sum, row) => sum + row.amount, 0);
+    return {
+      approvalVouchers,
+      reversalEntries,
+      snapshotCases: ledgerRows.length,
+      netOutflow,
+    };
+  }, [ledgerRows]);
 
   const handleExport = async () => {
     try {
       setExporting(true);
       await provider.createReportRun({
         templateId: 'accounts-mis-daily',
-        templateCode: 'ACCOUNTS_MIS_DAILY',
-        templateName: 'Accounts MIS Daily',
-        filters: {
-          date: selectedDate,
-        },
-        dataAsOf,
+        templateCode: 'ACCOUNTS_MIS',
+        templateName: 'Accounts MIS',
+        filters: { date: selectedDate },
+        dataAsOf: new Date(selectedDate),
       });
-
-      const csv = generateCSV(sampleData);
-      downloadCSV(csv, `Accounts_MIS_Daily_${formatDownloadTimestamp()}`);
+      downloadCSV(
+        toCSV(
+          ['Date', 'Voucher ID', 'Case Ref', 'Account', 'Type', 'Amount', 'Status', 'Remarks'],
+          ledgerRows.map((row) => [row.date, row.voucherId, row.caseRef, row.account, row.type, row.amount, row.status, row.remarks]),
+        ),
+        `Accounts_MIS_${formatDownloadTimestamp()}`,
+      );
       showToast('Download started', 'success');
       navigate('/reports/runs');
     } catch (error) {
-      console.error('Error exporting report:', error);
+      console.error('Error exporting Accounts MIS:', error);
       showToast('Failed to export report', 'error');
     } finally {
       setExporting(false);
     }
   };
 
-  const generateCSV = (data: AccountsData[]): string => {
-    const headers = [
-      'Date',
-      'Transaction ID',
-      'Type',
-      'Amount',
-      'Account',
-      'Status',
-      'Approver',
-      'Remarks',
-    ];
-    const rows = data.map(row => [
-      row.date,
-      row.transactionId,
-      row.type,
-      row.amount,
-      row.account,
-      row.status,
-      row.approver,
-      row.remarks,
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
-    ].join('\n');
-
-    return csvContent;
-  };
-
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const getTotalAmount = () => {
-    return sampleData.reduce((sum, row) => sum + row.amount, 0);
-  };
-
   return (
     <Layout>
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/reports')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Back to Reports"
-          >
+          <button onClick={() => navigate('/reports')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back to Reports">
             <ArrowLeft size={20} className="text-[var(--nfi-text)]" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Accounts MIS Daily</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily financial transactions and vouchers</p>
+            <h1 className="text-3xl font-bold text-[var(--nfi-text)]">Accounts MIS</h1>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily finance snapshot with voucher-style rows derived from current case finance context.</p>
           </div>
         </div>
 
         <NfiCard>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">
-                Date
-              </label>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">Date</label>
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]"
               />
+            </div>
+            <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Data as of</p>
+              <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{formatMISDate(selectedDate)}</p>
+              <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
+                <RefreshCw size={14} />
+                Last refresh: {formatMISDateTime(ledgerRows.length > 0 && liveLedgerRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
+              </div>
             </div>
             <div className="flex items-end">
               <button
@@ -247,13 +158,23 @@ export function AccountsMISDaily() {
                 className="w-full px-4 py-2 bg-[var(--nfi-primary)] text-white rounded-lg hover:bg-[var(--nfi-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 <Download size={16} />
-                {exporting ? 'Exporting...' : 'Export & Download'}
+                {exporting ? 'Exporting...' : 'Export / Download'}
               </button>
             </div>
           </div>
+        </NfiCard>
 
-          <div className="text-sm text-[var(--nfi-text-secondary)] mb-4">
-            Data as of: <span className="font-medium">{dataAsOf.toLocaleDateString()}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <MetricCard label="Approval Vouchers" value={totals.approvalVouchers} />
+          <MetricCard label="Reversal Entries" value={totals.reversalEntries} />
+          <MetricCard label="Snapshot Cases" value={totals.snapshotCases} />
+          <MetricCard label="Net Outflow" value={formatCurrencyCompact(totals.netOutflow)} />
+        </div>
+
+        <NfiCard>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Finance Ledger Snapshot</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Finance rows stay distinct from leadership/program views and preserve the accounts-first framing.</p>
           </div>
 
           {loading ? (
@@ -261,56 +182,51 @@ export function AccountsMISDaily() {
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
               <p className="text-[var(--nfi-text-secondary)]">Loading data...</p>
             </div>
+          ) : ledgerRows.length === 0 ? (
+            <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No finance ledger rows found for the selected date.</div>
           ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--nfi-border)]">
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Txn ID</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Type</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Account</th>
-                      <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Amount</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Approver</th>
-                      <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Remarks</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--nfi-border)]">
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Voucher ID</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Case Ref</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Account</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Type</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Amount</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerRows.map((row) => (
+                    <tr key={`${row.voucherId}-${row.caseRef}`} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
+                      <td className="py-3 px-4 font-mono text-[var(--nfi-text)]">{row.voucherId}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.caseRef}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text-secondary)]">{row.account}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.type}</td>
+                      <td className={`text-right py-3 px-4 font-medium ${row.amount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {formatCurrencyCompact(row.amount)}
+                      </td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.status}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text-secondary)]">{row.remarks}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sampleData.map((row, idx) => (
-                      <tr key={idx} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
-                        <td className="py-3 px-4 font-mono text-[var(--nfi-text)]">{row.transactionId}</td>
-                        <td className="py-3 px-4 text-[var(--nfi-text)]">{row.type}</td>
-                        <td className="py-3 px-4 text-[var(--nfi-text-secondary)]">{row.account}</td>
-                        <td className={`text-right py-3 px-4 font-medium ${row.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {row.amount >= 0 ? '+' : ''}₹{Math.abs(row.amount).toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-block px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-[var(--nfi-text)]">{row.approver}</td>
-                        <td className="py-3 px-4 text-[var(--nfi-text-secondary)] text-xs">{row.remarks}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-4 pt-4 border-t border-[var(--nfi-border)]">
-                <div className="flex justify-end">
-                  <div className="text-right">
-                    <p className="text-sm text-[var(--nfi-text-secondary)]">Total Amount</p>
-                    <p className="text-lg font-bold text-[var(--nfi-text)]">
-                      ₹{(getTotalAmount() / 100000).toFixed(2)}L
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </NfiCard>
       </div>
     </Layout>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: number | string }) {
+  return (
+    <NfiCard className="bg-white border border-[var(--nfi-border)]">
+      <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
+      <p className="text-3xl font-bold text-[var(--nfi-text)] mt-2">{value}</p>
+    </NfiCard>
   );
 }

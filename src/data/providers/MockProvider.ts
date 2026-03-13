@@ -1577,7 +1577,13 @@ export class MockProvider implements DataProvider {
     const stored = localStorage.getItem(REPORT_TEMPLATES_STORAGE_KEY);
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored) as ReportTemplatesData;
+        const codes = Object.values(parsed).map((template) => template.code);
+        const hasLegacyOnly = ['BEN_SUMMARY', 'FIN_SUMMARY', 'PROCESS_METRICS'].every((code) => codes.includes(code));
+        if (hasLegacyOnly) {
+          return this.generateReportTemplates();
+        }
+        return parsed;
       } catch {
         return this.generateReportTemplates();
       }
@@ -1589,9 +1595,9 @@ export class MockProvider implements DataProvider {
     const templates: ReportTemplatesData = {
       'template-1': {
         templateId: 'template-1',
-        code: 'BEN_SUMMARY',
-        name: 'Beneficiary Summary',
-        description: 'Summary of all beneficiaries with case status breakdown',
+        code: 'HOSPITAL_MIS_MONTHLY',
+        name: 'Hospital MIS - Monthly',
+        description: 'Hospital-wise monthly MIS scorecard',
         version: '1.0',
         isActive: true,
         createdAt: new Date().toISOString(),
@@ -1599,9 +1605,9 @@ export class MockProvider implements DataProvider {
       },
       'template-2': {
         templateId: 'template-2',
-        code: 'FIN_SUMMARY',
-        name: 'Financial Summary',
-        description: 'Financial tracking and disbursement summary',
+        code: 'DAILY_MIS_PROGRAMS',
+        name: 'Daily MIS - Programs',
+        description: 'Daily operational MIS with case status rollups',
         version: '1.0',
         isActive: true,
         createdAt: new Date().toISOString(),
@@ -1609,9 +1615,19 @@ export class MockProvider implements DataProvider {
       },
       'template-3': {
         templateId: 'template-3',
-        code: 'PROCESS_METRICS',
-        name: 'Process Metrics',
-        description: 'Case processing timeline and approval metrics',
+        code: 'MONTHLY_MIS_LEADERSHIP',
+        name: 'Monthly MIS - Leadership Team',
+        description: 'Monthly donor-safe leadership MIS',
+        version: '1.0',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      'template-4': {
+        templateId: 'template-4',
+        code: 'ACCOUNTS_MIS',
+        name: 'Accounts MIS',
+        description: 'Daily accounts MIS and finance snapshot',
         version: '1.0',
         isActive: true,
         createdAt: new Date().toISOString(),
