@@ -17,10 +17,15 @@
     "reportingAdmin": "Reporting Admin"
   },
   "login": {
-    "title": "Login",
+    "title": "Sign In",
+    "subtitle": "Prototype access for NFI demo accounts",
+    "demoAccount": "Demo account",
+    "accountPlaceholder": "Select a demo account",
     "selectUser": "Select user",
     "role": "Role",
     "login": "Login",
+    "signIn": "Sign In",
+    "demoNote": "Use a demo account and role selection for prototype access.",
     "logout": "Logout"
   },
   "common": {

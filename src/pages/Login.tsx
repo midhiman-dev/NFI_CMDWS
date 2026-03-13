@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { mockStore } from '../store/mockStore';
@@ -27,18 +27,15 @@ export function Login() {
   }, []);
 
   const handleUserChange = (userId: string) => {
-    const user = users.find((u) => u.userId === userId);
-    setSelectedUser(user || null);
-    if (user) {
-      setSelectedRole(user.roles[0]);
-    }
+    const user = users.find((candidate) => candidate.userId === userId) || null;
+    setSelectedUser(user);
+    setSelectedRole(user?.roles[0] || null);
   };
 
   const handleLogin = () => {
-    if (selectedUser && selectedRole) {
-      login(selectedUser, selectedRole);
-      navigate(getDefaultRouteForAuth(getAuthState()));
-    }
+    if (!selectedUser || !selectedRole) return;
+    login(selectedUser, selectedRole);
+    navigate(getDefaultRouteForAuth(getAuthState()));
   };
 
   const roleLabels: Record<UserRole, string> = {
@@ -85,28 +82,32 @@ export function Login() {
             alt="NFI Logo"
             className="h-16 mx-auto mb-4"
           />
-          <h1 className="text-2xl font-bold text-[var(--nfi-text)]">{APP_NAME}</h1>
-          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
-            Case Management & Document Workflow System
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--nfi-primary)]">
+            {t('login.title')}
           </p>
+          <h1 className="text-2xl font-bold text-[var(--nfi-text)] mt-2">{APP_NAME}</h1>
+          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">{t('login.subtitle')}</p>
         </div>
 
         <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">
-              {t('login.selectUser')}
+              {t('login.demoAccount')}
             </label>
             <select
               value={selectedUser?.userId || ''}
-              onChange={(e) => handleUserChange(e.target.value)}
+              onChange={(event) => handleUserChange(event.target.value)}
               className="w-full px-4 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
             >
-              <option value="">Choose a user...</option>
-              {users.map((user) => (
-                <option key={user.userId} value={user.userId}>
-                  {user.fullName} — {roleLabels[getPrimaryRole(user.roles)]}
-                </option>
-              ))}
+              <option value="">{t('login.accountPlaceholder')}</option>
+              {users.map((user) => {
+                const primaryRole = roleLabels[getPrimaryRole(user.roles)];
+                return (
+                  <option key={user.userId} value={user.userId}>
+                    {`${user.fullName} - ${primaryRole}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -117,7 +118,7 @@ export function Login() {
               </label>
               <select
                 value={selectedRole || ''}
-                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                onChange={(event) => setSelectedRole(event.target.value as UserRole)}
                 className="w-full px-4 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
               >
                 {selectedUser.roles.map((role) => (
@@ -134,13 +135,11 @@ export function Login() {
             disabled={!selectedUser || !selectedRole}
             className="w-full"
           >
-            {t('login.login')}
+            {t('login.signIn')}
           </NfiButton>
 
           <div className="text-center pt-4 border-t border-[var(--nfi-border)]">
-            <p className="text-xs text-[var(--nfi-text-secondary)]">
-              Demo mode: Select any user to login
-            </p>
+            <p className="text-xs text-[var(--nfi-text-secondary)]">{t('login.demoNote')}</p>
           </div>
         </div>
       </NfiCard>
