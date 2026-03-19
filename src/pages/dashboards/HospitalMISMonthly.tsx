@@ -146,7 +146,7 @@ export function HospitalMISMonthly() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.HOSPITAL_MIS_MONTHLY.title', { defaultValue: 'Hospital MIS - Monthly' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Hospital-wise monthly scorecard with totals as on date and the agreed MIS KPIs.</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Hospital-wise monthly view using the agreed case KPIs for demo review.</p>
           </div>
         </div>
 
@@ -200,8 +200,8 @@ export function HospitalMISMonthly() {
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Hospital Scorecard</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">This is the lightweight prototype version of the hospital monthly MIS with only the agreed case KPI set.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Hospital Snapshot</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">This prototype view keeps the monthly hospital summary focused on the agreed case KPI set.</p>
           </div>
 
           {loading ? (

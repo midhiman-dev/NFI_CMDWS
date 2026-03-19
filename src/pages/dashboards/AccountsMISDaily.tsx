@@ -130,7 +130,7 @@ export function AccountsMISDaily() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.ACCOUNTS_MIS.title', { defaultValue: 'Accounts MIS' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily finance snapshot with voucher-style rows derived from current case finance context.</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily finance snapshot with voucher-style rows tied to current case finance status.</p>
           </div>
         </div>
 
@@ -167,16 +167,16 @@ export function AccountsMISDaily() {
         </NfiCard>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard label="Approval Vouchers" value={totals.approvalVouchers} />
+          <MetricCard label="Released Vouchers" value={totals.approvalVouchers} />
           <MetricCard label="Reversal Entries" value={totals.reversalEntries} />
-          <MetricCard label="Snapshot Cases" value={totals.snapshotCases} />
+          <MetricCard label="Cases in Snapshot" value={totals.snapshotCases} />
           <MetricCard label="Net Outflow" value={formatCurrencyCompact(totals.netOutflow)} />
         </div>
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Finance Ledger Snapshot</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Finance rows stay distinct from leadership/program views and preserve the accounts-first framing.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Accounts Ledger Snapshot</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Finance rows stay separate from the program and leadership views to keep the accounts summary clear.</p>
           </div>
 
           {loading ? (

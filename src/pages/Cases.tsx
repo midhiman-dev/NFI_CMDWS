@@ -423,7 +423,7 @@ export function Cases() {
                   {filteredCases.map((caseItem) => {
                     const action = getRoleAction(caseItem);
                     const showNewCase = isNewCase(caseItem.createdAt);
-                    const babyDisplayName = formatBabyDisplayName(undefined, caseItem.childName);
+                    const babyDisplayName = formatBabyDisplayName(caseItem.motherName, caseItem.childName);
                     return (
                       <tr
                         key={caseItem.caseId}

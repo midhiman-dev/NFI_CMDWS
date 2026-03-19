@@ -147,7 +147,7 @@ export function DailyMISPrograms() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.DAILY_MIS_PROGRAMS.title', { defaultValue: 'Daily MIS - Programs' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">{t('reports.surfaces.DAILY_MIS_PROGRAMS.subtitle', { defaultValue: 'Daily operational MIS with case-event counts, pending workload, and lightweight funding visibility.' })}</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">{t('reports.surfaces.DAILY_MIS_PROGRAMS.subtitle', { defaultValue: 'Daily operational MIS grouped into case buckets for a quick demo-ready program view.' })}</p>
           </div>
         </div>
 
@@ -192,8 +192,8 @@ export function DailyMISPrograms() {
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.daily.gridTitle', { defaultValue: 'Operational Grid' })}</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Counts are tied to case activity on the selected date and grouped into daily program buckets.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.daily.gridTitle', { defaultValue: 'Daily Program Snapshot' })}</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Counts are grouped from case activity on the selected date for a compact daily review.</p>
           </div>
 
           {loading ? (
@@ -208,7 +208,7 @@ export function DailyMISPrograms() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--nfi-border)]">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Program Bucket</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Program</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.totalEnquires}</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.approvedCases}</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.rejectedCases}</th>

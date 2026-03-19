@@ -149,7 +149,7 @@ export function LeadershipMonthly() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.MONTHLY_MIS_LEADERSHIP.title', { defaultValue: 'Monthly MIS - Leadership Team' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Donor-safe monthly rollup with aggregate-only KPIs for leadership review.</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">Donor-safe monthly rollup with aggregate-only case KPIs for leadership review.</p>
           </div>
         </div>
 
@@ -203,8 +203,8 @@ export function LeadershipMonthly() {
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Monthly Rollup Grid</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Aggregate-only monthly MIS intended for leadership review and donor-safe exports.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Leadership Rollup</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Aggregate-only monthly summary intended for leadership review and donor-safe exports.</p>
           </div>
 
           {loading ? (

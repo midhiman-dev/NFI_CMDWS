@@ -3,6 +3,7 @@ import type { Case, Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDet
 export interface CaseWithDetails extends Case {
   hospitalName?: string;
   childName?: string;
+  motherName?: string;
   beneficiaryNo?: string;
   approvedAmount?: number;
 }

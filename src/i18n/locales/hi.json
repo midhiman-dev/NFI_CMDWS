@@ -121,7 +121,7 @@
     "title": "डैशबोर्ड",
     "welcomeBack": "फिर स्वागत है, {{name}}",
     "misSnapshot": "MIS स्नैपशॉट",
-    "misDescription": "पुराने जनरिक डैशबोर्ड सारांश की जगह NFI KPI लेबल्स।",
+    "misDescription": "मौजूदा MIS डेमो सरफेसेज़ के अनुरूप संक्षिप्त केस स्नैपशॉट।",
     "openReports": "MIS रिपोर्ट खोलें",
     "myQueue": "मेरी क्यू",
     "quickLinks": "तेज़ लिंक",
@@ -270,10 +270,10 @@
       "gridTitle": "ऑपरेशनल ग्रिड"
     },
     "kpis": {
-      "totalEnquires": "कुल एनक्वायरी",
+      "totalEnquires": "कुल पूछताछ",
       "approvedCases": "स्वीकृत केस",
       "rejectedCases": "अस्वीकृत केस",
-      "conversionRatio": "कन्वर्जन रेशियो"
+      "conversionRatio": "स्वीकृति दर"
     },
     "months": {
       "1": "जनवरी",

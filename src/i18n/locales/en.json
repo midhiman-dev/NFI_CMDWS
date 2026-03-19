@@ -121,7 +121,7 @@
     "title": "Dashboard",
     "welcomeBack": "Welcome back, {{name}}",
     "misSnapshot": "MIS Snapshot",
-    "misDescription": "Core NFI KPI labels replacing the old generic dashboard summaries.",
+    "misDescription": "Compact case snapshot aligned to the current MIS demo surfaces.",
     "openReports": "Open MIS Reports",
     "myQueue": "My Queue",
     "quickLinks": "Quick Links",
@@ -267,13 +267,13 @@
     "month": "Month",
     "totalsAsOn": "Totals as on",
     "daily": {
-      "gridTitle": "Operational Grid"
+      "gridTitle": "Daily Program Snapshot"
     },
     "kpis": {
-      "totalEnquires": "Total Enquires",
+      "totalEnquires": "Total Enquiries",
       "approvedCases": "Approved Cases",
       "rejectedCases": "Rejected Cases",
-      "conversionRatio": "Conversion Ratio"
+      "conversionRatio": "Approval Rate"
     },
     "months": {
       "1": "January",
@@ -298,22 +298,22 @@
     "surfaces": {
       "DAILY_MIS_PROGRAMS": {
         "title": "Daily MIS - Programs",
-        "subtitle": "Daily operational MIS with case-event counts, pending workload, and lightweight funding visibility.",
+        "subtitle": "Daily operational MIS grouped into case buckets for a quick demo-ready program view.",
         "cadence": "Daily"
       },
       "MONTHLY_MIS_LEADERSHIP": {
         "title": "Monthly MIS - Leadership Team",
-        "subtitle": "Donor-safe monthly rollup with aggregate-only KPIs for leadership review.",
+        "subtitle": "Donor-safe monthly rollup with aggregate-only case KPIs for leadership review.",
         "cadence": "Monthly"
       },
       "ACCOUNTS_MIS": {
         "title": "Accounts MIS",
-        "subtitle": "Daily finance snapshot with voucher-style rows derived from current case finance context.",
+        "subtitle": "Daily finance snapshot with voucher-style rows tied to current case finance status.",
         "cadence": "Daily"
       },
       "HOSPITAL_MIS_MONTHLY": {
         "title": "Hospital MIS - Monthly",
-        "subtitle": "Hospital-wise monthly scorecard with totals as on date and the agreed MIS KPIs.",
+        "subtitle": "Hospital-wise monthly view using the agreed case KPIs for demo review.",
         "cadence": "Monthly"
       }
     }

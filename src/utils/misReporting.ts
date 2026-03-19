@@ -2,10 +2,10 @@ import type { ReportRun, UserRole } from '../types';
 import { formatDateFriendly, formatDateTimeFriendly } from './dateFormat';
 
 export const MIS_KPI_LABELS = {
-  totalEnquires: 'Total Enquires',
+  totalEnquires: 'Total Enquiries',
   approvedCases: 'Approved Cases',
   rejectedCases: 'Rejected Cases',
-  conversionRatio: 'Conversion Ratio',
+  conversionRatio: 'Approval Rate',
 } as const;
 
 export const MONTH_OPTIONS = [
@@ -111,10 +111,10 @@ export const MIS_REPORT_SURFACES: MisReportSurface[] = [
 ];
 
 export const DAILY_MIS_DEMO_ROWS: DailyProgramRow[] = [
-  { programLabel: 'BRC Program', totalEnquires: 18, approvedCases: 12, rejectedCases: 2, pendingCases: 4, approvedValue: 540000 },
-  { programLabel: 'BRRC Program', totalEnquires: 11, approvedCases: 8, rejectedCases: 1, pendingCases: 2, approvedValue: 325000 },
-  { programLabel: 'BGRC Program', totalEnquires: 9, approvedCases: 6, rejectedCases: 1, pendingCases: 2, approvedValue: 210000 },
-  { programLabel: 'BCRC Program', totalEnquires: 7, approvedCases: 5, rejectedCases: 1, pendingCases: 1, approvedValue: 265000 },
+  { programLabel: 'BRC Cases', totalEnquires: 18, approvedCases: 12, rejectedCases: 2, pendingCases: 4, approvedValue: 540000 },
+  { programLabel: 'BRRC Cases', totalEnquires: 11, approvedCases: 8, rejectedCases: 1, pendingCases: 2, approvedValue: 325000 },
+  { programLabel: 'BGRC Cases', totalEnquires: 9, approvedCases: 6, rejectedCases: 1, pendingCases: 2, approvedValue: 210000 },
+  { programLabel: 'BCRC Cases', totalEnquires: 7, approvedCases: 5, rejectedCases: 1, pendingCases: 1, approvedValue: 265000 },
 ];
 
 export const LEADERSHIP_MIS_DEMO_ROWS: LeadershipRow[] = [

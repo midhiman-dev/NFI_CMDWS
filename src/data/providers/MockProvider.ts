@@ -7,6 +7,7 @@ import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, saveWorkflowStore } from '../../utils/caseWorkflow';
 import { getChecklistReadinessFromDocuments } from '../../utils/documentChecklistRules';
+import { formatBabyDisplayName } from '../../utils/casePresentation';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -16,6 +17,8 @@ import {
 } from '../../utils/intakeValidation';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
+const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
+const DEMO_DATA_VERSION = 'v3_5_l3';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -166,7 +169,7 @@ export class MockProvider implements DataProvider {
       }
       if (this.installments[caseItem.caseId].length === 0) {
         const baseAmount = 50000 + Math.random() * 50000;
-        if (caseItem.childName === 'Baby Vivaan') {
+        if (caseItem.caseId === 'case-demo-9') {
           this.installments[caseItem.caseId] = [
             {
               installmentId: `inst-${caseItem.caseId}-1`,
@@ -181,7 +184,7 @@ export class MockProvider implements DataProvider {
               updatedAt: new Date().toISOString(),
             },
           ];
-        } else if (caseItem.childName === 'Baby Aanya') {
+        } else if (caseItem.caseId === 'case-demo-10') {
           this.installments[caseItem.caseId] = [
             {
               installmentId: `inst-${caseItem.caseId}-1`,
@@ -272,6 +275,12 @@ export class MockProvider implements DataProvider {
   }
 
   private loadOrGenerateData(): MockData {
+    const storedVersion = localStorage.getItem(DEMO_DATA_VERSION_KEY);
+    if (storedVersion !== DEMO_DATA_VERSION) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(DEMO_DATA_VERSION_KEY, DEMO_DATA_VERSION);
+    }
+
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -529,18 +538,18 @@ export class MockProvider implements DataProvider {
     ];
 
     const caseTemplates = [
-      { status: 'Draft', processType: 'BRC', child: 'Baby Aarav', hosp: 0 },
-      { status: 'Draft', processType: 'BRRC', child: 'Baby Ishaan', hosp: 1 },
-      { status: 'Submitted', processType: 'BRC', child: 'Baby Ananya', hosp: 2 },
-      { status: 'Submitted', processType: 'BGRC', child: 'Baby Diya', hosp: 0 },
-      { status: 'Under_Verification', processType: 'BRC', child: 'Baby Kabir', hosp: 1 },
-      { status: 'Under_Verification', processType: 'BRRC', child: 'Baby Mira', hosp: 2 },
-      { status: 'Under_Review', processType: 'BRC', child: 'Baby Arjun', hosp: 0 },
-      { status: 'Under_Review', processType: 'BGRC', child: 'Baby Saanvi', hosp: 1 },
-      { status: 'Approved', processType: 'BRC', child: 'Baby Vivaan', hosp: 2 },
-      { status: 'Approved', processType: 'BRRC', child: 'Baby Aanya', hosp: 0 },
-      { status: 'Rejected', processType: 'BRC', child: 'Baby Reyansh', hosp: 1 },
-      { status: 'Returned', processType: 'BRC', child: 'Baby Myra', hosp: 2 },
+      { status: 'Draft', processType: 'BRC', motherName: 'Asha Menon', hosp: 0 },
+      { status: 'Draft', processType: 'BRRC', motherName: 'Pooja Shah', hosp: 1 },
+      { status: 'Submitted', processType: 'BRC', motherName: 'Neha Batra', hosp: 2 },
+      { status: 'Submitted', processType: 'BGRC', motherName: 'Farah Khan', hosp: 0 },
+      { status: 'Under_Verification', processType: 'BRC', motherName: 'Ritu Nair', hosp: 1 },
+      { status: 'Under_Verification', processType: 'BRRC', motherName: 'Megha Patil', hosp: 2 },
+      { status: 'Under_Review', processType: 'BRC', motherName: 'Kavya Rao', hosp: 0 },
+      { status: 'Under_Review', processType: 'BGRC', motherName: 'Shalini Verma', hosp: 1 },
+      { status: 'Approved', processType: 'BRC', motherName: 'Anita Das', hosp: 2 },
+      { status: 'Approved', processType: 'BRRC', motherName: 'Lakshmi Iyer', hosp: 0 },
+      { status: 'Rejected', processType: 'BRC', motherName: 'Sunaina Kaur', hosp: 1 },
+      { status: 'Returned', processType: 'BRC', motherName: 'Deepa Joshi', hosp: 2 },
     ];
 
     const now = new Date();
@@ -561,7 +570,8 @@ export class MockProvider implements DataProvider {
         createdBy: 'demo-user',
         updatedAt: caseDate.toISOString(),
         lastActionAt: caseDate.toISOString(),
-        childName: template.child,
+        childName: formatBabyDisplayName(template.motherName),
+        motherName: template.motherName,
         beneficiaryNo: template.status === 'Draft' ? undefined : `BEN-2026-${String(idx + 1).padStart(3, '0')}`,
         approvedAmount: template.status === 'Approved' ? 100000 : undefined,
       };
@@ -757,7 +767,8 @@ export class MockProvider implements DataProvider {
       createdBy: payload.createdBy,
       updatedAt: now,
       lastActionAt: now,
-      childName: payload.beneficiaryName,
+      childName: formatBabyDisplayName(payload.motherName, payload.beneficiaryName),
+      motherName: payload.motherName,
       beneficiaryNo: payload.beneficiaryNo,
     };
 

@@ -6,6 +6,7 @@ import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 import { appendCaseWorkflowEvent } from '../../utils/caseWorkflow';
+import { formatBabyDisplayName } from '../../utils/casePresentation';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -52,10 +53,33 @@ export class DbProvider implements DataProvider {
 
   async listCases(): Promise<CaseWithDetails[]> {
     const cases = await caseService.getCases();
-    return filterCasesForAuth(getAuthState(), cases).map(c => ({
+    const visibleCases = filterCasesForAuth(getAuthState(), cases);
+    const caseIds = visibleCases.map((c) => c.caseId);
+    let familyMap = new Map<string, string>();
+    let beneficiaryMap = new Map<string, string>();
+
+    if (caseIds.length > 0) {
+      const [{ data: families }, { data: beneficiaries }] = await Promise.all([
+        supabase
+          .from('family_profiles')
+          .select('case_id, mother_name')
+          .in('case_id', caseIds),
+        supabase
+          .from('beneficiary_profiles')
+          .select('case_id, baby_name')
+          .in('case_id', caseIds),
+      ]);
+
+      familyMap = new Map((families || []).map((row) => [row.case_id, row.mother_name]));
+      beneficiaryMap = new Map((beneficiaries || []).map((row) => [row.case_id, row.baby_name]));
+    }
+
+    return visibleCases.map(c => ({
       ...c,
       caseRef: c.caseNumber,
       intakeDate: c.createdAt,
+      motherName: familyMap.get(c.caseId),
+      childName: formatBabyDisplayName(familyMap.get(c.caseId), beneficiaryMap.get(c.caseId)),
     }));
   }
 
@@ -66,10 +90,17 @@ export class DbProvider implements DataProvider {
       throw new Error('ACCESS_DENIED_CASE_SCOPE');
     }
 
+    const [beneficiary, family] = await Promise.all([
+      this.getBeneficiary(caseId),
+      this.getFamily(caseId),
+    ]);
+
     return {
       ...caseData,
       caseRef: caseData.caseNumber,
       intakeDate: caseData.createdAt,
+      childName: beneficiary?.beneficiaryName,
+      motherName: family?.motherName,
     };
   }
 
@@ -185,7 +216,8 @@ export class DbProvider implements DataProvider {
       createdBy: payload.createdBy,
       updatedAt: caseRow.updated_at,
       lastActionAt: caseRow.last_action_at,
-      childName: payload.beneficiaryName,
+      childName: formatBabyDisplayName(payload.motherName, payload.beneficiaryName),
+      motherName: payload.motherName,
       beneficiaryNo: payload.beneficiaryNo,
     };
     await this.appendWorkflowTransition(caseId, undefined, payload.caseStatus, payload.caseStatus === 'Draft' ? 'Case created in wizard' : undefined, 'Intake');

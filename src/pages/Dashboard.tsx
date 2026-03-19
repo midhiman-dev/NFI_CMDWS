@@ -11,7 +11,7 @@ import { getHospitalDisplayStatus, listCaseWorkflowEvents } from '../utils/caseW
 import { getAuthState } from '../utils/auth';
 import { filterCasesForAuth } from '../utils/roleAccess';
 import { normalizeSeparator } from '../utils/textNormalize';
-import { MIS_KPI_LABELS, calculateConversionRatio } from '../utils/misReporting';
+import { MIS_KPI_LABELS } from '../utils/misReporting';
 import type { CaseStatus, UserRole } from '../types';
 import { translateCaseStatus } from '../i18n/helpers';
 import { formatBabyDisplayName, isNewCase } from '../utils/casePresentation';
@@ -80,12 +80,11 @@ export function Dashboard() {
   const misMetrics = useMemo(() => {
     const totalEnquires = cases.length;
     const approvedCases = cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed' || c.caseStatus === 'Approved').length;
-    const rejectedCases = cases.filter((c) => c.displayStatus === 'Rejected' || c.caseStatus === 'Rejected').length;
+    const underReviewCases = cases.filter((c) => c.displayStatus === 'Under_Review' || c.caseStatus === 'Under_Review').length;
     return [
       { label: t('reports.kpis.totalEnquires', { defaultValue: MIS_KPI_LABELS.totalEnquires }), value: totalEnquires, color: 'bg-slate-50', icon: <FileText className="text-slate-700" size={24} /> },
       { label: t('reports.kpis.approvedCases', { defaultValue: MIS_KPI_LABELS.approvedCases }), value: approvedCases, color: 'bg-emerald-50', icon: <CheckCircle className="text-emerald-700" size={24} /> },
-      { label: t('reports.kpis.rejectedCases', { defaultValue: MIS_KPI_LABELS.rejectedCases }), value: rejectedCases, color: 'bg-rose-50', icon: <XCircle className="text-rose-700" size={24} /> },
-      { label: t('reports.kpis.conversionRatio', { defaultValue: MIS_KPI_LABELS.conversionRatio }), value: `${calculateConversionRatio(approvedCases, totalEnquires)}%`, color: 'bg-blue-50', icon: <TrendingUp className="text-blue-700" size={24} /> },
+      { label: t('dashboard.queue.pendingReview', { defaultValue: 'Pending Review' }), value: underReviewCases, color: 'bg-amber-50', icon: <Clock className="text-amber-700" size={24} /> },
     ];
   }, [cases, t]);
 
@@ -151,7 +150,7 @@ export function Dashboard() {
               {t('dashboard.openReports')}
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {misMetrics.map((metric) => (
               <QueueCard
                 key={metric.label}
@@ -229,7 +228,7 @@ export function Dashboard() {
                     </div>
                     <p className="text-sm text-[var(--nfi-text-secondary)]">
                       {normalizeSeparator(
-                        `${formatBabyDisplayName(undefined, c.childName)}${CASE_SUBTITLE_SEPARATOR}${c.hospitalName || t('common.unknownHospital', { defaultValue: 'Unknown Hospital' })}`,
+                        `${formatBabyDisplayName(c.motherName, c.childName)}${CASE_SUBTITLE_SEPARATOR}${c.hospitalName || t('common.unknownHospital', { defaultValue: 'Unknown Hospital' })}`,
                       )}
                     </p>
                   </div>
