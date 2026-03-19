@@ -1,6 +1,7 @@
-import { IntakeFundApplication, IntakeInterimSummary } from '../types';
 import { isPresentFieldValue } from './fieldValue';
+import { diffFullYears, parseDateFlexible } from './derivedFields';
 import i18next from '../i18n';
+import type { IntakeFundApplication, IntakeInterimSummary } from '../types';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -15,6 +16,8 @@ export interface SectionProgress {
   filled: number;
   total: number;
 }
+
+export const MINIMUM_PARENT_AGE_AT_CHILD_BIRTH = 18;
 
 export const FUND_APPLICATION_FIELDS = {
   parentsFamilySection: {
@@ -227,6 +230,50 @@ function hasIncomeProofSelection(section: any): boolean {
   return section?.incomeProofTahsildarCertificate === true || section?.incomeProofBankStatement6Months === true;
 }
 
+function buildParentAgeErrorMessage(parentLabel: 'Mother' | 'Father'): string {
+  return `${parentLabel} must meet the minimum age requirement based on the child's date of birth.`;
+}
+
+function buildChildDobAgeErrorMessage(): string {
+  return "Child date of birth must align with the parent minimum age requirement.";
+}
+
+export function calculateAgeAtReferenceDate(
+  dob: string | undefined,
+  referenceDate: string | undefined
+): number | null {
+  const birthDate = parseDateFlexible(dob);
+  const comparisonDate = parseDateFlexible(referenceDate);
+
+  if (!birthDate || !comparisonDate) {
+    return null;
+  }
+
+  return diffFullYears(birthDate, comparisonDate);
+}
+
+export function validateParentAge(input: {
+  motherDob?: string;
+  fatherDob?: string;
+  childDob?: string;
+  minimumAge?: number;
+}): Record<string, string> {
+  const { motherDob, fatherDob, childDob, minimumAge = MINIMUM_PARENT_AGE_AT_CHILD_BIRTH } = input;
+  const errors: Record<string, string> = {};
+
+  const motherAgeAtBirth = calculateAgeAtReferenceDate(motherDob, childDob);
+  if (motherAgeAtBirth !== null && motherAgeAtBirth < minimumAge) {
+    errors.motherDob = buildParentAgeErrorMessage('Mother');
+  }
+
+  const fatherAgeAtBirth = calculateAgeAtReferenceDate(fatherDob, childDob);
+  if (fatherAgeAtBirth !== null && fatherAgeAtBirth < minimumAge) {
+    errors.fatherDob = buildParentAgeErrorMessage('Father');
+  }
+
+  return errors;
+}
+
 function validateRequiredFields(
   data: any,
   requiredFields: string[],
@@ -250,7 +297,11 @@ function validateRequiredFields(
   };
 }
 
-export function validateFundApplicationSection(sectionKey: string, data: any): ValidationResult {
+export function validateFundApplicationSection(
+  sectionKey: string,
+  data: any,
+  formData?: IntakeFundApplication
+): ValidationResult {
   const config = FUND_APPLICATION_FIELDS[sectionKey as keyof typeof FUND_APPLICATION_FIELDS];
   if (!config) {
     return { isValid: true, missingFields: [], errors: {} };
@@ -268,11 +319,40 @@ export function validateFundApplicationSection(sectionKey: string, data: any): V
     result.errors.outbornHospitalName = buildErrorMessage('outbornHospitalName', FUND_FIELD_LABELS);
   }
 
+  if (sectionKey === 'parentsFamilySection' || sectionKey === 'birthDetailsSection') {
+    const parentAgeErrors = validateParentAge({
+      motherDob: formData?.parentsFamilySection?.motherDob,
+      fatherDob: formData?.parentsFamilySection?.fatherDob,
+      childDob: formData?.birthDetailsSection?.babyDateOfBirth,
+    });
+
+    Object.entries(parentAgeErrors).forEach(([fieldName, message]) => {
+      if (!result.missingFields.includes(fieldName)) {
+        result.missingFields.push(fieldName);
+      }
+      result.errors[fieldName] = message;
+    });
+
+    if (sectionKey === 'birthDetailsSection' && Object.keys(parentAgeErrors).length > 0) {
+      result.errors.babyDateOfBirth = buildChildDobAgeErrorMessage();
+    }
+  }
+
   result.isValid = result.missingFields.length === 0;
   return result;
 }
 
-export function validateInterimSummarySection(sectionKey: string, data: any): ValidationResult {
+export function validateInterimSummarySection(
+  sectionKey: string,
+  data: any,
+  context?: {
+    formData?: IntakeInterimSummary;
+    parentDobContext?: {
+      motherDob?: string;
+      fatherDob?: string;
+    };
+  }
+): ValidationResult {
   const config = INTERIM_SUMMARY_FIELDS[sectionKey as keyof typeof INTERIM_SUMMARY_FIELDS];
   if (!config) {
     return { isValid: true, missingFields: [], errors: {} };
@@ -285,6 +365,25 @@ export function validateInterimSummarySection(sectionKey: string, data: any): Va
     result.errors.outbornHospitalName = buildErrorMessage('outbornHospitalName', INTERIM_FIELD_LABELS);
   }
 
+  if (sectionKey === 'birthSummarySection') {
+    const parentAgeErrors = validateParentAge({
+      motherDob: context?.parentDobContext?.motherDob,
+      fatherDob: context?.parentDobContext?.fatherDob,
+      childDob: data?.dateOfBirth ?? context?.formData?.birthSummarySection?.dateOfBirth,
+    });
+
+    Object.entries(parentAgeErrors).forEach(([fieldName, message]) => {
+      if (!result.missingFields.includes(fieldName)) {
+        result.missingFields.push(fieldName);
+      }
+      result.errors[fieldName] = message;
+    });
+
+    if (Object.keys(parentAgeErrors).length > 0) {
+      result.errors.dateOfBirth = buildChildDobAgeErrorMessage();
+    }
+  }
+
   result.isValid = result.missingFields.length === 0;
   return result;
 }
@@ -295,7 +394,7 @@ export function validateFundApplicationForm(data: IntakeFundApplication): Valida
 
   Object.entries(FUND_APPLICATION_FIELDS).forEach(([sectionKey, config]) => {
     const section = data[sectionKey as keyof IntakeFundApplication] as Record<string, unknown> | undefined;
-    const sectionValidation = validateFundApplicationSection(sectionKey, section);
+    const sectionValidation = validateFundApplicationSection(sectionKey, section, data);
 
     sectionValidation.missingFields.forEach(fieldName => {
       const fullFieldName = `${config.label}.${fieldName}`;
@@ -317,7 +416,7 @@ export function validateInterimSummaryForm(data: IntakeInterimSummary): Validati
 
   Object.entries(INTERIM_SUMMARY_FIELDS).forEach(([sectionKey, config]) => {
     const section = data[sectionKey as keyof IntakeInterimSummary] as Record<string, unknown> | undefined;
-    const sectionValidation = validateInterimSummarySection(sectionKey, section);
+    const sectionValidation = validateInterimSummarySection(sectionKey, section, { formData: data });
 
     sectionValidation.missingFields.forEach(fieldName => {
       const fullFieldName = `${config.label}.${fieldName}`;

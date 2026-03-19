@@ -82,7 +82,7 @@ export function FundApplicationForm({
     if (readOnly) return;
 
     const sectionData = formData[section as keyof IntakeFundApplication];
-    const validation = validateFundApplicationSection(section, sectionData);
+    const validation = validateFundApplicationSection(section, sectionData, formData);
 
     if (!validation.isValid) {
       setSectionErrors(prev => ({
@@ -144,8 +144,8 @@ export function FundApplicationForm({
                   }}
                 />
               </div>
-              <NfiField label="Father DOB" required type="input" inputProps={{ type: 'date', value: formData.parentsFamilySection?.fatherDob || '', onChange: e => handleFieldChange('parentsFamilySection', 'fatherDob', e.target.value), disabled: readOnly }} />
-              <NfiField label="Mother DOB" required type="input" inputProps={{ type: 'date', value: formData.parentsFamilySection?.motherDob || '', onChange: e => handleFieldChange('parentsFamilySection', 'motherDob', e.target.value), disabled: readOnly }} />
+              <NfiField label="Father DOB" required error={sectionErrors.parentsFamilySection?.fatherDob} type="input" inputProps={{ type: 'date', value: formData.parentsFamilySection?.fatherDob || '', onChange: e => handleFieldChange('parentsFamilySection', 'fatherDob', e.target.value), disabled: readOnly }} />
+              <NfiField label="Mother DOB" required error={sectionErrors.parentsFamilySection?.motherDob} type="input" inputProps={{ type: 'date', value: formData.parentsFamilySection?.motherDob || '', onChange: e => handleFieldChange('parentsFamilySection', 'motherDob', e.target.value), disabled: readOnly }} />
               <NfiField label="Father Education" required type="input" inputProps={{ type: 'text', value: formData.parentsFamilySection?.fatherEducation || '', onChange: e => handleFieldChange('parentsFamilySection', 'fatherEducation', e.target.value), disabled: readOnly }} />
               <NfiField label="Mother Education" required type="input" inputProps={{ type: 'text', value: formData.parentsFamilySection?.motherEducation || '', onChange: e => handleFieldChange('parentsFamilySection', 'motherEducation', e.target.value), disabled: readOnly }} />
               <NfiField label="Date of Marriage" required type="input" inputProps={{ type: 'date', value: formData.parentsFamilySection?.marriageDate || '', onChange: e => handleFieldChange('parentsFamilySection', 'marriageDate', e.target.value), disabled: readOnly }} />
@@ -219,7 +219,7 @@ export function FundApplicationForm({
             isDirty={!readOnly && dirtyFields.has('birthDetailsSection')}
           >
             <div className="grid grid-cols-2 gap-4">
-              <NfiField label="Baby Date of Birth" required type="input" inputProps={{ type: 'date', value: formData.birthDetailsSection?.babyDateOfBirth || '', onChange: e => handleFieldChange('birthDetailsSection', 'babyDateOfBirth', e.target.value), disabled: readOnly }} />
+              <NfiField label="Baby Date of Birth" required error={sectionErrors.birthDetailsSection?.babyDateOfBirth} type="input" inputProps={{ type: 'date', value: formData.birthDetailsSection?.babyDateOfBirth || '', onChange: e => handleFieldChange('birthDetailsSection', 'babyDateOfBirth', e.target.value), disabled: readOnly }} />
               <NfiField
                 label="Gender"
                 required

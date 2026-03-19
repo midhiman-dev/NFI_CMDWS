@@ -26,6 +26,10 @@ interface InterimSummaryFormProps {
   onFormDataChange?: (data: IntakeInterimSummary) => void;
   isLoading?: boolean;
   readOnly?: boolean;
+  parentDobContext?: {
+    motherDob?: string;
+    fatherDob?: string;
+  };
 }
 
 export function InterimSummaryForm({
@@ -33,6 +37,7 @@ export function InterimSummaryForm({
   onSectionSave,
   onFormDataChange,
   readOnly = false,
+  parentDobContext,
 }: InterimSummaryFormProps) {
   const [formData, setFormData] = useState<IntakeInterimSummary>(
     initialData || {
@@ -89,7 +94,10 @@ export function InterimSummaryForm({
     if (readOnly) return;
 
     const sectionData = formData[section as keyof IntakeInterimSummary];
-    const validation = validateInterimSummarySection(section, sectionData);
+    const validation = validateInterimSummarySection(section, sectionData, {
+      formData,
+      parentDobContext,
+    });
 
     if (!validation.isValid) {
       setSectionErrors(prev => ({
@@ -174,6 +182,7 @@ export function InterimSummaryForm({
           <NfiField
             label="Date of Birth"
             required
+            error={sectionErrors.birthSummarySection?.dateOfBirth}
             type="input"
             inputProps={{
               type: 'date',
@@ -694,4 +703,3 @@ export function InterimSummaryForm({
     </div>
   );
 }
-

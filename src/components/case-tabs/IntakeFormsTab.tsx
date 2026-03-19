@@ -447,6 +447,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
               onFormDataChange={setInterimSummary}
               readOnly={!canEdit}
               isLoading={isLoading}
+              parentDobContext={{
+                motherDob: fundApplication?.parentsFamilySection?.motherDob,
+                fatherDob: fundApplication?.parentsFamilySection?.fatherDob,
+              }}
             />
           </div>
         )}
