@@ -408,7 +408,7 @@ export function FundApplicationForm({
               </label>
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={formData.declarationsSection?.declarationPhotoVideoConsentAccepted || false} onChange={e => handleFieldChange('declarationsSection', 'declarationPhotoVideoConsentAccepted', e.target.checked)} className="mt-1 w-4 h-4 accent-teal-600 cursor-pointer" disabled={readOnly} />
-                <span className="text-sm text-slate-700">I agree to provide consent for using my child and family photo/video for testimonials.</span>
+                <span className="text-sm text-slate-700">I agree to provide a signed consent form for any approved testimonial transcript or supporting document use.</span>
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <NfiField label="Declaration Date" required type="input" inputProps={{ type: 'date', value: formData.declarationsSection?.declarationDate || '', onChange: e => handleFieldChange('declarationsSection', 'declarationDate', e.target.value), disabled: readOnly }} />
@@ -457,4 +457,3 @@ export function FundApplicationForm({
     </div>
   );
 }
-

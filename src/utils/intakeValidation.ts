@@ -164,7 +164,7 @@ const FUND_FIELD_LABELS: Record<string, string> = {
   anyOtherSupportReceived: 'Any Other Support Received',
   declarationTruthfulnessAccepted: 'Truthfulness Declaration',
   declarationDocumentationConsentAccepted: 'Documentation / E-Meeting Consent',
-  declarationPhotoVideoConsentAccepted: 'Photo / Video Consent',
+  declarationPhotoVideoConsentAccepted: 'Signed Consent Form Declaration',
   declarationDate: 'Declaration Date',
   parentSignatureRef: 'Parent Signature',
   approvedByName: 'Approver Name',

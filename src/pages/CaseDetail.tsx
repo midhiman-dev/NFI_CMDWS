@@ -830,7 +830,7 @@ export function DocumentsTab({
     const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '';
 
     if (!allowedTypes.includes(file.type) && (!extension || !allowedExtensions.includes(extension))) {
-      showToast('Only PDF, JPG, PNG, DOC, DOCX files are allowed', 'error');
+      showToast('Only document files are allowed: PDF, JPG, PNG, DOC, DOCX', 'error');
       return;
     }
 
@@ -1083,7 +1083,7 @@ export function DocumentsTab({
             )}
             {category === 'FINAL' && (
               <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-                These documents are uploaded after discharge and do not affect initial case submission.
+                These documents are uploaded after discharge and do not affect initial case submission. If consent or testimonial support is needed, upload a signed/scanned document or PDF transcript only.
               </div>
             )}
             <div className="space-y-3">

@@ -1,6 +1,7 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
 import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions } from '../../types';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
+import { getBuiltInDocumentTemplates } from '../../utils/documentTemplateCatalog';
 import { mockStore } from '../../store/mockStore';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
@@ -35,6 +36,7 @@ const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
 const SETTLEMENTS_STORAGE_KEY = 'nfi_demo_settlements_v1';
 const DOCTOR_REVIEWS_STORAGE_KEY = 'nfi_demo_doctor_reviews_v1';
 const OPTIONAL_SUPPORTING_DOC_TYPES = new Set([
+  'Consent Form',
   'Signed Fund Application Copy (Optional)',
   'Signed Interim Summary Copy (Optional)',
   'Mother Bank Statement (Optional)',
@@ -45,7 +47,7 @@ const OPTIONAL_SUPPORTING_DOC_TYPES = new Set([
   'Discharge Summary / Report',
   'Post-Discharge Baby Photo',
   'Post-Discharge Parents with Baby Photo',
-  'Testimonial / Video (Optional)',
+  'Testimonial Transcript / Supporting Document (Optional)',
 ]);
 
 interface MockData {
@@ -622,117 +624,10 @@ export class MockProvider implements DataProvider {
   }
 
   private getBuiltInTemplates(): DocumentRequirementTemplate[] {
-    const templateSpecs: Array<{
-      category: 'GENERAL' | 'FINANCE' | 'MEDICAL' | 'FINAL';
-      docType: string;
-      mandatoryFlag: boolean;
-      conditionNotes?: string;
-    }> = [
-      { category: 'GENERAL', docType: 'Aadhaar Card - Mother', mandatoryFlag: true },
-      { category: 'GENERAL', docType: 'Aadhaar Card - Father', mandatoryFlag: true },
-      { category: 'GENERAL', docType: 'Baby Photo in NICU', mandatoryFlag: true },
-      { category: 'GENERAL', docType: 'Parents with Baby in NICU / Hospital', mandatoryFlag: true },
-      {
-        category: 'GENERAL',
-        docType: 'Signed Fund Application Copy (Optional)',
-        mandatoryFlag: false,
-        conditionNotes: 'Supporting signed/scanned copy. Optional when structured intake is complete.',
-      },
-      {
-        category: 'FINANCE',
-        docType: 'Father Bank Statement',
-        mandatoryFlag: false,
-        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
-      },
-      {
-        category: 'FINANCE',
-        docType: 'Mother Bank Statement (Optional)',
-        mandatoryFlag: false,
-      },
-      {
-        category: 'FINANCE',
-        docType: 'Income Certificate',
-        mandatoryFlag: false,
-        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
-      },
-      {
-        category: 'FINANCE',
-        docType: 'Talati/Govt Economic Card',
-        mandatoryFlag: false,
-        conditionNotes: 'Primary financial proof. Upload any one of Father Bank Statement, Income Certificate, or Talati/Govt Economic Card.',
-      },
-      {
-        category: 'FINANCE',
-        docType: 'BPL Card (Optional Supporting)',
-        mandatoryFlag: false,
-      },
-      { category: 'MEDICAL', docType: 'Lab Report', mandatoryFlag: true },
-      { category: 'MEDICAL', docType: 'Internal Case Papers / Doctor Notes', mandatoryFlag: true },
-      { category: 'MEDICAL', docType: 'Investigation Reports (All)', mandatoryFlag: true },
-      {
-        category: 'MEDICAL',
-        docType: 'Pregnancy / Birth / Initial Treatment Records from Other Hospitals',
-        mandatoryFlag: false,
-        conditionNotes: 'Upload when outborn or prior outside-hospital treatment records are available.',
-      },
-      {
-        category: 'MEDICAL',
-        docType: 'Signed Interim Summary Copy (Optional)',
-        mandatoryFlag: false,
-        conditionNotes: 'Supporting signed/scanned copy. Optional when structured intake is complete.',
-      },
-      {
-        category: 'FINAL',
-        docType: 'Final Bill',
-        mandatoryFlag: false,
-        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
-      },
-      {
-        category: 'FINAL',
-        docType: 'Payment Requisition',
-        mandatoryFlag: false,
-        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
-      },
-      {
-        category: 'FINAL',
-        docType: 'Discharge Summary / Report',
-        mandatoryFlag: false,
-        conditionNotes: 'Post-discharge document. Not required for initial case submission.',
-      },
-      {
-        category: 'FINAL',
-        docType: 'Post-Discharge Baby Photo',
-        mandatoryFlag: false,
-      },
-      {
-        category: 'FINAL',
-        docType: 'Post-Discharge Parents with Baby Photo',
-        mandatoryFlag: false,
-      },
-      {
-        category: 'FINAL',
-        docType: 'Testimonial / Video (Optional)',
-        mandatoryFlag: false,
-      },
-    ];
-
-    const templates: DocumentRequirementTemplate[] = [];
-    const processTypes = ['BRC', 'BRRC', 'BGRC', 'BCRC', 'NON_BRC'] as const;
-
-    for (const processType of processTypes) {
-      for (const spec of templateSpecs) {
-        templates.push({
-          templateId: `tpl-${processType}-${spec.category}-${spec.docType}`,
-          processType,
-          category: spec.category,
-          docType: spec.docType,
-          mandatoryFlag: spec.mandatoryFlag && !OPTIONAL_SUPPORTING_DOC_TYPES.has(spec.docType),
-          conditionNotes: spec.conditionNotes,
-        });
-      }
-    }
-
-    return templates;
+    return getBuiltInDocumentTemplates().map((template) => ({
+      ...template,
+      mandatoryFlag: template.mandatoryFlag && !OPTIONAL_SUPPORTING_DOC_TYPES.has(template.docType),
+    }));
   }
 
   private getActorMeta(): { by: string; role: string } {
@@ -895,14 +790,30 @@ export class MockProvider implements DataProvider {
   }
 
   async ensureDocumentChecklist(caseId: string, processType: string): Promise<void> {
+    const caseItem = this.data.cases.find(c => c.caseId === caseId);
+    if (!caseItem) return;
+
+    const templates = this.getBuiltInTemplates().filter(
+      t => t.processType === caseItem.processType
+    );
+
+    const existingDocs = this.documents[caseId] || [];
+    const existingKeys = new Set(
+      existingDocs.map((doc) => {
+        const resolved = resolveDocTypeAlias(doc.docType, doc.category);
+        return `${resolved.category}::${resolved.docType}`;
+      })
+    );
+
+    const missingDocs = templates.filter((template) =>
+      !existingKeys.has(`${template.category}::${template.docType}`)
+    );
+
     if (!this.documents[caseId]) {
-      const caseItem = this.data.cases.find(c => c.caseId === caseId);
-      if (!caseItem) return;
+      this.documents[caseId] = [];
+    }
 
-      const templates = this.getBuiltInTemplates().filter(
-        t => t.processType === caseItem.processType
-      );
-
+    if (this.documents[caseId].length === 0) {
       this.documents[caseId] = templates.map((template, idx) => ({
         docId: `doc-${caseId}-${idx}`,
         caseId,
@@ -911,7 +822,22 @@ export class MockProvider implements DataProvider {
         status: 'Missing' as DocumentStatus,
         notes: '',
       }));
+      this.saveDocuments();
+      return;
+    }
 
+    if (missingDocs.length > 0) {
+      const startingIndex = this.documents[caseId].length;
+      this.documents[caseId].push(
+        ...missingDocs.map((template, idx) => ({
+          docId: `doc-${caseId}-${startingIndex + idx}`,
+          caseId,
+          category: template.category,
+          docType: template.docType,
+          status: 'Missing' as DocumentStatus,
+          notes: '',
+        }))
+      );
       this.saveDocuments();
     }
   }

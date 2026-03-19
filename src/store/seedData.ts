@@ -18,7 +18,7 @@ import {
   AuditEvent,
 } from '../types';
 
-export const SEED_VERSION = 'docs_u3_v4';
+export const SEED_VERSION = 'docs_u3_v5';
 
 export function seedData(): AppStore {
   const users: User[] = [
@@ -141,15 +141,19 @@ export function seedData(): AppStore {
     { templateId: 'tmpl_1', processType: 'BRC', category: 'GENERAL', docType: 'Hospital Registration', mandatoryFlag: true },
     { templateId: 'tmpl_2', processType: 'BRC', category: 'GENERAL', docType: 'Birth Certificate', mandatoryFlag: true },
     { templateId: 'tmpl_3', processType: 'BRC', category: 'GENERAL', docType: 'Aadhar Card (Parent)', mandatoryFlag: false },
+    { templateId: 'tmpl_14', processType: 'BRC', category: 'GENERAL', docType: 'Consent Form', mandatoryFlag: false },
     { templateId: 'tmpl_4', processType: 'BRC', category: 'MEDICAL', docType: 'Discharge Summary', mandatoryFlag: true },
     { templateId: 'tmpl_5', processType: 'BRC', category: 'MEDICAL', docType: 'Medical Reports', mandatoryFlag: true },
     { templateId: 'tmpl_6', processType: 'BRC', category: 'FINANCE', docType: 'Bank Statement', mandatoryFlag: true },
     { templateId: 'tmpl_7', processType: 'BRC', category: 'FINANCE', docType: 'Income Certificate', mandatoryFlag: true },
     { templateId: 'tmpl_8', processType: 'BRRC', category: 'MEDICAL', docType: 'Follow-up Report', mandatoryFlag: true },
+    { templateId: 'tmpl_15', processType: 'BRRC', category: 'GENERAL', docType: 'Consent Form', mandatoryFlag: false },
     { templateId: 'tmpl_9', processType: 'BRRC', category: 'FINANCE', docType: 'BPL Card', mandatoryFlag: true },
     { templateId: 'tmpl_10', processType: 'BGRC', category: 'MEDICAL', docType: 'Lab Report', mandatoryFlag: true },
+    { templateId: 'tmpl_16', processType: 'BGRC', category: 'GENERAL', docType: 'Consent Form', mandatoryFlag: false },
     { templateId: 'tmpl_11', processType: 'BGRC', category: 'MEDICAL', docType: 'Internal Case Papers', mandatoryFlag: true },
     { templateId: 'tmpl_12', processType: 'BCRC', category: 'FINANCE', docType: 'Talati/Govt Economic Card', mandatoryFlag: true },
+    { templateId: 'tmpl_17', processType: 'BCRC', category: 'GENERAL', docType: 'Consent Form', mandatoryFlag: false },
     { templateId: 'tmpl_13', processType: 'BCRC', category: 'MEDICAL', docType: 'Investigation Reports (All)', mandatoryFlag: true },
   ];
 

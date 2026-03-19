@@ -57,6 +57,7 @@ const docTypes = [
   { type: 'Aadhaar Card - Father', category: 'GENERAL', mandatory: true },
   { type: 'Baby Photo in NICU', category: 'GENERAL', mandatory: true },
   { type: 'Parents with Baby in NICU / Hospital', category: 'GENERAL', mandatory: true },
+  { type: 'Consent Form', category: 'GENERAL', mandatory: false },
   { type: 'Signed Fund Application Copy (Optional)', category: 'GENERAL', mandatory: false },
 
   { type: 'Father Bank Statement', category: 'FINANCE', mandatory: false },
@@ -76,7 +77,7 @@ const docTypes = [
   { type: 'Discharge Summary / Report', category: 'FINAL', mandatory: false },
   { type: 'Post-Discharge Baby Photo', category: 'FINAL', mandatory: false },
   { type: 'Post-Discharge Parents with Baby Photo', category: 'FINAL', mandatory: false },
-  { type: 'Testimonial / Video (Optional)', category: 'FINAL', mandatory: false },
+  { type: 'Testimonial Transcript / Supporting Document (Optional)', category: 'FINAL', mandatory: false },
 ];
 
 const rejectionReasons = [

@@ -80,6 +80,12 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
     canonicalType: 'Parents with Baby in NICU / Hospital',
     canonicalCategory: 'GENERAL',
   },
+  'Consent Form': {
+    legacyCode: 'Consent Form',
+    legacyCategory: 'GENERAL',
+    canonicalType: 'Consent Form',
+    canonicalCategory: 'GENERAL',
+  },
   'Baby Photo': {
     legacyCode: 'Baby Photo',
     legacyCategory: 'GENERAL',
@@ -114,6 +120,12 @@ export const LEGACY_DOC_MAPPING: Record<string, DocTypeAlias> = {
     legacyCode: 'Discharge Certificate',
     legacyCategory: 'FINAL',
     canonicalType: 'Discharge Summary / Report',
+    canonicalCategory: 'FINAL',
+  },
+  'Testimonial / Video (Optional)': {
+    legacyCode: 'Testimonial / Video (Optional)',
+    legacyCategory: 'FINAL',
+    canonicalType: 'Testimonial Transcript / Supporting Document (Optional)',
     canonicalCategory: 'FINAL',
   },
 };

@@ -1,6 +1,35 @@
 import { supabase } from '../lib/supabase';
 import type { Case, DocumentMetadata, AuditEvent, DoctorReview, SubmitGatingInfo, SettlementRecord } from '../types';
 import { getSubmitGatingInfo } from '../utils/submitGating';
+import { getBuiltInDocumentTemplates } from '../utils/documentTemplateCatalog';
+
+function mergeDocumentTemplates(dbTemplates: any[]) {
+  const merged = new Map<string, any>();
+
+  for (const template of dbTemplates || []) {
+    merged.set(`${template.process_type}::${template.doc_type}`, template);
+  }
+
+  for (const template of getBuiltInDocumentTemplates()) {
+    const key = `${template.processType}::${template.docType}`;
+    if (!merged.has(key)) {
+      merged.set(key, {
+        id: `builtin-${key}`,
+        process_type: template.processType,
+        category: template.category,
+        doc_type: template.docType,
+        mandatory_flag: template.mandatoryFlag,
+        condition_notes: template.conditionNotes,
+        display_order: 999,
+      });
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    if (a.process_type !== b.process_type) return String(a.process_type).localeCompare(String(b.process_type));
+    return Number(a.display_order ?? 999) - Number(b.display_order ?? 999);
+  });
+}
 
 export const caseService = {
   async getCases(): Promise<Case[]> {
@@ -88,11 +117,8 @@ export const caseService = {
     const caseData = await this.getCaseById(caseId);
     if (!caseData) return [];
 
-    const { data: templates } = await supabase
-      .from('document_templates')
-      .select('*')
-      .eq('process_type', caseData.processType)
-      .order('display_order');
+    const templates = (await this.getDocumentTemplates())
+      .filter((template: any) => template.process_type === caseData.processType);
 
     const { data: existingDocs } = await supabase
       .from('document_metadata')
@@ -220,7 +246,7 @@ export const caseService = {
       .order('process_type, display_order');
 
     if (error) throw error;
-    return data || [];
+    return mergeDocumentTemplates(data || []);
   },
 
   async getHospitals() {
