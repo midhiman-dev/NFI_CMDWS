@@ -18,6 +18,8 @@ import type { CaseWorkflowEvent } from '../utils/caseWorkflow';
 import { getHospitalDisplayStatus, getLatestReturnedEvent, listCaseWorkflowEvents } from '../utils/caseWorkflow';
 import { formatDateTimeFriendly } from '../utils/dateFormat';
 import { translateGender, translateLiteral, translateProcessType } from '../i18n/helpers';
+import { intakeService } from '../services/intakeService';
+import { formatBabyDisplayName } from '../utils/casePresentation';
 
 const TOTAL_STEPS = 5;
 const STEP_TITLES = [
@@ -50,7 +52,8 @@ interface CaseFormData {
   dob: string;
   fatherName: string;
   motherName: string;
-  phone: string;
+  fatherPhone: string;
+  motherPhone: string;
   address: string;
   city: string;
   state: string;
@@ -71,8 +74,7 @@ function getProcessTypeLabel(processType: ProcessType | ''): string {
 }
 
 function buildDerivedBabyName(motherName: string): string {
-  const trimmed = motherName.trim();
-  return trimmed ? `Baby of ${trimmed}` : '';
+  return formatBabyDisplayName(motherName, '');
 }
 
 function normalizeDateForInput(value?: string | null): string {
@@ -123,7 +125,8 @@ export function CaseNew() {
     dob: '',
     fatherName: '',
     motherName: '',
-    phone: '',
+    fatherPhone: '',
+    motherPhone: '',
     address: '',
     city: '',
     state: '',
@@ -249,11 +252,12 @@ export function CaseNew() {
 
     const loadExistingDraft = async () => {
       try {
-        const [caseInfo, beneficiary, family, clinical] = await Promise.all([
+        const [caseInfo, beneficiary, family, clinical, intakeData] = await Promise.all([
           provider.getCaseById(routeCaseId),
           provider.getBeneficiary(routeCaseId).catch(() => null),
           provider.getFamily(routeCaseId).catch(() => null),
           provider.getClinicalDetails(routeCaseId).catch(() => null),
+          intakeService.loadIntakeForCase(routeCaseId).catch(() => ({ fundApplication: undefined, interimSummary: undefined })),
         ]);
 
         if (!caseInfo || cancelled) return;
@@ -277,7 +281,8 @@ export function CaseNew() {
           gender: beneficiary?.gender || prev.gender,
           fatherName: family?.fatherName || prev.fatherName,
           motherName: family?.motherName || prev.motherName,
-          phone: family?.phone || prev.phone,
+          fatherPhone: intakeData.fundApplication?.parentsFamilySection?.fatherContactNo || family?.phone || prev.fatherPhone,
+          motherPhone: intakeData.fundApplication?.parentsFamilySection?.motherContactNo || family?.phone || prev.motherPhone,
           address: family?.address || prev.address,
           city: family?.city || prev.city,
           state: family?.state || prev.state,
@@ -308,6 +313,10 @@ export function CaseNew() {
     const resolvedBabyName = isHospitalSpoc
       ? buildDerivedBabyName(formData.motherName)
       : formData.beneficiaryName;
+    const intakeData = await intakeService.loadIntakeForCase(caseId).catch(() => ({
+      fundApplication: undefined,
+      interimSummary: undefined,
+    }));
 
     await Promise.all([
       provider.upsertBeneficiary(caseId, {
@@ -320,7 +329,7 @@ export function CaseNew() {
       provider.upsertFamily(caseId, {
         fatherName: formData.fatherName || undefined,
         motherName: formData.motherName || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.motherPhone || undefined,
         address: formData.address || undefined,
         city: formData.city || undefined,
         state: formData.state || undefined,
@@ -328,6 +337,16 @@ export function CaseNew() {
       }),
       provider.upsertClinical(caseId, {
         admissionDate: formData.admissionDate || undefined,
+      }),
+      intakeService.saveIntakeSection(caseId, 'fundApp', {
+        ...(intakeData.fundApplication || {}),
+        parentsFamilySection: {
+          ...(intakeData.fundApplication?.parentsFamilySection || {}),
+          fatherName: formData.fatherName || undefined,
+          motherName: formData.motherName || undefined,
+          fatherContactNo: formData.fatherPhone || undefined,
+          motherContactNo: formData.motherPhone || undefined,
+        },
       }),
     ]);
   };
@@ -418,6 +437,16 @@ export function CaseNew() {
   };
 
   const validateStep1 = () => {
+    if (!formData.fatherPhone.trim()) {
+      showToast('Father phone number is required.', 'error');
+      return false;
+    }
+
+    if (!formData.motherPhone.trim()) {
+      showToast('Mother phone number is required.', 'error');
+      return false;
+    }
+
     const required: Array<keyof CaseFormData> = [
       'hospitalId',
       'processType',
@@ -426,7 +455,8 @@ export function CaseNew() {
       'gender',
       'fatherName',
       'motherName',
-      'phone',
+      'fatherPhone',
+      'motherPhone',
       'city',
       'admissionDate',
       'intakeDate',
@@ -455,6 +485,16 @@ export function CaseNew() {
 
     if (!formData.fatherName.trim()) {
       showToast(t('wizard.fatherRequiredFinal'), 'error');
+      return false;
+    }
+
+    if (!formData.fatherPhone.trim()) {
+      showToast('Father phone number is required before final submission.', 'error');
+      return false;
+    }
+
+    if (!formData.motherPhone.trim()) {
+      showToast('Mother phone number is required before final submission.', 'error');
       return false;
     }
 
@@ -504,7 +544,7 @@ export function CaseNew() {
         dob: formData.dob || undefined,
         fatherName: formData.fatherName || undefined,
         motherName: formData.motherName || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.motherPhone || undefined,
         address: formData.address || undefined,
         city: formData.city || undefined,
         state: formData.state || undefined,
@@ -806,10 +846,12 @@ export function CaseNew() {
                 </div>
               )}
 
-              <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-2 text-sm">
-                <span className="font-medium text-[var(--nfi-text)]">{t('wizard.processTypeLabel')}:</span>{' '}
-                <span className="text-[var(--nfi-text-secondary)]">{processingTypeLoading ? t('wizard.deriving') : getProcessTypeLabel(formData.processType)}</span>
-              </div>
+              {!isHospitalSpoc && (
+                <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-2 text-sm">
+                  <span className="font-medium text-[var(--nfi-text)]">{t('wizard.processTypeLabel')}:</span>{' '}
+                  <span className="text-[var(--nfi-text-secondary)]">{processingTypeLoading ? t('wizard.deriving') : getProcessTypeLabel(formData.processType)}</span>
+                </div>
+              )}
 
               <NfiField label="Baby Name" required>
                 {isHospitalSpoc ? (
@@ -872,16 +914,28 @@ export function CaseNew() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <NfiField label="Primary Phone" required>
+                <NfiField label="Father Phone Number" required hint="Required to continue.">
                   <input
                     type="tel"
-                    value={formData.phone}
-                    onChange={(e) => updateField('phone', e.target.value)}
+                    value={formData.fatherPhone}
+                    onChange={(e) => updateField('fatherPhone', e.target.value)}
                     placeholder={t('wizard.phonePlaceholder', { defaultValue: '+91-9876543210' })}
                     className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
                   />
                 </NfiField>
 
+                <NfiField label="Mother Phone Number" required hint="Required to continue.">
+                  <input
+                    type="tel"
+                    value={formData.motherPhone}
+                    onChange={(e) => updateField('motherPhone', e.target.value)}
+                    placeholder={t('wizard.phonePlaceholder', { defaultValue: '+91-9876543210' })}
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
+                  />
+                </NfiField>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <NfiField label="City" required>
                   <select
                     value={formData.city}
@@ -979,9 +1033,10 @@ export function CaseNew() {
                   <p><span className="font-medium">{translateLiteral('Gender')}:</span> {formData.gender ? translateGender(formData.gender) : '-'}</p>
                   <p><span className="font-medium">{translateLiteral('Father Name')}:</span> {formData.fatherName || '-'}</p>
                   <p><span className="font-medium">{translateLiteral('Mother Name')}:</span> {formData.motherName || '-'}</p>
-                  <p><span className="font-medium">{translateLiteral('Primary Phone')}:</span> {formData.phone || '-'}</p>
+                  <p><span className="font-medium">Father Phone Number:</span> {formData.fatherPhone || '-'}</p>
+                  <p><span className="font-medium">Mother Phone Number:</span> {formData.motherPhone || '-'}</p>
                   <p><span className="font-medium">{translateLiteral('City')}:</span> {formData.city || '-'}</p>
-                  <p><span className="font-medium">{translateLiteral('Process')}:</span> {getProcessTypeLabel(formData.processType)}</p>
+                  {!isHospitalSpoc && <p><span className="font-medium">{translateLiteral('Process')}:</span> {getProcessTypeLabel(formData.processType)}</p>}
                 </div>
               </div>
 

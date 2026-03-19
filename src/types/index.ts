@@ -575,6 +575,7 @@ export interface IntakeFundApplication {
 
 export interface IntakeInterimSummary {
   birthSummarySection: {
+    babyName?: string;
     babyBirthWeightKg?: number;
     gender?: 'Male' | 'Female' | 'Other';
     isInborn?: boolean;

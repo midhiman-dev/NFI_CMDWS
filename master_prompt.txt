@@ -1,0 +1,84 @@
+You are working on the existing NFI BMS / NFI CMDWS UI prototype codebase.
+
+Project mode:
+- This is the V3.5 prototype update round.
+- V3.5 must be built as a delta on top of the existing V3 baseline.
+- Do not rebuild the app.
+- Do not redesign the architecture.
+- Do not rewrite large sections unless absolutely necessary.
+
+Standing context:
+- V3 baseline is already assumed to include structured intake, document checklist/folders/versioning, clinical review baseline, workflow extensions, settlement baseline, reporting refinements, and date-format fixes.
+- This round is primarily UI/prototype-focused.
+- Keep all changes demo-safe, minimal, and non-breaking.
+
+Important agreed boundaries:
+- No in-app video / MP4 upload.
+- No mandatory discharge photo/video support.
+- No multilingual in-app consent flow.
+- Consent should be treated as an uploaded signed document.
+- Underage-parent rule must be submit-blocking validation only, not auto-reject.
+- Panel-related changes must preserve the current flow as much as possible.
+- No OTP login/auth work.
+- No backend redesign.
+- No full workflow rebuild.
+- No destructive schema/API changes unless explicitly required for a slice and kept prototype-safe.
+
+Global implementation rules:
+1. Modify the existing codebase only.
+2. Use minimal, surgical edits.
+3. Preserve current visual language, styling, routing, and component patterns.
+4. Avoid unrelated changes and scope creep.
+5. Reuse existing utilities/components where possible.
+6. If a repeated change touches multiple screens, prefer a small shared helper over duplication.
+7. Keep internal data models intact unless a slice explicitly requires otherwise.
+8. If a shared component forces a compromise, make the safest reasonable assumption and report it.
+9. Ensure the project still builds.
+
+Global UI conventions:
+- Prefer display name format: “Baby of <Mother Name>”.
+- Use “BO - <Mother Name>” only where compact layout clearly needs it.
+- Hide internal process/routing jargon from hospital-facing UI when relevant.
+- Where ordered statuses are shown on touched V3.5 surfaces, use:
+  Under Review -> Returned -> Approved -> Rejected -> Closed
+- Use concise, human-readable validation messages.
+- Use subtle badges/highlights, not loud visual treatment.
+- Clean or normalize demo data when stale sample data makes the UI appear broken.
+
+Business-decision / feasibility-sensitive areas:
+Do not silently decide or deeply implement these unless the requested slice explicitly asks for them:
+- serial/case reference number redesign
+- beneficiary number timing
+- income slab / wage model redesign
+- 40,000 income threshold logic
+- full medical/social/financial panel workflow
+- verifier financial snapshot
+- sponsor amount auto-suggestion
+- removal of Director variance review
+- full structured 3/6/9/12/18/24 month questionnaire flow
+
+Typically inspect before editing:
+- dashboard components
+- case list/table/card components
+- intake/edit forms
+- validation schema/utilities
+- shared case headers/summary components
+- document upload config/registry
+- demo/mock/fixture data
+- status constants/maps
+- audit trail/timeline components
+- settlement/closure screens
+- volunteer/follow-up screens
+- reviewer/admin assignment UI
+- shared filter bars/metadata chips
+
+Your task now:
+Read this standing context and implement ONLY the requested slice:
+[INSERT SLICE ID AND SLICE-SPECIFIC REQUIREMENTS HERE]
+
+Mandatory output after implementation:
+1. Brief summary of what was implemented
+2. List of changed files
+3. Mapping of work done against the requested slice checklist
+4. Any assumptions / ambiguities / shared-component impacts
+5. Confirmation that the project still builds, if verified

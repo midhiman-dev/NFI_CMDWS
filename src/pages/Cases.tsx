@@ -13,6 +13,7 @@ import { useAppContext } from '../App';
 import type { CaseWithDetails } from '../data/providers/DataProvider';
 import type { CaseStatus } from '../types';
 import { translateCaseStatus } from '../i18n/helpers';
+import { formatBabyDisplayName, getOrderedCaseStatuses, isNewCase } from '../utils/casePresentation';
 
 interface CaseRow extends CaseWithDetails {
   checklistProgress: number;
@@ -31,7 +32,6 @@ export function Cases() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [processFilter, setProcessFilter] = useState<string>('all');
   const [hospitalFilter, setHospitalFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const authState = getAuthState();
@@ -45,14 +45,14 @@ export function Cases() {
 
   useEffect(() => {
     const requestedStatus = searchParams.get('status');
-    if (requestedStatus && ['Draft', 'Submitted', 'Returned', 'Rejected', 'Approved'].includes(requestedStatus)) {
+    if (requestedStatus && ['Draft', 'Submitted', 'Returned', 'Rejected', 'Approved', 'Closed', 'Under_Review'].includes(requestedStatus)) {
       setStatusFilter(requestedStatus);
     }
   }, [searchParams]);
 
   useEffect(() => {
     applyFilters();
-  }, [cases, searchTerm, statusFilter, processFilter, hospitalFilter, isHospitalUser]);
+  }, [cases, searchTerm, statusFilter, hospitalFilter, isHospitalUser]);
 
   const loadCases = async () => {
     try {
@@ -99,10 +99,6 @@ export function Cases() {
 
     if (statusFilter !== 'all') {
       filtered = filtered.filter((c) => (isHospitalUser ? c.displayStatus : c.caseStatus) === statusFilter);
-    }
-
-    if (processFilter !== 'all') {
-      filtered = filtered.filter((c) => c.processType === processFilter);
     }
 
     if (hospitalFilter !== 'all') {
@@ -225,10 +221,25 @@ export function Cases() {
       Draft: cases.filter((c) => c.displayStatus === 'Draft').length,
       Submitted: cases.filter((c) => c.displayStatus === 'Submitted').length,
       Returned: cases.filter((c) => c.displayStatus === 'Returned').length,
-      Rejected: cases.filter((c) => c.displayStatus === 'Rejected').length,
       Approved: cases.filter((c) => c.displayStatus === 'Approved' || c.displayStatus === 'Closed').length,
+      Rejected: cases.filter((c) => c.displayStatus === 'Rejected').length,
     }),
     [cases]
+  );
+
+  const orderedStatusOptions = useMemo(
+    () =>
+      getOrderedCaseStatuses([
+        'Draft',
+        'Submitted',
+        'Under_Verification',
+        'Under_Review',
+        'Returned',
+        'Approved',
+        'Rejected',
+        'Closed',
+      ]),
+    []
   );
 
   if (loading) {
@@ -289,7 +300,7 @@ export function Cases() {
 
             {isHospitalUser && (
               <div className="flex flex-wrap items-center gap-2">
-                {(['Draft', 'Submitted', 'Returned', 'Rejected', 'Approved'] as const).map((bucket) => {
+                {(['Draft', 'Submitted', 'Returned', 'Approved', 'Rejected'] as const).map((bucket) => {
                   const active = statusFilter === bucket;
                   return (
                     <button
@@ -325,30 +336,16 @@ export function Cases() {
               </div>
 
               <select
-                value={processFilter}
-                onChange={(e) => setProcessFilter(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
-              >
-                <option value="all">{t('common.allProcessTypes')}</option>
-                <option value="New">New</option>
-                <option value="Renewal">Renewal</option>
-                <option value="Revision">Revision</option>
-              </select>
-
-              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-3 py-1.5 text-sm border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
               >
                 <option value="all">{t('common.allStatus')}</option>
-                <option value="Draft">{translateCaseStatus('Draft')}</option>
-                <option value="Submitted">{translateCaseStatus('Submitted')}</option>
-                <option value="Under_Verification">{translateCaseStatus('Under_Verification')}</option>
-                <option value="Under_Review">{translateCaseStatus('Under_Review')}</option>
-                <option value="Approved">{translateCaseStatus('Approved')}</option>
-                <option value="Rejected">{translateCaseStatus('Rejected')}</option>
-                <option value="Closed">{translateCaseStatus('Closed')}</option>
-                <option value="Returned">{translateCaseStatus('Returned')}</option>
+                {orderedStatusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {translateCaseStatus(status)}
+                  </option>
+                ))}
               </select>
 
               {canFilterHospital && (
@@ -366,12 +363,11 @@ export function Cases() {
                 </select>
               )}
 
-              {(searchTerm || statusFilter !== 'all' || processFilter !== 'all' || (canFilterHospital && hospitalFilter !== 'all')) && (
+              {(searchTerm || statusFilter !== 'all' || (canFilterHospital && hospitalFilter !== 'all')) && (
                 <button
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('all');
-                    setProcessFilter('all');
                     if (canFilterHospital) {
                       setHospitalFilter('all');
                     }
@@ -410,9 +406,6 @@ export function Cases() {
                       {t('cases.hospital')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      {t('cases.process')}
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
                       {t('common.status')}
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
@@ -429,24 +422,31 @@ export function Cases() {
                 <tbody>
                   {filteredCases.map((caseItem) => {
                     const action = getRoleAction(caseItem);
+                    const showNewCase = isNewCase(caseItem.createdAt);
+                    const babyDisplayName = formatBabyDisplayName(undefined, caseItem.childName);
                     return (
                       <tr
                         key={caseItem.caseId}
-                        className="border-b border-[var(--nfi-border)] hover:bg-gray-50 transition-colors"
+                        className={`border-b border-[var(--nfi-border)] transition-colors ${
+                          showNewCase ? 'bg-sky-50/60 hover:bg-sky-50' : 'hover:bg-gray-50'
+                        }`}
                       >
                         <td className="py-3 px-4">
-                          <button
-                            onClick={() => navigate(getCaseOpenPath(caseItem))}
-                            className="font-medium text-[var(--nfi-primary)] hover:underline text-left"
-                          >
-                            {caseItem.caseRef}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate(getCaseOpenPath(caseItem))}
+                              className="font-medium text-[var(--nfi-primary)] hover:underline text-left"
+                            >
+                              {caseItem.caseRef}
+                            </button>
+                            {showNewCase && <NfiBadge tone="status">New</NfiBadge>}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
                           {caseItem.beneficiaryNo || '-'}
                         </td>
                         <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
-                          {caseItem.childName || '-'}
+                          <span className="font-medium">{babyDisplayName}</span>
                         </td>
                         <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
                           <div>
@@ -455,9 +455,6 @@ export function Cases() {
                               {t('cases.locationDetails')}
                             </p>
                           </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <NfiBadge tone="accent">{caseItem.processType}</NfiBadge>
                         </td>
                         <td className="py-3 px-4">
                           <NfiBadge

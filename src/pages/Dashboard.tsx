@@ -14,6 +14,7 @@ import { normalizeSeparator } from '../utils/textNormalize';
 import { MIS_KPI_LABELS, calculateConversionRatio } from '../utils/misReporting';
 import type { CaseStatus, UserRole } from '../types';
 import { translateCaseStatus } from '../i18n/helpers';
+import { formatBabyDisplayName, isNewCase } from '../utils/casePresentation';
 import {
   AlertCircle,
   AlertTriangle,
@@ -211,19 +212,24 @@ export function Dashboard() {
               {cases.slice(0, 10).map((c) => (
                 <div
                   key={c.caseId}
-                  className="flex items-center justify-between p-4 border border-[var(--nfi-border)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  className={`flex items-center justify-between p-4 border rounded-lg transition-colors cursor-pointer ${
+                    isNewCase(c.createdAt)
+                      ? 'border-sky-200 bg-sky-50/60 hover:bg-sky-50'
+                      : 'border-[var(--nfi-border)] hover:bg-gray-50'
+                  }`}
                   onClick={() => navigate(getCaseOpenPath(c))}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-medium text-[var(--nfi-text)]">{c.caseRef}</p>
+                      {isNewCase(c.createdAt) && <NfiBadge tone="status">New</NfiBadge>}
                       <NfiBadge tone={getStatusTone(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus)}>
                         {translateCaseStatus(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus)}
                       </NfiBadge>
                     </div>
                     <p className="text-sm text-[var(--nfi-text-secondary)]">
                       {normalizeSeparator(
-                        `${c.childName ? `${c.childName}${CASE_SUBTITLE_SEPARATOR}` : ''}${c.hospitalName || t('common.unknownHospital', { defaultValue: 'Unknown Hospital' })}${CASE_SUBTITLE_SEPARATOR}${c.processType}`,
+                        `${formatBabyDisplayName(undefined, c.childName)}${CASE_SUBTITLE_SEPARATOR}${c.hospitalName || t('common.unknownHospital', { defaultValue: 'Unknown Hospital' })}`,
                       )}
                     </p>
                   </div>

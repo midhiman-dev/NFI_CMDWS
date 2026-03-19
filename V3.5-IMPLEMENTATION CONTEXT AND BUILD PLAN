@@ -1,0 +1,753 @@
+NFI BMS V3.5 — CODEX IMPLEMENTATION CONTEXT AND BUILD PLAN
+Version: Draft for Codex usage
+Purpose: Reusable instruction + context file for all V3.5 prototype slice builds
+Project: Neonates Foundation India (NFI) BMS / CMDWS UI Prototype
+Build target: V3.5 on top of existing V3 prototype baseline
+
+====================================================================
+1. PURPOSE OF THIS FILE
+====================================================================
+
+This file is the master implementation context for Codex / VS Code agent mode.
+
+Use this file as the standing instruction set every time a V3.5 slice is implemented.
+
+Goals:
+- keep all slice prompts aligned
+- prevent scope drift
+- preserve already implemented V3 work
+- ensure March 18 decisions are respected
+- distinguish safe UI refinements from business-decision-dependent changes
+- build V3.5 incrementally in a low -> medium -> high effort sequence
+
+This file should be treated as the default context for every future V3.5 slice prompt.
+
+====================================================================
+2. PRODUCT / PROTOTYPE CONTEXT
+====================================================================
+
+This prototype represents the NFI Beneficiary Management System (NFI BMS), previously referred to as NFI CMDWS.
+
+The final approved prototype will be treated as the source of truth for the development team.
+
+The current work is still prototype/UI-focused.
+The March 18 discussion clarified that the next revision should remain UI-first and should not silently lock in backend or workflow changes unless explicitly agreed.
+
+Primary project goal:
+Create an MVP system to manage neonatal support cases end-to-end, including:
+- intake
+- documents
+- validation
+- review / approvals
+- post-discharge / settlement
+- volunteer follow-up
+- reporting
+
+Current architecture direction in project documents:
+- Angular UI -> Spring Boot APIs -> MySQL + Blob/S3-style storage
+However, the current UI prototype codebase being iterated is the existing prototype implementation and should be modified in-place, not rebuilt from scratch.
+
+====================================================================
+3. V3 BASELINE ASSUMPTION
+====================================================================
+
+Assume the prototype already includes the V3 baseline.
+
+That means V3.5 must be built as a DELTA on top of V3, not as a reimplementation of already completed features.
+
+Treat the following as already implemented in V3 unless a slice explicitly says to refine them:
+
+- structured intake forms
+- 12 mandatory document checklist
+- document folders / grouping
+- re-upload / versioning behavior
+- clinical review tab / reviewer flow baseline
+- workflow extension states
+- settlement / closure stage baseline
+- reporting / export refinements already done in V3
+- date-format consistency fixes
+- V3 demo-mode behavior and other already completed slices
+
+Do not rebuild these from scratch.
+Only adjust them where a V3.5 slice explicitly says to refine or extend them.
+
+====================================================================
+4. AUTHORITATIVE V3.5 DECISIONS / INTERPRETATION
+====================================================================
+
+Use the following as the controlling interpretation for V3.5:
+
+A. CONFIRMED / SAFE DIRECTION
+These can be treated as acceptable for prototype refinement:
+- case list / dashboard / intake simplifications
+- “Baby of / mother name” display standardization
+- remove/hide process type from hospital-facing UI
+- make both father and mother phone numbers mandatory
+- submit-blocking parental age validation
+- auto-carry common fields from Fund Application into Interim Summary
+- remove duplicate signed Fund Application upload dependency if form is already filled digitally
+- add Consent Form as a document type
+- replace video wording with transcript/document wording
+- keep videos out of app storage
+- continue MIS/reporting alignment work
+- clean demo data and correct volunteer questionnaire demo representation
+- simplify/remove KPI logs if not useful
+- refine audit trail where still incomplete
+
+B. IMPORTANT MARCH 18 SCOPE BOUNDARIES
+These must be respected in V3.5:
+- NO in-app video / MP4 upload support
+- NO mandatory discharge photo/video support unless separately approved
+- NO multilingual digital consent interaction inside the app
+- consent should be treated as an uploaded signed document
+- underage validation should BLOCK SUBMIT, not auto-reject in workflow
+- panel direction should preserve the current flow as much as possible
+- prototype round should remain primarily UI-focused
+
+C. BUSINESS-DECISION / FEASIBILITY-DEPENDENT ITEMS
+These are part of the V3.5 planning view, but they are not silently approved requirements.
+They should be built only if the specific slice says so, and should be handled carefully because they affect workflow or product logic.
+
+These include:
+- simpler serial reference number
+- beneficiary number timing (on submit vs after approval)
+- income model redesign
+- daily wage / income slab logic
+- 40,000 income threshold flag
+- full medical/social/financial panel model
+- verifier-uploaded financial snapshot
+- sponsor amount auto-suggestion
+- removing Director review from variance handling
+- donor mapping visibility
+- accounts payment tracking fields
+- volunteer lead assignment
+- pre-discharge contact flow
+- hamper dispatch tracking
+- full structured 3/6/9/12/18/24 month questionnaires
+
+Important:
+For prototype planning, these items are organized into effort buckets.
+But Codex must not infer that all of them are fully approved product requirements.
+They are included because the PM has chosen to keep them in the V3.5 implementation planning view.
+
+====================================================================
+5. ITEMS EXPLICITLY OUT OF SCOPE FOR V3.5
+====================================================================
+
+Do NOT build any of the following unless a future prompt explicitly reverses this:
+
+- consent language selector inside the form
+- multilingual digital in-app consent flow
+- MP4/video upload support
+- mandatory discharge photo upload
+- mandatory discharge video upload
+- any OTP login / OTP auth behavior
+- any full backend redesign
+- any full workflow rebuild from scratch
+- any major API contract change unless a specific slice explicitly asks for a non-breaking prototype-safe adjustment
+- any destructive schema refactor
+- any heavy RBAC implementation beyond lightweight UI-safe prototype scaffolding
+
+====================================================================
+6. HOW CODEX MUST WORK ON THIS PROJECT
+====================================================================
+
+Every V3.5 slice implementation must follow these rules:
+
+1. MODIFY THE EXISTING CODEBASE
+Do not create a new app.
+Do not redesign the entire UI.
+Do not replace major architecture or routing.
+
+2. USE MINIMAL, SURGICAL CHANGES
+Prefer local, targeted edits.
+Avoid large rewrites unless a component is clearly broken or impossible to adapt safely.
+
+3. PRESERVE VISUAL LANGUAGE
+Reuse existing design system, spacing, typography, badges, cards, tabs, colors, and interaction patterns.
+
+4. KEEP DEMO-SAFE
+The prototype may use demo/mock/local data.
+If backend logic is absent, create only minimal safe demo-layer support.
+
+5. AVOID BACKEND DEPENDENCIES
+Do not assume backend endpoints will change.
+Do not introduce API contract changes unless the slice absolutely requires a local, non-breaking stub/adapter.
+
+6. CENTRALIZE WHERE SENSIBLE
+If a repeated pattern is being fixed in multiple places, prefer a small helper or utility instead of duplicating logic everywhere.
+
+Examples:
+- formatBabyDisplayName(...)
+- isNewCase(...)
+- orderedCaseStatuses(...)
+- validateParentPhoneFields(...)
+- shouldShowProcessType(...)
+
+7. DO NOT SILENTLY CHANGE PRODUCT LOGIC
+If a requested change crosses from UI/demo into business-rule redesign, implement only what the slice explicitly allows.
+
+8. REPORT CHANGES CLEARLY
+At the end of each slice implementation, report:
+- files changed
+- what was done
+- any assumptions
+- any non-blocking ambiguities
+
+9. NO SCOPE CREEP
+Only implement the requested slice.
+Do not opportunistically bundle adjacent future slices.
+
+====================================================================
+7. GLOBAL UI / UX CONVENTIONS FOR V3.5
+====================================================================
+
+Apply these conventions consistently whenever relevant:
+
+A. NAMING
+Prefer “Baby of <Mother Name>” as the standard display pattern.
+Use “BO - <Mother Name>” only where a compact card/list layout clearly requires the shortened form.
+
+B. HOSPITAL-FACING SIMPLICITY
+Hide internal routing/process jargon from hospital users wherever the relevant slice calls for it.
+
+C. STATUS PRESENTATION
+When ordered display is needed for the V3.5 surfaces, prefer this order:
+- Under Review
+- Returned
+- Approved
+- Rejected
+- Closed
+
+If other statuses still exist internally, they may remain in data/state, but the visible order on the touched screens should respect the above where applicable.
+
+D. VALIDATION STYLE
+Use concise, human-readable validation messages.
+Do not use alarming or legalistic wording.
+Block submit when required, but keep the user informed clearly.
+
+E. HIGHLIGHTS / BADGES
+Use subtle badges or indicators.
+Avoid flashy animation or loud visual noise.
+
+F. DEMO DATA HONESTY
+Do not let stale sample data make correct UI appear broken.
+Clean or normalize demo data where required.
+
+G. TEXT / LABEL CLARITY
+If wording conflicts with agreed direction, align labels/help text to the agreed interpretation.
+
+====================================================================
+8. BUILD ORDER OVERVIEW
+====================================================================
+
+The V3.5 plan is divided into low, medium, and high effort slices.
+
+Recommended execution order:
+1. V3.5-L1
+2. V3.5-L2
+3. V3.5-L3
+4. V3.5-M1
+5. V3.5-M2
+6. V3.5-M3
+7. V3.5-M4
+8. V3.5-M5
+9. V3.5-M6
+10. V3.5-M7
+11. V3.5-H1
+12. V3.5-H2
+13. V3.5-H3
+14. V3.5-H4
+15. V3.5-H5
+16. V3.5-H6
+
+Recommended practical freeze:
+- Build now: L1, L2, L3, M1, M2, M3, M4
+- Build carefully: M5, M6, M7
+- Hold until explicit PM decision / signoff: H1, H2, H3, H4, H5, H6
+
+====================================================================
+9. DETAILED SLICE PLAN
+====================================================================
+
+------------------------------------------------------------
+V3.5-L1 — CASE LIST, DASHBOARD, AND INTAKE SURFACE CLEANUP
+------------------------------------------------------------
+
+Objective:
+Close the simplest user-facing UI refinements first.
+
+Scope:
+- remove “All Process Type” filter
+- remove “Process” column from case list/grid/table views
+- hide process type from hospital-facing case list/intake surfaces
+- reorder visible statuses to:
+  Under Review -> Returned -> Approved -> Rejected -> Closed
+- highlight new cases more clearly on dashboard/navigation/list surfaces
+- make both father and mother phone numbers mandatory
+- standardize baby display naming to “Baby of <Mother Name>” or compact BO form where necessary
+
+Implementation notes:
+- keep data model intact even if process type remains in state
+- only remove or hide process type from relevant visible UI
+- make validation changes via shared schema/utility where possible
+- use subtle visual highlighting for “New” cases
+- centralize baby-name formatting where possible
+
+Do not:
+- change workflows
+- touch reporting/MIS
+- touch documents
+- touch panel logic
+
+Expected output:
+A clean UI-only refinement pass with no regressions.
+
+------------------------------------------------------------
+V3.5-L2 — DOCUMENT WORDING AND CONSENT UPLOAD ALIGNMENT
+------------------------------------------------------------
+
+Objective:
+Align upload/document UX with agreed March 18 decisions.
+
+Scope:
+- add Consent Form as a document type
+- replace “video upload” wording with transcript/document/PDF wording
+- remove any implication that the prototype stores testimonial videos in-app
+- keep consent as uploaded signed document only
+
+Implementation notes:
+- update document-type config/registry
+- update labels, upload cards, help text, hints, tooltips
+- do not add multilingual consent UI
+- do not add actual video support
+
+Do not:
+- add MP4 support
+- add discharge photo/video requirement
+- add digital consent flows
+
+Expected output:
+Document model and copy fully aligned to agreed consent/video direction.
+
+------------------------------------------------------------
+V3.5-L3 — DEMO DATA AND VISUAL TRUST CLEANUP
+------------------------------------------------------------
+
+Objective:
+Remove demo artifacts that make correct behavior look incorrect.
+
+Scope:
+- clean old demo data causing baby-name inconsistency
+- ensure visible sample cases reflect the intended naming behavior
+- simplify/remove KPI logs where they are not useful
+- fix demo-only label/layout mismatches in MIS-related surfaces where the issue is presentation, not underlying reporting functionality
+
+Implementation notes:
+- prefer fixture/seed cleanup over logic hacks
+- keep prototype deterministic
+- preserve existing screens while making them look trustworthy
+
+Do not:
+- perform a full MIS redesign here
+- build new reporting logic here
+
+Expected output:
+Cleaner demo presentation and improved stakeholder confidence.
+
+------------------------------------------------------------
+V3.5-M1 — SUBMIT-BLOCKING PARENTAL AGE VALIDATION
+------------------------------------------------------------
+
+Objective:
+Implement agreed validation behavior without changing workflow semantics.
+
+Scope:
+- calculate parental age using child DOB and parent DOB
+- block submit if age rule fails
+- show clear validation/warning states
+- do not auto-reject
+
+Implementation notes:
+- keep validation logic reusable
+- integrate with intake/edit submit flow
+- prefer field + form-level clarity
+
+Do not:
+- auto-change case status
+- add backend-driven rejection flow
+
+Expected output:
+Parents below allowed threshold cannot be submitted, but no workflow auto-reject is introduced.
+
+------------------------------------------------------------
+V3.5-M2 — FUND APPLICATION / INTERIM SUMMARY ALIGNMENT REFINEMENTS
+------------------------------------------------------------
+
+Objective:
+Improve intake usability and reduce duplication.
+
+Scope:
+- remove hospital-facing sponsor amount request
+- auto-carry shared fields from Fund Application into Interim Summary
+- treat HHFNC + O2 as compatible / combined support mode
+- remove separate signed Fund Application dependency when digital form is already completed
+
+Implementation notes:
+- use mapping/helper logic for carry-forward
+- keep UI labels clear and non-duplicative
+- prefer minimal edits over form redesign
+
+Do not:
+- rework the whole intake architecture
+- introduce new backend contracts unnecessarily
+
+Expected output:
+Smoother intake experience and less duplicate user effort.
+
+------------------------------------------------------------
+V3.5-M3 — MIS AND VOLUNTEER DEMO CORRECTION PASS
+------------------------------------------------------------
+
+Objective:
+Make MIS and volunteer screens look closer to the intended expected format and behavior.
+
+Scope:
+- correct MIS views beyond Hospital MIS
+- improve month-wise volunteer questionnaire representation
+- update demo/question-set representation where needed
+- simplify or remove KPI logs if not useful
+
+Implementation notes:
+- this is still a prototype/demo alignment slice
+- keep changes visual/presentational unless a tiny local data-shape helper is necessary
+- reflect expected daily/monthly reporting layouts more faithfully
+
+Do not:
+- build final production reporting engine
+- invent unsupported KPIs
+
+Expected output:
+MIS and volunteer sections feel more credible and aligned during stakeholder review.
+
+------------------------------------------------------------
+V3.5-M4 — AUDIT TRAIL REFINEMENT PASS
+------------------------------------------------------------
+
+Objective:
+Close remaining trust and traceability gaps.
+
+Scope:
+- review missing audit events in changed/new prototype flows
+- ensure key actions show timestamp, actor, and concise action summary
+- make new document/validation behaviors visible in timeline/history where appropriate
+
+Implementation notes:
+- keep audit entries concise
+- maintain existing audit/timeline visual language
+- patch missing coverage rather than redesigning the whole audit system
+
+Expected output:
+A more complete and convincing prototype audit trail.
+
+------------------------------------------------------------
+V3.5-M5 — PANELIZATION FOUNDATION (LIGHTWEIGHT REMAP)
+------------------------------------------------------------
+
+Objective:
+Prepare for panel direction without rebuilding workflow.
+
+Scope:
+- reframe “Committee” terminology toward “Panel” / “Panel Decision” where safe
+- add admin-managed assignment placeholders for clinical/social/financial reviewer types
+- preserve current core flow
+- treat this as a routing/remapping layer, not a full workflow replacement
+
+Implementation notes:
+- prefer UI terminology/config layers
+- use placeholders/stubs where needed
+- avoid deep RBAC/workflow branching
+- shared components may need conditional labels
+
+Do not:
+- implement full three-panel workflow engine
+- rebuild review lifecycle
+- create complex branching queues unless explicitly required later
+
+Expected output:
+Prototype shows the likely future direction while staying compatible with the current flow.
+
+------------------------------------------------------------
+V3.5-M6 — SETTLEMENT OPERATIONS ENHANCEMENT LAYER
+------------------------------------------------------------
+
+Objective:
+Extend already-built settlement area with useful operational fields.
+
+Scope:
+- add accounts tracking fields:
+  - paid/unpaid
+  - due date
+  - payment date
+  - reductions
+- add donor mapping visibility
+- keep closure document baseline unchanged:
+  - discharge summary
+  - final bill
+  - payment requisition
+
+Implementation notes:
+- treat these as UI/prototype enhancements adjacent to settlement scope
+- use cards/sections/summary rows consistent with existing design
+- keep demo-safe data support
+
+Do not:
+- add mandatory photo/video closure docs
+- redesign full finance engine
+
+Expected output:
+Settlement screens look more operationally complete without overexpansion.
+
+------------------------------------------------------------
+V3.5-M7 — VOLUNTEER OPERATIONS ENHANCEMENT LAYER
+------------------------------------------------------------
+
+Objective:
+Add requested operational follow-up elements without building a full new workflow engine.
+
+Scope:
+- volunteer-lead case allotment UI
+- pre-discharge contact markers
+- SPOC/parent/home-reached follow-up markers
+- hamper dispatch tracking
+
+Implementation notes:
+- add fields, milestone markers, cards, or status tags as needed
+- preserve current volunteer baseline where possible
+- prefer incremental extension over overhaul
+
+Do not:
+- build final large-scale assignment engine
+- build full structured long-term questionnaires here
+
+Expected output:
+Volunteer operations feel closer to real-world follow-up behavior.
+
+------------------------------------------------------------
+V3.5-H1 — NUMBERING AND IDENTITY MODEL REVISION
+------------------------------------------------------------
+
+Objective:
+Handle case reference and beneficiary numbering decisions.
+
+Scope:
+- simpler serial case reference number
+- beneficiary number timing:
+  - on submit
+  - or after approval
+
+Important:
+This is a product decision area, not just a UI detail.
+
+Implementation caution:
+Do not start unless explicitly instructed.
+
+------------------------------------------------------------
+V3.5-H2 — INCOME AND ELIGIBILITY RULE REDESIGN
+------------------------------------------------------------
+
+Objective:
+Redesign financial eligibility representation.
+
+Scope:
+- monthly vs daily wage capture
+- daily-wage slab logic
+- 40,000 family-income flag
+- any stronger age-rule packaging beyond the already agreed submit-blocking validation
+
+Implementation caution:
+Do not start unless explicitly instructed.
+
+------------------------------------------------------------
+V3.5-H3 — FULL THREE-PANEL REVIEW MODEL
+------------------------------------------------------------
+
+Objective:
+Implement the deeper medical/social/financial panel workflow.
+
+Scope:
+- distinct panel roles
+- scoped queues/doc subsets
+- richer admin assignment
+- deeper panel decision flow changes
+
+Implementation caution:
+This is a major workflow shift.
+Do not start unless explicitly instructed.
+
+------------------------------------------------------------
+V3.5-H4 — FINANCIAL REVIEWER ARTIFACT + SPONSOR INTELLIGENCE
+------------------------------------------------------------
+
+Objective:
+Add finance-specific artifacts and quantification assistance.
+
+Scope:
+- verifier-uploaded financial snapshot
+- sponsor amount suggestion from financial grid
+- financial grid visible during sponsor quantification
+
+Implementation caution:
+Do not start unless explicitly instructed.
+
+------------------------------------------------------------
+V3.5-H5 — VARIANCE-GOVERNANCE CHANGE
+------------------------------------------------------------
+
+Objective:
+Handle the request to remove Director review from variance path.
+
+Scope:
+- remove Director review requirement for bill variance handling
+
+Implementation caution:
+This conflicts with current baseline understanding.
+Do not start unless explicitly instructed.
+
+------------------------------------------------------------
+V3.5-H6 — FULL STRUCTURED 3/6/9/12/18/24 MONTH QUESTIONNAIRE FLOW
+------------------------------------------------------------
+
+Objective:
+Convert milestone follow-up from demo representation into full structured flow.
+
+Scope:
+- structured questionnaires at each milestone
+
+Implementation caution:
+This is a functional expansion.
+Do not start unless explicitly instructed.
+
+====================================================================
+10. SLICE EXECUTION RULES
+====================================================================
+
+For every slice prompt:
+
+A. Assume this context file has already been read.
+B. Implement ONLY the requested slice.
+C. Reuse existing code patterns and components.
+D. Keep changes non-breaking and demo-safe.
+E. Prefer shared helpers/utilities over duplication.
+F. Do not introduce hidden product decisions.
+G. If a shared component forces a reasonable compromise, make the safest assumption and report it.
+H. Always ensure the project still builds.
+
+====================================================================
+11. FILES / AREAS CODEX SHOULD TYPICALLY INSPECT
+====================================================================
+
+Before editing any slice, inspect the most relevant parts of the codebase, such as:
+
+- dashboard components
+- case list / table / card components
+- intake and edit forms
+- validation schema / form utilities
+- shared case header / summary components
+- document upload config / labels / registry
+- demo/mock/fixture data
+- status constants / enums / label maps
+- audit trail / timeline components
+- settlement / closure screens
+- volunteer monitoring / follow-up screens
+- assignment / reviewer / admin-facing UI
+- any shared filter bars or metadata chips
+
+Pick the smallest coherent set of files possible.
+
+====================================================================
+12. ACCEPTANCE CRITERIA TEMPLATE FOR ALL SLICES
+====================================================================
+
+Unless a slice-specific prompt says otherwise, use this general acceptance standard:
+
+1. Requested slice scope is fully implemented.
+2. No unrelated features are changed.
+3. Existing V3 behavior outside slice scope is preserved.
+4. No obvious UI regressions are introduced.
+5. Labels/help text match current agreed direction.
+6. Demo data/state remain coherent.
+7. The project builds successfully.
+8. Files changed are clearly reported.
+9. Any assumptions are explicitly documented.
+
+====================================================================
+13. OUTPUT FORMAT EXPECTED FROM CODEX AFTER EACH SLICE
+====================================================================
+
+At the end of each slice implementation, Codex should provide:
+
+1. A brief summary of what was implemented
+2. A file list of all changed files
+3. A mapping of implemented work against the slice checklist
+4. Any assumptions / ambiguities / shared-component impacts
+5. Confirmation that the build still succeeds, if verified in the environment
+
+====================================================================
+14. WHEN CODEX SHOULD STOP AND NOT GUESS
+====================================================================
+
+Stop and avoid deep implementation if the requested change would require silently deciding one of the following:
+
+- beneficiary number generation timing
+- income slab / 40,000 threshold rule finalization
+- full workflow replacement with three panels
+- removal of Director variance review
+- photo/video becoming mandatory closure docs
+- any new backend/API contract not clearly allowed by the slice
+
+If a future prompt explicitly asks for one of these high-effort slices, then proceed within that slice.
+Otherwise, do not guess.
+
+====================================================================
+15. RECOMMENDED FUTURE PROMPTING PATTERN
+====================================================================
+
+When giving Codex a slice prompt later, the PM should use a pattern like:
+
+“Read and follow the standing instructions in:
+NFI BMS V3.5 — CODEX IMPLEMENTATION CONTEXT AND BUILD PLAN
+
+Now implement only:
+[V3.5-SLICE-ID]
+
+Constraints:
+- do not touch unrelated slices
+- keep changes minimal and non-breaking
+- report changed files and assumptions”
+
+This allows future slice prompts to stay shorter and more consistent.
+
+====================================================================
+16. FINAL IMPLEMENTATION STRATEGY SUMMARY
+====================================================================
+
+V3.5 should be built as:
+- an incremental refinement round on top of V3
+- mostly UI-safe changes first
+- careful alignment to March 18 decisions
+- no silent acceptance of major process-rule changes
+- no rebuild
+- no scope drift
+- no video support
+- no in-app multilingual consent
+- no auto-reject for underage parents
+- no full panel engine unless explicitly approved
+
+Core strategy:
+1. finish safe polish and alignment
+2. refine validation, data carry-forward, MIS demo, and audit trail
+3. add light panel/settlement/volunteer enhancement layers carefully
+4. hold true workflow/rule redesign items until explicit signoff
+
+End of file

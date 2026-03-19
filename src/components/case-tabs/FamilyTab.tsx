@@ -5,6 +5,7 @@ import { NfiField } from '../design-system/NfiField';
 import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
 import type { FamilyProfile } from '../../types';
+import { intakeService } from '../../services/intakeService';
 
 interface Props {
   caseId: string;
@@ -20,10 +21,22 @@ export function FamilyTab({ caseId }: Props) {
   const [form, setForm] = useState<FamilyProfile>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [parentPhones, setParentPhones] = useState({ fatherPhone: '', motherPhone: '' });
 
   const load = async () => {
     setLoading(true);
-    try { const r = await provider.getFamily(caseId); setData(r); if (r) setForm(r); } catch {}
+    try {
+      const [family, intakeData] = await Promise.all([
+        provider.getFamily(caseId),
+        intakeService.loadIntakeForCase(caseId).catch(() => ({ fundApplication: undefined, interimSummary: undefined })),
+      ]);
+      setData(family);
+      if (family) setForm(family);
+      setParentPhones({
+        fatherPhone: intakeData.fundApplication?.parentsFamilySection?.fatherContactNo || family?.phone || '',
+        motherPhone: intakeData.fundApplication?.parentsFamilySection?.motherContactNo || family?.phone || '',
+      });
+    } catch {}
     setLoading(false);
   };
 
@@ -33,11 +46,25 @@ export function FamilyTab({ caseId }: Props) {
 
   const handleSave = async () => {
     if (!form.motherName.trim()) { showToast('Mother name is required', 'error'); return; }
-    if (!form.phone.trim()) { showToast('Phone is required', 'error'); return; }
+    if (!parentPhones.fatherPhone.trim()) { showToast('Father phone number is required', 'error'); return; }
+    if (!parentPhones.motherPhone.trim()) { showToast('Mother phone number is required', 'error'); return; }
     setSaving(true);
     try {
       const { caseId: _, ...rest } = form;
-      await provider.upsertFamily(caseId, rest);
+      const intakeData = await intakeService.loadIntakeForCase(caseId).catch(() => ({ fundApplication: undefined, interimSummary: undefined }));
+      await Promise.all([
+        provider.upsertFamily(caseId, { ...rest, phone: parentPhones.motherPhone }),
+        intakeService.saveIntakeSection(caseId, 'fundApp', {
+          ...(intakeData.fundApplication || {}),
+          parentsFamilySection: {
+            ...(intakeData.fundApplication?.parentsFamilySection || {}),
+            fatherName: form.fatherName || undefined,
+            motherName: form.motherName || undefined,
+            fatherContactNo: parentPhones.fatherPhone,
+            motherContactNo: parentPhones.motherPhone,
+          },
+        }),
+      ]);
       showToast('Family details saved', 'success');
       setEditing(false);
       await load();
@@ -71,8 +98,11 @@ export function FamilyTab({ caseId }: Props) {
           <NfiField label="Father Name">
             <input type="text" className="nfi-input" value={form.fatherName ?? ''} onChange={e => setForm({ ...form, fatherName: e.target.value })} />
           </NfiField>
-          <NfiField label="Phone" required>
-            <input type="tel" className="nfi-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+          <NfiField label="Father Phone Number" required>
+            <input type="tel" className="nfi-input" value={parentPhones.fatherPhone} onChange={e => setParentPhones({ ...parentPhones, fatherPhone: e.target.value })} />
+          </NfiField>
+          <NfiField label="Mother Phone Number" required>
+            <input type="tel" className="nfi-input" value={parentPhones.motherPhone} onChange={e => setParentPhones({ ...parentPhones, motherPhone: e.target.value })} />
           </NfiField>
           <NfiField label="WhatsApp">
             <input type="tel" className="nfi-input" value={form.whatsapp ?? ''} onChange={e => setForm({ ...form, whatsapp: e.target.value })} />
@@ -137,7 +167,8 @@ export function FamilyTab({ caseId }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-6">
           <KV label="Mother Name" value={data.motherName} />
           <KV label="Father Name" value={data.fatherName} />
-          <KV label="Phone" value={data.phone} />
+          <KV label="Father Phone Number" value={parentPhones.fatherPhone} />
+          <KV label="Mother Phone Number" value={parentPhones.motherPhone} />
           <KV label="WhatsApp" value={data.whatsapp} />
           <KV label="Email" value={data.email} />
           <KV label="Aadhaar" value={data.aadhaarLast4 ? `XXXX-XXXX-${data.aadhaarLast4}` : undefined} />

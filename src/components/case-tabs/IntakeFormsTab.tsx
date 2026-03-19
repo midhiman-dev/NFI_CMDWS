@@ -9,6 +9,7 @@ import { useToast } from '../design-system/Toast';
 import { getAuthState } from '../../utils/auth';
 import { providerFactory } from '../../data/providers/ProviderFactory';
 import { deriveMaternalFields, isEmptyDerivedValue, parseDateFlexible } from '../../utils/derivedFields';
+import { formatBabyDisplayName } from '../../utils/casePresentation';
 
 interface IntakeFormsTabProps {
   caseId: string;
@@ -91,6 +92,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       const resolvedInterim = data.interimSummary || createEmptyInterimSummary();
       const patchedBirthSummary = {
         ...resolvedInterim.birthSummarySection,
+        babyName: resolvedInterim.birthSummarySection?.babyName || formatBabyDisplayName(family?.motherName, beneficiary?.beneficiaryName),
         dateOfBirth: resolvedInterim.birthSummarySection?.dateOfBirth || beneficiary?.dob || undefined,
         gender: resolvedInterim.birthSummarySection?.gender || beneficiary?.gender || undefined,
       };
@@ -117,6 +119,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       }
 
       if (
+        patchedInterim.birthSummarySection?.babyName !== resolvedInterim.birthSummarySection?.babyName ||
         patchedInterim.birthSummarySection?.dateOfBirth !== resolvedInterim.birthSummarySection?.dateOfBirth ||
         patchedInterim.birthSummarySection?.gender !== resolvedInterim.birthSummarySection?.gender
       ) {

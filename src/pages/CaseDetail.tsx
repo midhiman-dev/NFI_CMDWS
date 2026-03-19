@@ -36,6 +36,7 @@ import { formatDateTimeFriendly } from '../utils/dateFormat';
 import { FUNDING_CAMPAIGN_OPTIONS, FUNDING_PROGRAM_OPTIONS, toCurrency } from '../utils/fundingConfig';
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
+import { formatBabyDisplayName } from '../utils/casePresentation';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -207,6 +208,7 @@ export function CaseDetail() {
   const hospitalName = caseData.hospitalName || 'Unknown Hospital';
   const isHospitalRejectedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Rejected';
   const isHospitalReturnedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Returned';
+  const caseDisplayName = formatBabyDisplayName(familyProfile?.motherName, childProfile?.beneficiaryName || caseData.childName);
 
   const caseDataTabs = [
     { id: 'overview', label: translateLiteral('Overview'), icon: <FileText size={16} /> },
@@ -261,7 +263,7 @@ export function CaseDetail() {
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{caseData.caseRef}</h1>
             <p className="text-[var(--nfi-text-secondary)] mt-1">
-              {normalizeSeparator(`${caseData.processType}${CASE_SUBTITLE_SEPARATOR}${hospitalName}`)}
+              {normalizeSeparator(`${caseDisplayName}${CASE_SUBTITLE_SEPARATOR}${hospitalName}`)}
             </p>
           </div>
           <NfiBadge
@@ -637,9 +639,9 @@ function OverviewTab({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InfoItem label="Case Reference" value={caseData.caseRef} />
           <InfoItem label="Beneficiary No" value={caseData.beneficiaryNo || 'Not assigned'} />
-          <InfoItem label="Child Name" value={caseData.childName} />
+          <InfoItem label="Baby Name" value={formatBabyDisplayName(familyProfile?.motherName, caseData.childName)} />
           <InfoItem label="Hospital" value={caseData.hospitalName} />
-          <InfoItem label="Process Type" value={caseData.processType} />
+          {authState.activeRole !== 'hospital_spoc' && <InfoItem label="Process Type" value={caseData.processType} />}
           <InfoItem label="Status" value={caseData.caseStatus.replace('_', ' ')} />
           <InfoItem label="Intake Date" value={caseData.intakeDate ? new Date(caseData.intakeDate).toLocaleDateString() : undefined} />
           <InfoItem label="Last Updated" value={new Date(caseData.updatedAt).toLocaleDateString()} />
