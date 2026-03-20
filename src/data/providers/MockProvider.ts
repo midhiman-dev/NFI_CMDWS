@@ -8,6 +8,7 @@ import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalize
 import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, saveWorkflowStore } from '../../utils/caseWorkflow';
 import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
+import { FOLLOWUP_REMARK_FIELDS, getFollowupQuestionnaire } from '../../utils/followupQuestionnaires';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -1171,32 +1172,26 @@ export class MockProvider implements DataProvider {
   }
 
   async listFollowupMetricDefs(milestoneMonths: number): Promise<FollowupMetricDef[]> {
-    const metricDefs: Record<number, FollowupMetricDef[]> = {
-      3: [
-        { metricId: 'metric-3-weight', milestoneMonths: 3, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-        { metricId: 'metric-3-feeding', milestoneMonths: 3, metricKey: 'feedingStatus', metricLabel: 'Feeding Status Normal', valueType: 'BOOLEAN', allowNA: true },
-        { metricId: 'metric-3-illness', milestoneMonths: 3, metricKey: 'noMajorIllness', metricLabel: 'No Major Illness', valueType: 'BOOLEAN', allowNA: true },
-      ],
-      6: [
-        { metricId: 'metric-6-weight', milestoneMonths: 6, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-        { metricId: 'metric-6-development', milestoneMonths: 6, metricKey: 'developmentNormal', metricLabel: 'Normal Development', valueType: 'BOOLEAN', allowNA: true },
-        { metricId: 'metric-6-immunization', milestoneMonths: 6, metricKey: 'immunizationUpToDate', metricLabel: 'Immunization Up-to-Date', valueType: 'BOOLEAN', allowNA: false },
-      ],
-      9: [
-        { metricId: 'metric-9-weight', milestoneMonths: 9, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-      ],
-      12: [
-        { metricId: 'metric-12-weight', milestoneMonths: 12, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-        { metricId: 'metric-12-language', milestoneMonths: 12, metricKey: 'languageMilestone', metricLabel: 'Appropriate Language Skills', valueType: 'BOOLEAN', allowNA: true },
-      ],
-      18: [
-        { metricId: 'metric-18-weight', milestoneMonths: 18, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-      ],
-      24: [
-        { metricId: 'metric-24-weight', milestoneMonths: 24, metricKey: 'currentWeight', metricLabel: 'Current Weight (kg)', valueType: 'TEXT', allowNA: false },
-      ],
-    };
-    return metricDefs[milestoneMonths] || [];
+    const questionnaire = getFollowupQuestionnaire(milestoneMonths);
+    const questionDefs = questionnaire.questions.map((question, index) => ({
+      metricId: `metric-${milestoneMonths}-${question.metricKey}`,
+      milestoneMonths: questionnaire.milestoneMonths,
+      metricKey: question.metricKey,
+      metricLabel: question.label,
+      valueType: 'TEXT' as const,
+      allowNA: true,
+    }));
+
+    const remarkDefs = FOLLOWUP_REMARK_FIELDS.map((field, index) => ({
+      metricId: `metric-${milestoneMonths}-${field.metricKey}-${index}`,
+      milestoneMonths: questionnaire.milestoneMonths,
+      metricKey: field.metricKey,
+      metricLabel: field.label,
+      valueType: 'TEXT' as const,
+      allowNA: true,
+    }));
+
+    return [...questionDefs, ...remarkDefs];
   }
 
   async saveFollowupMetricValues(caseId: string, milestoneMonths: number, values: Omit<FollowupMetricValue, 'valueId'>[]): Promise<void> {

@@ -10,21 +10,32 @@ import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth } from '../../utils/roleAccess';
 import {
   DAILY_MIS_DEMO_ROWS,
-  MIS_KPI_LABELS,
   MIS_DEMO_DATE,
   MIS_DEMO_LAST_REFRESH,
-  calculateConversionRatio,
   downloadCSV,
   formatCurrencyCompact,
   formatDownloadTimestamp,
-  formatMISDate,
   formatMISDateTime,
+  getDailyMisStatusSummary,
+  getMonthDateRange,
+  getMonthLabel,
   isDemoDailyDate,
-  sameDay,
+  sameMonth,
   toCSV,
-  type DailyProgramRow,
+  type DailyMisCaseRow,
 } from '../../utils/misReporting';
 import type { CaseWithDetails } from '../../data/providers/DataProvider';
+
+function mapCaseStatusToDailyMisStatus(caseStatus: CaseWithDetails['caseStatus']): DailyMisCaseRow['status'] {
+  if (caseStatus === 'Approved' || caseStatus === 'Closed') return 'Approved';
+  if (caseStatus === 'Rejected') return 'Rejected';
+  if (caseStatus === 'Submitted' || caseStatus === 'Under_Verification' || caseStatus === 'Returned') return 'Documentation';
+  return 'Enquiry';
+}
+
+function formatBabyName(caseItem: CaseWithDetails) {
+  return caseItem.childName || (caseItem.motherName ? `Baby of ${caseItem.motherName}` : caseItem.caseRef);
+}
 
 export function DailyMISPrograms() {
   const navigate = useNavigate();
@@ -58,49 +69,35 @@ export function DailyMISPrograms() {
     loadCases();
   }, [authScopeKey, provider, showToast]);
 
-  const filteredCases = useMemo(
-    () => cases.filter((item) => sameDay(item.lastActionAt || item.updatedAt || item.intakeDate, selectedDate)),
-    [cases, selectedDate],
-  );
+  const selected = new Date(selectedDate);
+  const selectedYear = selected.getFullYear();
+  const selectedMonth = selected.getMonth() + 1;
+  const selectedFiscalYear = `${selectedMonth >= 4 ? selectedYear : selectedYear - 1}-${String(((selectedMonth >= 4 ? selectedYear : selectedYear - 1) + 1) % 100).padStart(2, '0')}`;
 
-  const liveRows = useMemo<DailyProgramRow[]>(() => {
-    const grouped = new Map<string, DailyProgramRow>();
-    filteredCases.forEach((item) => {
-      const key = item.processType || 'General';
-      const current = grouped.get(key) || {
-        programLabel: key === 'NON_BRC' ? 'Other Programs' : `${key} Program`,
-        totalEnquires: 0,
-        approvedCases: 0,
-        rejectedCases: 0,
-        pendingCases: 0,
-        approvedValue: 0,
-      };
-      current.totalEnquires += 1;
-      if (item.caseStatus === 'Approved' || item.caseStatus === 'Closed') current.approvedCases += 1;
-      else if (item.caseStatus === 'Rejected') current.rejectedCases += 1;
-      else current.pendingCases += 1;
-      current.approvedValue += item.approvedAmount || 0;
-      grouped.set(key, current);
-    });
-    return Array.from(grouped.values()).sort((a, b) => b.totalEnquires - a.totalEnquires);
-  }, [filteredCases]);
+  const liveRows = useMemo<DailyMisCaseRow[]>(() => {
+    return cases
+      .filter((item) => sameMonth(item.lastActionAt || item.updatedAt || item.intakeDate, selectedFiscalYear, String(selectedMonth)))
+      .map((item) => {
+        const relevantDate = item.lastActionAt || item.updatedAt || item.intakeDate;
+        return {
+          rowId: item.caseId,
+          date: relevantDate.split('T')[0],
+          babyName: formatBabyName(item),
+          hospitalName: item.hospitalName || 'Unknown Hospital',
+          status: mapCaseStatusToDailyMisStatus(item.caseStatus),
+          sponsorAmount: item.approvedAmount || 0,
+          activeDays: [new Date(relevantDate).getDate()],
+        };
+      });
+  }, [cases, selectedFiscalYear, selectedMonth]);
 
   const rows = useMemo(
     () => (liveRows.length > 0 ? liveRows : isDemoDailyDate(selectedDate) ? DAILY_MIS_DEMO_ROWS : []),
     [liveRows, selectedDate],
   );
 
-  const summary = useMemo(() => {
-    const totalEnquires = rows.reduce((sum, row) => sum + row.totalEnquires, 0);
-    const approvedCases = rows.reduce((sum, row) => sum + row.approvedCases, 0);
-    const rejectedCases = rows.reduce((sum, row) => sum + row.rejectedCases, 0);
-    return {
-      totalEnquires,
-      approvedCases,
-      rejectedCases,
-      conversionRatio: calculateConversionRatio(approvedCases, totalEnquires),
-    };
-  }, [rows]);
+  const summaryRows = useMemo(() => getDailyMisStatusSummary(rows), [rows]);
+  const monthDays = useMemo(() => getMonthDateRange(selectedYear, selectedMonth), [selectedMonth, selectedYear]);
 
   const handleExport = async () => {
     try {
@@ -115,15 +112,15 @@ export function DailyMISPrograms() {
 
       downloadCSV(
         toCSV(
-          ['Program', MIS_KPI_LABELS.totalEnquires, MIS_KPI_LABELS.approvedCases, MIS_KPI_LABELS.rejectedCases, MIS_KPI_LABELS.conversionRatio, 'Pending Cases', 'Approved Value'],
-          rows.map((row) => [
-            row.programLabel,
-            row.totalEnquires,
-            row.approvedCases,
-            row.rejectedCases,
-            `${calculateConversionRatio(row.approvedCases, row.totalEnquires)}%`,
-            row.pendingCases,
-            row.approvedValue,
+          ['Sl.No', 'Date', 'Baby Name', 'Hospital Name', 'Status', 'Sponsor amount', ...monthDays.map((day) => day.toISOString().split('T')[0])],
+          rows.map((row, index) => [
+            index + 1,
+            row.date,
+            row.babyName,
+            row.hospitalName,
+            row.status,
+            row.sponsorAmount,
+            ...monthDays.map((day) => (row.activeDays.includes(day.getDate()) ? 'Marked' : '')),
           ]),
         ),
         `Daily_MIS_Programs_${formatDownloadTimestamp()}`,
@@ -147,7 +144,9 @@ export function DailyMISPrograms() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.DAILY_MIS_PROGRAMS.title', { defaultValue: 'Daily MIS - Programs' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">{t('reports.surfaces.DAILY_MIS_PROGRAMS.subtitle', { defaultValue: 'Daily operational MIS grouped into case buckets for a quick demo-ready program view.' })}</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">
+              Daily MIS layout aligned to the source template: status summary at top and a selected-month day grid below.
+            </p>
           </div>
         </div>
 
@@ -163,8 +162,8 @@ export function DailyMISPrograms() {
               />
             </div>
             <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{t('common.dataAsOf')}</p>
-                <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{formatMISDate(selectedDate)}</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Selected month</p>
+              <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{getMonthLabel(selectedMonth)} {selectedYear}</p>
               <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
                 <RefreshCw size={14} />
                 {t('common.lastRefresh')}: {formatMISDateTime(rows.length > 0 && liveRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
@@ -183,17 +182,39 @@ export function DailyMISPrograms() {
           </div>
         </NfiCard>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MisMetricCard label={t('reports.kpis.totalEnquires', { defaultValue: MIS_KPI_LABELS.totalEnquires })} value={summary.totalEnquires} />
-          <MisMetricCard label={t('reports.kpis.approvedCases', { defaultValue: MIS_KPI_LABELS.approvedCases })} value={summary.approvedCases} />
-          <MisMetricCard label={t('reports.kpis.rejectedCases', { defaultValue: MIS_KPI_LABELS.rejectedCases })} value={summary.rejectedCases} />
-          <MisMetricCard label={t('reports.kpis.conversionRatio', { defaultValue: MIS_KPI_LABELS.conversionRatio })} value={`${summary.conversionRatio}%`} />
-        </div>
+        <NfiCard>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Status Summary</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+              Uses the source template order: Approved, Rejected, Documentation, Enquiry.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--nfi-border)]">
+                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summaryRows.map((row) => (
+                  <tr key={row.status} className="border-b border-[var(--nfi-border)]">
+                    <td className="py-3 px-4 text-[var(--nfi-text)]">{row.status}</td>
+                    <td className="py-3 px-4 text-right text-[var(--nfi-text)]">{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </NfiCard>
 
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">{t('reports.daily.gridTitle', { defaultValue: 'Daily Program Snapshot' })}</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Counts are grouped from case activity on the selected date for a compact daily review.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Daily MIS - Programs (Month View)</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+              Fixed case columns are followed by day markers for the selected month, matching the intended template structure.
+            </p>
           </div>
 
           {loading ? (
@@ -202,31 +223,45 @@ export function DailyMISPrograms() {
               <p className="text-[var(--nfi-text-secondary)]">{t('common.loadingData')}</p>
             </div>
           ) : rows.length === 0 ? (
-            <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No daily program activity found for the selected date.</div>
+            <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No daily MIS rows are available for the selected month.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[1400px]">
                 <thead>
                   <tr className="border-b border-[var(--nfi-border)]">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Program</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.totalEnquires}</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.approvedCases}</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.rejectedCases}</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">{MIS_KPI_LABELS.conversionRatio}</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Pending Cases</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Approved Value</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Sl.No</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Baby Name</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Hospital Name</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Sponsor amount</th>
+                    {monthDays.map((day) => (
+                      <th key={day.toISOString()} className="text-center py-3 px-2 font-semibold text-[var(--nfi-text)]">
+                        {day.getDate()}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.programLabel} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
-                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.programLabel}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.totalEnquires}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.approvedCases}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.rejectedCases}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{calculateConversionRatio(row.approvedCases, row.totalEnquires)}%</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.pendingCases}</td>
-                      <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.approvedValue)}</td>
+                  {rows.map((row, index) => (
+                    <tr key={row.rowId} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{index + 1}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.date}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.babyName}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.hospitalName}</td>
+                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.status}</td>
+                      <td className="py-3 px-4 text-right text-[var(--nfi-text)]">{formatCurrencyCompact(row.sponsorAmount)}</td>
+                      {monthDays.map((day) => (
+                        <td key={`${row.rowId}-${day.toISOString()}`} className="py-3 px-2 text-center">
+                          {row.activeDays.includes(day.getDate()) ? (
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-100 px-1 text-xs font-medium text-blue-700">
+                              {row.status.charAt(0)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -236,14 +271,5 @@ export function DailyMISPrograms() {
         </NfiCard>
       </div>
     </Layout>
-  );
-}
-
-function MisMetricCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <NfiCard className="bg-white border border-[var(--nfi-border)]">
-      <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
-      <p className="text-3xl font-bold text-[var(--nfi-text)] mt-2">{value}</p>
-    </NfiCard>
   );
 }

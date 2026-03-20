@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, CheckCircle, Clock, Edit2, FileText, Play } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, Edit2, FileText, Play, UserRound } from 'lucide-react';
 import { NfiBadge } from './design-system/NfiBadge';
 import { NfiButton } from './design-system/NfiButton';
 import { NfiField } from './design-system/NfiField';
@@ -8,8 +8,9 @@ import { CompactMilestoneModal } from './CompactMilestoneModal';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
 import { formatDateDMY } from '../utils/dateFormat';
-import type { Case, User, ClinicalCaseDetails, FollowupMilestone } from '../types';
+import type { Case, FamilyProfile, Hospital, User, ClinicalCaseDetails, FollowupMilestone } from '../types';
 import type { BeniProgramOpsData } from '../data/providers/DataProvider';
+import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
 
 interface MonitoringTabProps {
   caseId: string;
@@ -24,6 +25,8 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
   const [milestones, setMilestones] = useState<FollowupMilestone[]>([]);
   const [volunteers, setVolunteers] = useState<User[]>([]);
   const [clinicalDetails, setClinicalDetails] = useState<ClinicalCaseDetails | null>(null);
+  const [hospital, setHospital] = useState<Hospital | null>(null);
+  const [family, setFamily] = useState<FamilyProfile | null>(null);
   const [isEditingBeni, setIsEditingBeni] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<FollowupMilestone | null>(null);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
@@ -55,17 +58,21 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         return;
       }
 
-      const [beniOpsData, milestonesData, volunteersData, clinicalData] = await Promise.all([
+      const [beniOpsData, milestonesData, volunteersData, clinicalData, hospitals, familyData] = await Promise.all([
         provider.getBeniProgramOps(caseId),
         provider.listFollowupMilestones(caseId),
         provider.listVolunteers(),
         provider.getClinicalDetails(caseId),
+        provider.getHospitals(),
+        provider.getFamily(caseId),
       ]);
 
       setBeniOps(beniOpsData);
-      setMilestones(milestonesData);
+      setMilestones(sortMilestonesBySourceOrder(milestonesData));
       setVolunteers(volunteersData);
       setClinicalDetails(clinicalData);
+      setHospital(hospitals.find((item) => item.hospitalId === caseInfo.hospitalId) || null);
+      setFamily(familyData);
 
       if (beniOpsData) {
         setBeniForm({
@@ -80,7 +87,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         const anchorDate = clinicalData.dischargeDate || clinicalData.admissionDate;
         if (anchorDate) {
           const newMilestones = await provider.ensureFollowupMilestones(caseId, anchorDate);
-          setMilestones(newMilestones);
+          setMilestones(sortMilestonesBySourceOrder(newMilestones));
         }
       }
     } catch (err) {
@@ -158,7 +165,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
     }
     try {
       const newMilestones = await provider.ensureFollowupMilestones(caseId, anchorDate);
-      setMilestones(newMilestones);
+      setMilestones(sortMilestonesBySourceOrder(newMilestones));
       showToast('Milestones initialized successfully', 'success');
     } catch (err) {
       console.error('Error initializing milestones:', err);
@@ -166,13 +173,13 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
     }
   };
 
-  const handleOpenQuestionnaire = (milestone: any) => {
+  const handleOpenQuestionnaire = (milestone: FollowupMilestone) => {
     setSelectedMilestone(milestone);
     setShowQuestionnaire(true);
   };
 
-  const completedMilestones = milestones.filter(m => m.status === 'Completed' || m.followupDate).length;
-  const nextDueMilestone = milestones.find(m => m.status !== 'Completed' && !m.followupDate && m.dueDate);
+  const completedMilestones = milestones.filter((m) => m.status === 'Completed' || m.followupDate).length;
+  const nextDueMilestone = milestones.find((m) => m.status !== 'Completed' && !m.followupDate && m.dueDate);
   const anchorDate = clinicalDetails?.dischargeDate || clinicalDetails?.admissionDate;
 
   return (
@@ -180,7 +187,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
       <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3 flex items-center gap-2">
           <CheckCircle size={20} className="text-green-600" />
-          Follow-up Progress
+          Volunteer Follow-up Overview
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -193,7 +200,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
             <div>
               <p className="text-sm text-[var(--nfi-text-secondary)]">Next Due Milestone</p>
               <p className="text-lg font-semibold text-[var(--nfi-text)]">
-                {nextDueMilestone.milestoneMonths} Months
+                {getFollowupQuestionnaire(nextDueMilestone.milestoneMonths).shortLabel}
               </p>
               <p className="text-sm text-blue-600">
                 Due: {formatDateDMY(nextDueMilestone.dueDate)}
@@ -212,9 +219,14 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">BENI Program Operations</h3>
+      <div className="rounded-xl border border-[var(--nfi-border)] bg-white p-5">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">BENI / Program Ops</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+              Case-level operational contacts are kept separate from milestone questionnaires.
+            </p>
+          </div>
           {beniOps && !isEditingBeni && (
             <NfiButton size="sm" onClick={() => setIsEditingBeni(true)}>
               <Edit2 size={16} className="mr-1" />
@@ -223,103 +235,112 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
           )}
         </div>
 
-        {!beniOps || isEditingBeni ? (
-          <div className="space-y-4 p-4 border border-[var(--nfi-border)] rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <NfiField label="BENI Team Member">
-                <select
-                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                  value={beniForm.beniTeamMember}
-                  onChange={(e) => setBeniForm({ ...beniForm, beniTeamMember: e.target.value })}
-                >
-                  <option value="">Select volunteer...</option>
-                  {volunteers.map((v) => (
-                    <option key={v.userId} value={v.userId}>
-                      {v.fullName} (BENI Volunteer)
-                    </option>
-                  ))}
-                </select>
-              </NfiField>
-
-              <NfiField label="Hamper Sent Date">
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                  value={beniForm.hamperSentDate}
-                  onChange={(e) => setBeniForm({ ...beniForm, hamperSentDate: e.target.value })}
-                />
-              </NfiField>
-
-              <NfiField label="Voice Note Received">
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                  value={beniForm.voiceNoteReceivedAt}
-                  onChange={(e) => setBeniForm({ ...beniForm, voiceNoteReceivedAt: e.target.value })}
-                />
-              </NfiField>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="rounded-lg border border-[var(--nfi-border)] bg-slate-50 p-4">
+            <div className="flex items-center gap-2 text-[var(--nfi-text)] mb-3">
+              <UserRound size={18} className="text-blue-600" />
+              <h4 className="font-semibold">Case-level Contacts</h4>
             </div>
-
-            <NfiField label="Notes">
-              <textarea
-                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
-                rows={3}
-                value={beniForm.notes}
-                onChange={(e) => setBeniForm({ ...beniForm, notes: e.target.value })}
-                placeholder="Add notes about BENI program activities..."
-              />
-            </NfiField>
-
-            <div className="flex gap-3">
-              <NfiButton onClick={handleSaveBeniOps} disabled={submitting}>
-                {submitting ? 'Saving...' : 'Save'}
-              </NfiButton>
-              {isEditingBeni && (
-                <NfiButton variant="secondary" onClick={() => {
-                  setIsEditingBeni(false);
-                  loadData();
-                }}>
-                  Cancel
-                </NfiButton>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <InfoItem label="SPOC name" value={hospital?.spocName || 'Not available'} />
+              <InfoItem label="SPOC number" value={hospital?.spocPhone || 'Not available'} />
+              <InfoItem label="Contact 1 (NICU)" value={hospital?.spocPhone || 'Not available'} />
+              <InfoItem label="Contact 2 (Home)" value={family?.phone || family?.whatsapp || 'Not available'} />
             </div>
           </div>
-        ) : (
-          <div className="p-4 border border-[var(--nfi-border)] rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-[var(--nfi-text-secondary)]">Team Member</p>
-                <p className="font-medium text-[var(--nfi-text)]">{beniOps.beniTeamMemberName || 'Not assigned'}</p>
+
+          {!beniOps || isEditingBeni ? (
+            <div className="space-y-4 rounded-lg border border-[var(--nfi-border)] p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <NfiField label="BENI team member allotted">
+                  <select
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={beniForm.beniTeamMember}
+                    onChange={(e) => setBeniForm({ ...beniForm, beniTeamMember: e.target.value })}
+                  >
+                    <option value="">Select volunteer...</option>
+                    {volunteers.map((v) => (
+                      <option key={v.userId} value={v.userId}>
+                        {v.fullName} (BENI Volunteer)
+                      </option>
+                    ))}
+                  </select>
+                </NfiField>
+
+                <NfiField label="Hamper sent date">
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={beniForm.hamperSentDate}
+                    onChange={(e) => setBeniForm({ ...beniForm, hamperSentDate: e.target.value })}
+                  />
+                </NfiField>
+
+                <NfiField label="Voice note / WhatsApp certificate received at discharge date">
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={beniForm.voiceNoteReceivedAt}
+                    onChange={(e) => setBeniForm({ ...beniForm, voiceNoteReceivedAt: e.target.value })}
+                  />
+                </NfiField>
               </div>
-              {beniOps.hamperSentDate && (
-                <div>
-                  <p className="text-sm text-[var(--nfi-text-secondary)]">Hamper Sent</p>
-                  <p className="font-medium text-[var(--nfi-text)]">
-                    {formatDateDMY(beniOps.hamperSentDate)}
-                  </p>
-                </div>
-              )}
-              {beniOps.voiceNoteReceivedAt && (
-                <div>
-                  <p className="text-sm text-[var(--nfi-text-secondary)]">Voice Note Received</p>
-                  <p className="font-medium text-[var(--nfi-text)]">
-                    {formatDateDMY(beniOps.voiceNoteReceivedAt)}
-                  </p>
-                </div>
-              )}
+
+              <NfiField label="Program ops notes">
+                <textarea
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  rows={3}
+                  value={beniForm.notes}
+                  onChange={(e) => setBeniForm({ ...beniForm, notes: e.target.value })}
+                  placeholder="Add case-level BENI coordination notes"
+                />
+              </NfiField>
+
+              <div className="flex gap-3">
+                <NfiButton onClick={handleSaveBeniOps} disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Save'}
+                </NfiButton>
+                {isEditingBeni && (
+                  <NfiButton
+                    variant="secondary"
+                    onClick={() => {
+                      setIsEditingBeni(false);
+                      loadData();
+                    }}
+                  >
+                    Cancel
+                  </NfiButton>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-[var(--nfi-border)] p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <InfoItem label="BENI team member allotted" value={beniOps.beniTeamMemberName || 'Not assigned'} />
+                <InfoItem label="Hamper sent date" value={beniOps.hamperSentDate ? formatDateDMY(beniOps.hamperSentDate) : 'Not recorded'} />
+                <InfoItem
+                  label="Voice note / WhatsApp certificate received at discharge date"
+                  value={beniOps.voiceNoteReceivedAt ? formatDateDMY(beniOps.voiceNoteReceivedAt) : 'Not recorded'}
+                />
+              </div>
               {beniOps.notes && (
-                <div className="md:col-span-2">
-                  <p className="text-sm text-[var(--nfi-text-secondary)]">Notes</p>
-                  <p className="text-[var(--nfi-text)]">{beniOps.notes}</p>
+                <div className="mt-4">
+                  <p className="text-sm text-[var(--nfi-text-secondary)]">Program ops notes</p>
+                  <p className="text-[var(--nfi-text)] mt-1">{beniOps.notes}</p>
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div>
-        <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-4">Follow-up Milestones</h3>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Milestone Follow-up</h3>
+          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+            Milestones are shown in the agreed order and each card opens its own questionnaire.
+          </p>
+        </div>
         {milestones.length === 0 ? (
           <div className="text-center py-8 border border-[var(--nfi-border)] rounded-lg">
             {anchorDate ? (
@@ -339,73 +360,46 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-[var(--nfi-border)]">
-                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Milestone</th>
-                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Due Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Follow-up Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {milestones.map((milestone) => {
-                  const isCompleted = milestone.status === 'Completed' || !!milestone.followupDate;
-                  return (
-                    <tr key={milestone.milestoneId} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-[var(--nfi-text)]">{milestone.milestoneMonths} Months</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)]">
-                          <Calendar size={14} />
-                          {milestone.dueDate ? formatDateDMY(milestone.dueDate) : 'Not set'}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        {milestone.followupDate ? (
-                          <span className="text-sm text-[var(--nfi-text)]">
-                            {formatDateDMY(milestone.followupDate)}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-[var(--nfi-text-secondary)]">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {isCompleted ? (
-                          <NfiBadge tone="success">
-                            <CheckCircle size={14} className="mr-1" />
-                            Completed
-                          </NfiBadge>
-                        ) : milestone.status === 'Due' ? (
-                          <NfiBadge tone="warning">
-                            <Clock size={14} className="mr-1" />
-                            Due
-                          </NfiBadge>
-                        ) : (
-                          <NfiBadge tone="neutral">
-                            <Clock size={14} className="mr-1" />
-                            Upcoming
-                          </NfiBadge>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <NfiButton
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleOpenQuestionnaire(milestone)}
-                        >
-                          <FileText size={14} className="mr-1" />
-                          Update
-                        </NfiButton>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {milestones.map((milestone) => {
+              const questionnaire = getFollowupQuestionnaire(milestone.milestoneMonths);
+              const isCompleted = milestone.status === 'Completed' || !!milestone.followupDate;
+              const tone = isCompleted ? 'success' : milestone.status === 'Due' ? 'warning' : 'neutral';
+              return (
+                <div key={milestone.milestoneId} className="rounded-xl border border-[var(--nfi-border)] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-semibold text-[var(--nfi-text)]">{questionnaire.milestoneLabel}</h4>
+                      <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">{questionnaire.sectionTitle}</p>
+                    </div>
+                    <NfiBadge tone={tone}>
+                      {isCompleted ? 'Completed' : milestone.status === 'Due' ? 'Due' : 'Upcoming'}
+                    </NfiBadge>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-[var(--nfi-text-secondary)]">
+                      <Calendar size={14} />
+                      Due: {milestone.dueDate ? formatDateDMY(milestone.dueDate) : 'Not set'}
+                    </div>
+                    <div className="text-[var(--nfi-text-secondary)]">
+                      Follow-up date: {milestone.followupDate ? formatDateDMY(milestone.followupDate) : 'Not recorded'}
+                    </div>
+                    <div className="text-[var(--nfi-text-secondary)]">
+                      Questions: {questionnaire.questions.length}
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[var(--nfi-text-secondary)]">
+                    {questionnaire.questions[0]?.label}
+                  </div>
+                  <div className="mt-4">
+                    <NfiButton size="sm" variant="secondary" onClick={() => handleOpenQuestionnaire(milestone)}>
+                      <FileText size={14} className="mr-1" />
+                      Open Questionnaire
+                    </NfiButton>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -414,7 +408,7 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         <CompactMilestoneModal
           caseId={caseId}
           milestone={selectedMilestone}
-          title={`${selectedMilestone.milestoneMonths} Month Monitoring`}
+          title={getFollowupQuestionnaire(selectedMilestone.milestoneMonths).milestoneLabel}
           mode="monitoring"
           onSaved={loadData}
           onClose={() => {
@@ -423,6 +417,15 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-sm text-[var(--nfi-text-secondary)]">{label}</p>
+      <p className="font-medium text-[var(--nfi-text)] mt-1">{value}</p>
     </div>
   );
 }

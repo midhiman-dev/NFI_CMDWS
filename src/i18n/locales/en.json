@@ -298,22 +298,22 @@
     "surfaces": {
       "DAILY_MIS_PROGRAMS": {
         "title": "Daily MIS - Programs",
-        "subtitle": "Daily operational MIS grouped into case buckets for a quick demo-ready program view.",
+        "subtitle": "Status summary plus the month-wise day-grid structure used in the MIS template.",
         "cadence": "Daily"
       },
       "MONTHLY_MIS_LEADERSHIP": {
         "title": "Monthly MIS - Leadership Team",
-        "subtitle": "Donor-safe monthly rollup with aggregate-only case KPIs for leadership review.",
+        "subtitle": "NFI monthly performance dashboard grouped by beneficiary, partner hospitals, donations, and cost ratio.",
         "cadence": "Monthly"
       },
       "ACCOUNTS_MIS": {
         "title": "Accounts MIS",
-        "subtitle": "Daily finance snapshot with voucher-style rows tied to current case finance status.",
-        "cadence": "Daily"
+        "subtitle": "Month-wise finance and operations snapshot with daily rows and grouped funds columns.",
+        "cadence": "Monthly"
       },
       "HOSPITAL_MIS_MONTHLY": {
         "title": "Hospital MIS - Monthly",
-        "subtitle": "Hospital-wise monthly view using the agreed case KPIs for demo review.",
+        "subtitle": "Hospital-wise monthly scorecard using the agreed monthly enquiry, approval, rejection, and conversion structure.",
         "cadence": "Monthly"
       }
     }

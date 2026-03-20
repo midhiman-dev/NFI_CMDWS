@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
@@ -6,93 +6,31 @@ import { Layout } from '../../components/layout/Layout';
 import { NfiCard } from '../../components/design-system/NfiCard';
 import { useToast } from '../../components/design-system/Toast';
 import { useAppContext } from '../../App';
-import { getAuthState } from '../../utils/auth';
-import { filterCasesForAuth } from '../../utils/roleAccess';
 import {
-  ACCOUNTS_MIS_DEMO_ROWS,
+  MIS_DEMO_FISCAL_YEAR,
+  MIS_DEMO_LAST_REFRESH,
+  MIS_DEMO_MONTH,
+  MONTH_OPTIONS,
+  buildAccountsMisDemoRows,
   downloadCSV,
   formatCurrencyCompact,
   formatDownloadTimestamp,
-  formatMISDate,
   formatMISDateTime,
-  isDemoDailyDate,
-  MIS_DEMO_DATE,
-  MIS_DEMO_LAST_REFRESH,
-  sameDay,
+  getMonthLabel,
   toCSV,
-  type AccountsLedgerRow,
 } from '../../utils/misReporting';
-import type { CaseWithDetails } from '../../data/providers/DataProvider';
 
 export function AccountsMISDaily() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { provider } = useAppContext();
   const { showToast } = useToast();
-  const authState = getAuthState();
-  const authScopeKey = `${authState.activeRole || 'none'}:${authState.activeUser?.userId || 'anon'}:${authState.activeUser?.hospitalId || 'all'}`;
-  const [cases, setCases] = useState<CaseWithDetails[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>(MIS_DEMO_DATE);
-  const [loading, setLoading] = useState(true);
+  const [selectedFY, setSelectedFY] = useState<string>(MIS_DEMO_FISCAL_YEAR);
+  const [selectedMonth, setSelectedMonth] = useState<string>(MIS_DEMO_MONTH);
   const [exporting, setExporting] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<string>(new Date().toISOString());
 
-  useEffect(() => {
-    const loadCases = async () => {
-      try {
-        setLoading(true);
-        const allCases = await provider.listCases();
-        const scopedCases = filterCasesForAuth(authState, allCases);
-        setCases(scopedCases);
-        setLastRefresh(new Date().toISOString());
-      } catch (error) {
-        console.error('Error loading Accounts MIS:', error);
-        showToast(t('reports.loadFailed', { defaultValue: 'Failed to load Accounts MIS' }), 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCases();
-  }, [authScopeKey, provider, showToast]);
-
-  const liveLedgerRows = useMemo<AccountsLedgerRow[]>(() => {
-    return cases
-      .filter((item) => sameDay(item.updatedAt || item.lastActionAt || item.intakeDate, selectedDate))
-      .map((item) => {
-        const isApproved = item.caseStatus === 'Approved' || item.caseStatus === 'Closed';
-        const isRejected = item.caseStatus === 'Rejected';
-        const amount = isApproved ? item.approvedAmount || 0 : isRejected ? -(item.approvedAmount || 0) : 0;
-        return {
-          date: selectedDate,
-          voucherId: `VCH-${item.caseRef.split('/').pop() || item.caseId.slice(-4)}`,
-          caseRef: item.caseRef,
-          account: `${item.processType} Fund`,
-          type: isApproved ? 'Approval Voucher' : isRejected ? 'Reversal Entry' : 'Pending Finance Review',
-          amount,
-          status: isApproved ? 'Released' : isRejected ? 'Reversed' : 'Pending',
-          remarks: `${item.hospitalName || 'Hospital'} / ${item.caseStatus.replace(/_/g, ' ')}`,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-  }, [cases, selectedDate]);
-
-  const ledgerRows = useMemo(
-    () => (liveLedgerRows.length > 0 ? liveLedgerRows : isDemoDailyDate(selectedDate) ? ACCOUNTS_MIS_DEMO_ROWS : []),
-    [liveLedgerRows, selectedDate],
-  );
-
-  const totals = useMemo(() => {
-    const approvalVouchers = ledgerRows.filter((row) => row.type === 'Approval Voucher').length;
-    const reversalEntries = ledgerRows.filter((row) => row.type === 'Reversal Entry').length;
-    const netOutflow = ledgerRows.reduce((sum, row) => sum + row.amount, 0);
-    return {
-      approvalVouchers,
-      reversalEntries,
-      snapshotCases: ledgerRows.length,
-      netOutflow,
-    };
-  }, [ledgerRows]);
+  const selectedYear = Number(selectedFY.slice(0, 4)) + (Number(selectedMonth) <= 3 ? 1 : 0);
+  const rows = useMemo(() => buildAccountsMisDemoRows(selectedYear, Number(selectedMonth)), [selectedMonth, selectedYear]);
 
   const handleExport = async () => {
     try {
@@ -101,13 +39,53 @@ export function AccountsMISDaily() {
         templateId: 'accounts-mis-daily',
         templateCode: 'ACCOUNTS_MIS',
         templateName: 'Accounts MIS',
-        filters: { date: selectedDate },
-        dataAsOf: new Date(selectedDate),
+        filters: { fiscalYear: selectedFY, month: Number(selectedMonth) },
+        dataAsOf: new Date(`${selectedYear}-${selectedMonth.padStart(2, '0')}-01`),
       });
       downloadCSV(
         toCSV(
-          ['Date', 'Voucher ID', 'Case Ref', 'Account', 'Type', 'Amount', 'Status', 'Remarks'],
-          ledgerRows.map((row) => [row.date, row.voucherId, row.caseRef, row.account, row.type, row.amount, row.status, row.remarks]),
+          [
+            'Date',
+            'Babies Count - Completed Till date',
+            'Babies Count - Completed Current Month',
+            'Babies Count - Inquiries',
+            'Babies Count - Rejected',
+            'Babies Count - In Pipeline',
+            'Partner Hospital Count - Completed',
+            'Partner Hospital Count - In Pipeline',
+            'Fund Status - Funds Raised (Current Month)',
+            'Fund Status - Funds Raised (Daily)',
+            'Fund Status - Bank (as on date)',
+            'Fund Status - FD (as on Date)',
+            'Fund Status - Total',
+            'Committed Outflow - No of Babies',
+            'Committed Outflow - Amount',
+            'Surplus Funds - Total Funds Available',
+            'Program Vs Ops Ratio (As on Date) - Programs',
+            'Program Vs Ops Ratio (As on Date) - Operations',
+            'Program Vs Ops Ratio (As on Date) - Ratio',
+          ],
+          rows.map((row) => [
+            row.date,
+            row.babiesCompletedTillDate,
+            row.babiesCompletedCurrentMonth,
+            row.inquiries,
+            row.rejected,
+            row.inPipeline,
+            row.partnerCompleted,
+            row.partnerInPipeline,
+            row.fundsRaisedCurrentMonth,
+            row.fundsRaisedDaily,
+            row.bankAsOnDate,
+            row.fdAsOnDate,
+            row.totalFunds,
+            row.committedBabies,
+            row.committedAmount,
+            row.totalFundsAvailable,
+            row.programSpend,
+            row.operationsSpend,
+            row.ratio,
+          ]),
         ),
         `Accounts_MIS_${formatDownloadTimestamp()}`,
       );
@@ -130,27 +108,36 @@ export function AccountsMISDaily() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-[var(--nfi-text)]">{t('reports.surfaces.ACCOUNTS_MIS.title', { defaultValue: 'Accounts MIS' })}</h1>
-            <p className="text-[var(--nfi-text-secondary)] mt-1">Daily finance snapshot with voucher-style rows tied to current case finance status.</p>
+            <p className="text-[var(--nfi-text-secondary)] mt-1">
+              Accounts MIS aligned to the month-wise finance and operations template with grouped daily columns.
+            </p>
           </div>
         </div>
 
         <NfiCard>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('common.date')}</label>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('reports.fiscalYear', { defaultValue: 'Fiscal Year' })}</label>
               <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={selectedFY}
+                onChange={(e) => setSelectedFY(e.target.value)}
                 className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--nfi-text)] mb-2">{t('reports.month', { defaultValue: 'Month' })}</label>
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-white text-[var(--nfi-text)]">
+                {MONTH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="rounded-xl border border-[var(--nfi-border)] bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{t('common.dataAsOf')}</p>
-              <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{formatMISDate(selectedDate)}</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Selected month</p>
+              <p className="text-lg font-semibold text-[var(--nfi-text)] mt-1">{getMonthLabel(selectedMonth)} {selectedYear}</p>
               <div className="flex items-center gap-2 text-sm text-[var(--nfi-text-secondary)] mt-2">
                 <RefreshCw size={14} />
-                {t('common.lastRefresh')}: {formatMISDateTime(ledgerRows.length > 0 && liveLedgerRows.length === 0 ? MIS_DEMO_LAST_REFRESH : lastRefresh)}
+                {t('common.lastRefresh')}: {formatMISDateTime(MIS_DEMO_LAST_REFRESH)}
               </div>
             </div>
             <div className="flex items-end">
@@ -166,69 +153,76 @@ export function AccountsMISDaily() {
           </div>
         </NfiCard>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard label="Released Vouchers" value={totals.approvalVouchers} />
-          <MetricCard label="Reversal Entries" value={totals.reversalEntries} />
-          <MetricCard label="Cases in Snapshot" value={totals.snapshotCases} />
-          <MetricCard label="Net Outflow" value={formatCurrencyCompact(totals.netOutflow)} />
-        </div>
-
         <NfiCard>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Accounts Ledger Snapshot</h2>
-            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Finance rows stay separate from the program and leadership views to keep the accounts summary clear.</p>
+            <h2 className="text-xl font-semibold text-[var(--nfi-text)]">Accounts MIS ({getMonthLabel(selectedMonth)})</h2>
+            <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+              Daily rows follow the source grouping: Babies Count, Partner Hospital Count, Fund Status, Committed Outflow, Surplus Funds, and Program Vs Ops Ratio.
+            </p>
           </div>
 
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--nfi-primary)] mb-2"></div>
-              <p className="text-[var(--nfi-text-secondary)]">{t('common.loadingData')}</p>
-            </div>
-          ) : ledgerRows.length === 0 ? (
-            <div className="text-center py-10 text-[var(--nfi-text-secondary)]">No finance ledger rows found for the selected date.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--nfi-border)]">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Voucher ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Case Ref</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Account</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Type</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Amount</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Status</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Remarks</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[1800px]">
+              <thead>
+                <tr className="border-b border-[var(--nfi-border)]">
+                  <th rowSpan={2} className="text-left py-3 px-4 font-semibold text-[var(--nfi-text)]">Date</th>
+                  <th colSpan={5} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Babies Count</th>
+                  <th colSpan={2} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Partner Hospital Count</th>
+                  <th colSpan={5} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Fund Status</th>
+                  <th colSpan={2} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Committed Outflow</th>
+                  <th colSpan={1} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Surplus Funds</th>
+                  <th colSpan={3} className="text-center py-3 px-4 font-semibold text-[var(--nfi-text)]">Program Vs Ops Ratio (As on Date)</th>
+                </tr>
+                <tr className="border-b border-[var(--nfi-border)]">
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Completed Till date</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Completed Current Month</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Inquiries</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Rejected</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">In Pipeline</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Completed</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">In Pipeline</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Funds Raised (Current Month)</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Funds Raised (Daily)</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Bank (as on date)</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">FD (as on Date)</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Total</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">No of Babies</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Amount</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Total Funds Available</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Programs</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Operations</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--nfi-text)]">Ratio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.date} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
+                    <td className="py-3 px-4 text-[var(--nfi-text)]">{row.date}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.babiesCompletedTillDate}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.babiesCompletedCurrentMonth}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.inquiries}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.rejected}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.inPipeline}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.partnerCompleted}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.partnerInPipeline}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.fundsRaisedCurrentMonth)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.fundsRaisedDaily)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.bankAsOnDate)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.fdAsOnDate)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.totalFunds)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.committedBabies}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.committedAmount)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.totalFundsAvailable)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.programSpend)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{formatCurrencyCompact(row.operationsSpend)}</td>
+                    <td className="text-right py-3 px-4 text-[var(--nfi-text)]">{row.ratio}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {ledgerRows.map((row) => (
-                    <tr key={`${row.voucherId}-${row.caseRef}`} className="border-b border-[var(--nfi-border)] hover:bg-gray-50">
-                      <td className="py-3 px-4 font-mono text-[var(--nfi-text)]">{row.voucherId}</td>
-                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.caseRef}</td>
-                      <td className="py-3 px-4 text-[var(--nfi-text-secondary)]">{row.account}</td>
-                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.type}</td>
-                      <td className={`text-right py-3 px-4 font-medium ${row.amount >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        {formatCurrencyCompact(row.amount)}
-                      </td>
-                      <td className="py-3 px-4 text-[var(--nfi-text)]">{row.status}</td>
-                      <td className="py-3 px-4 text-[var(--nfi-text-secondary)]">{row.remarks}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </NfiCard>
       </div>
     </Layout>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <NfiCard className="bg-white border border-[var(--nfi-border)]">
-      <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
-      <p className="text-3xl font-bold text-[var(--nfi-text)] mt-2">{value}</p>
-    </NfiCard>
   );
 }
