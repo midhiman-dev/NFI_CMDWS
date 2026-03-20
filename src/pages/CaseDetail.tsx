@@ -38,6 +38,7 @@ import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/Da
 import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
 import { formatBabyDisplayName } from '../utils/casePresentation';
 import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
+import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -132,7 +133,7 @@ export function CaseDetail() {
 
           const [docs, events, clinical] = await Promise.all([
             provider.listCaseDocuments(caseId).catch(() => [] as DocumentWithTemplate[]),
-            caseService.getAuditEvents(caseId).catch(() => [] as AuditEvent[]),
+            getAuditEvents(caseId).catch(() => [] as AuditEvent[]),
             provider.getClinicalDetails(caseId).catch(() => null),
           ]);
 
@@ -838,6 +839,7 @@ export function DocumentsTab({
     setUploadingDoc(docId);
 
     try {
+      const currentDoc = allDocs.find((doc) => doc.docId === docId);
       const uploadedAt = new Date().toISOString();
       const uploadedBy = authState.activeUser?.fullName || 'Current User';
       await provider.uploadDocument(caseId, docId, {
@@ -845,6 +847,11 @@ export function DocumentsTab({
         mimeType: file.type || undefined,
         fileSize: file.size,
         lastModified: file.lastModified,
+      });
+      await logAuditEvent({
+        caseId,
+        action: currentDoc?.fileName ? `${currentDoc.docType} uploaded as a new version` : `${currentDoc?.docType || 'Document'} uploaded`,
+        notes: file.name,
       });
 
       setAllDocs(prev =>
@@ -916,6 +923,13 @@ export function DocumentsTab({
 
     try {
       await provider.updateDocumentStatus(docId, isNA ? 'Not_Applicable' : 'Missing');
+      if (doc) {
+        await logAuditEvent({
+          caseId,
+          action: isNA ? `${doc.docType} marked optional supporting document` : `${doc.docType} marked pending document`,
+          notes: isNA ? 'This document will not block the current checklist.' : 'Document reverted to pending status.',
+        });
+      }
       setAllDocs(prev =>
         prev.map(doc => {
           if (doc.docId !== docId) return doc;
@@ -1328,6 +1342,13 @@ function VerificationTab({
 
     try {
       await provider.updateDocumentStatus(docId, 'Verified');
+      if (doc) {
+        await logAuditEvent({
+          caseId,
+          action: `${doc.docType} verified`,
+          notes: 'Document accepted during verification review.',
+        });
+      }
       onUpdate();
       showToast('Document verified', 'success');
     } catch (error) {
@@ -1344,6 +1365,14 @@ function VerificationTab({
 
     try {
       await provider.updateDocumentStatus(docId, 'Rejected', rejectReason);
+      const doc = documents.find(d => d.docId === docId);
+      if (doc) {
+        await logAuditEvent({
+          caseId,
+          action: `${doc.docType} rejected`,
+          notes: rejectReason,
+        });
+      }
       onUpdate();
       setShowRejectModal(null);
       setRejectReason('');
@@ -1364,6 +1393,13 @@ function VerificationTab({
 
     try {
       await provider.updateDocumentStatus(docId, 'Uploaded');
+      if (doc) {
+        await logAuditEvent({
+          caseId,
+          action: `${doc.docType} reset for re-review`,
+          notes: 'Document moved back to uploaded status.',
+        });
+      }
       onUpdate();
       showToast('Document unverified', 'success');
     } catch (error) {
@@ -2573,6 +2609,11 @@ function FollowupsTab({ caseId }: { caseId: string }) {
     try {
       const today = new Date().toISOString().split('T')[0];
       await provider.setFollowupDate(caseId, milestoneMonths, today);
+      await logAuditEvent({
+        caseId,
+        action: `Saved ${getFollowupAuditLabel(milestoneMonths)}`,
+        notes: `Follow-up completed on ${today}.`,
+      });
       await loadData();
       showToast('Follow-up marked as complete', 'success');
     } catch (error) {
@@ -2686,7 +2727,8 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
       id: event.eventId,
       timestamp: event.changedAt,
       title: `${event.fromStatus || 'Start'} -> ${event.toStatus}`,
-      actor: event.changedBy || event.changedByRole || 'System',
+      actor: getAuditActorDisplayName(event.changedBy, event.changedByRole as UserRole | null),
+      role: event.changedByRole ? getRoleLabel(event.changedByRole as UserRole) : 'Workflow',
       note: event.reason,
       source: event.source || 'Workflow',
     })),
@@ -2694,7 +2736,8 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
       id: event.eventId,
       timestamp: event.timestamp,
       title: event.action,
-      actor: event.userId,
+      actor: getAuditActorDisplayName(event.userId, event.userRole),
+      role: getRoleLabel(event.userRole),
       note: event.notes,
       source: 'Audit',
     })),
@@ -2712,12 +2755,12 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
           <div>
             <div className="flex items-center gap-2 mb-1">
               <p className="font-medium text-[var(--nfi-text)]">{event.title}</p>
-              <span className="text-xs text-[var(--nfi-text-secondary)]">
-                {formatDateTimeFriendly(event.timestamp)}
-              </span>
             </div>
             <p className="text-sm text-[var(--nfi-text-secondary)] mb-1">
-              by {event.actor} ({event.source})
+              {event.actor} • {event.role}
+            </p>
+            <p className="text-xs text-[var(--nfi-text-secondary)] mb-2">
+              {formatDateTimeFriendly(event.timestamp)} • {event.source}
             </p>
             {event.note && (
               <p className="text-sm text-[var(--nfi-text)] mt-2 p-3 bg-gray-50 rounded">{event.note}</p>

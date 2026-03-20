@@ -1,5 +1,6 @@
 import { providerFactory } from '../data/providers/ProviderFactory';
 import { IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness } from '../types';
+import { logAuditEvent } from '../utils/auditTrail';
 
 export const intakeService = {
   async loadIntakeForCase(caseId: string) {
@@ -7,7 +8,12 @@ export const intakeService = {
     return provider.getIntakeData(caseId);
   },
 
-  async saveIntakeSection(caseId: string, type: 'fundApp' | 'interimSummary', data: any) {
+  async saveIntakeSection(
+    caseId: string,
+    type: 'fundApp' | 'interimSummary',
+    data: any,
+    audit?: { action: string; notes?: string }
+  ) {
     const provider = providerFactory.getProvider();
     const intake = await provider.getIntakeData(caseId);
 
@@ -15,6 +21,14 @@ export const intakeService = {
       await provider.saveIntakeData(caseId, data, intake.interimSummary);
     } else {
       await provider.saveIntakeData(caseId, intake.fundApplication, data);
+    }
+
+    if (audit) {
+      await logAuditEvent({
+        caseId,
+        action: audit.action,
+        notes: audit.notes,
+      });
     }
   },
 

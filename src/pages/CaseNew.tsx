@@ -20,6 +20,7 @@ import { formatDateTimeFriendly } from '../utils/dateFormat';
 import { translateGender, translateLiteral, translateProcessType } from '../i18n/helpers';
 import { intakeService } from '../services/intakeService';
 import { formatBabyDisplayName } from '../utils/casePresentation';
+import { logAuditEvent } from '../utils/auditTrail';
 
 const TOTAL_STEPS = 5;
 const STEP_TITLES = [
@@ -499,11 +500,33 @@ export function CaseNew() {
     }
 
     if (!readiness) {
+      if (createdCaseId) {
+        void logAuditEvent({
+          caseId: createdCaseId,
+          action: 'Submission blocked due to validation',
+          notes: 'Submit readiness was still loading when submission was attempted.',
+        }).catch((error) => {
+          console.error('Failed to log submit blocker:', error);
+        });
+      }
       showToast(t('wizard.readinessLoading'), 'error');
       return false;
     }
 
     if (!readiness.canSubmit) {
+      if (createdCaseId) {
+        const blockerSummary = [
+          ...(readiness.missingSections || []),
+          ...(readiness.missingDocuments || []),
+        ].join(' | ');
+        void logAuditEvent({
+          caseId: createdCaseId,
+          action: 'Submission blocked due to validation',
+          notes: blockerSummary || 'Readiness checks failed for final submission.',
+        }).catch((error) => {
+          console.error('Failed to log submit blocker:', error);
+        });
+      }
       showToast(t('wizard.completeIntakeDocs'), 'error');
       return false;
     }
@@ -571,6 +594,11 @@ export function CaseNew() {
     try {
       const newCase = await saveCase('Draft');
       setCreatedCaseId(newCase.caseId);
+      await logAuditEvent({
+        caseId: newCase.caseId,
+        action: 'Started draft case',
+        notes: 'Case created from the intake wizard.',
+      });
       return true;
     } catch (error) {
       console.error('Failed to create draft case:', error);
@@ -587,12 +615,22 @@ export function CaseNew() {
     try {
       if (createdCaseId) {
         await persistRegistrationDetails(createdCaseId);
+        await logAuditEvent({
+          caseId: createdCaseId,
+          action: 'Saved Basic Registration',
+          notes: 'Draft registration details updated.',
+        });
         showToast('Draft updated. Continue in this wizard.', 'success');
         return;
       }
 
       const newCase = await saveCase('Draft');
       setCreatedCaseId(newCase.caseId);
+      await logAuditEvent({
+        caseId: newCase.caseId,
+        action: 'Started draft case',
+        notes: 'Case created from the intake wizard.',
+      });
       showToast('Case saved as draft', 'success');
     } catch (error) {
       console.error('Failed to save draft:', error);
@@ -612,6 +650,11 @@ export function CaseNew() {
     try {
       await persistRegistrationDetails(createdCaseId);
       await provider.updateCaseStatus(createdCaseId, 'Submitted');
+      await logAuditEvent({
+        caseId: createdCaseId,
+        action: isReturnedCase ? 'Resubmitted case' : 'Submitted case',
+        notes: isReturnedCase ? 'Returned corrections were updated and resubmitted.' : 'Case submitted for review.',
+      });
       showToast(isReturnedCase ? 'Case resubmitted successfully' : 'Case submitted successfully', 'success');
       navigate('/cases');
     } catch (error) {

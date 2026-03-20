@@ -232,7 +232,7 @@ export const caseService = {
       eventId: e.id,
       caseId: e.case_id,
       timestamp: e.timestamp,
-      userId: e.user_id,
+      userId: e.user?.full_name || e.user_id,
       userRole: e.user_role,
       action: e.action,
       notes: e.notes,

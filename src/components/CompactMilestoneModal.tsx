@@ -12,6 +12,7 @@ import {
   getFollowupQuestionnaire,
   type FollowupResponseValue,
 } from '../utils/followupQuestionnaires';
+import { getFollowupAuditLabel, logAuditEvent } from '../utils/auditTrail';
 
 interface CompactMilestoneModalProps {
   caseId: string;
@@ -206,6 +207,11 @@ export function CompactMilestoneModal({
         new Date(form.followupDate).toISOString(),
         form.remarks.doctorRemarks?.trim() || undefined,
       );
+      await logAuditEvent({
+        caseId,
+        action: `Saved ${getFollowupAuditLabel(milestone.milestoneMonths)}`,
+        notes: `Follow-up completed on ${form.followupDate}.`,
+      });
 
       showToast('Follow-up saved', 'success');
       await onSaved();

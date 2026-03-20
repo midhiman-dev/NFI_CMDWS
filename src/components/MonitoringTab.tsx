@@ -8,6 +8,7 @@ import { CompactMilestoneModal } from './CompactMilestoneModal';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
 import { formatDateDMY } from '../utils/dateFormat';
+import { logAuditEvent } from '../utils/auditTrail';
 import type { Case, FamilyProfile, Hospital, User, ClinicalCaseDetails, FollowupMilestone } from '../types';
 import type { BeniProgramOpsData } from '../data/providers/DataProvider';
 import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
@@ -146,6 +147,19 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         notes: beniForm.notes || undefined,
       });
 
+      const volunteerName = volunteers.find((v) => v.userId === beniForm.beniTeamMember)?.fullName;
+      const beniNotes = [
+        volunteerName ? `Volunteer: ${volunteerName}` : null,
+        beniForm.hamperSentDate ? `Hamper sent: ${formatDateDMY(beniForm.hamperSentDate)}` : null,
+        beniForm.voiceNoteReceivedAt ? `Voice note received: ${formatDateDMY(beniForm.voiceNoteReceivedAt)}` : null,
+      ].filter(Boolean).join(' | ');
+
+      await logAuditEvent({
+        caseId,
+        action: 'Updated volunteer follow-up',
+        notes: beniNotes || 'BENI operations details saved.',
+      });
+
       await loadData();
       setIsEditingBeni(false);
       showToast('BENI program operations saved successfully', 'success');
@@ -166,6 +180,11 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
     try {
       const newMilestones = await provider.ensureFollowupMilestones(caseId, anchorDate);
       setMilestones(sortMilestonesBySourceOrder(newMilestones));
+      await logAuditEvent({
+        caseId,
+        action: 'Initialized follow-up milestones',
+        notes: `Anchor date set from ${clinicalDetails?.dischargeDate ? 'discharge' : 'admission'} details.`,
+      });
       showToast('Milestones initialized successfully', 'success');
     } catch (err) {
       console.error('Error initializing milestones:', err);

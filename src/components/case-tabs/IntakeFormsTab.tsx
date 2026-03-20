@@ -11,6 +11,7 @@ import { providerFactory } from '../../data/providers/ProviderFactory';
 import { deriveMaternalFields, isEmptyDerivedValue, parseDateFlexible } from '../../utils/derivedFields';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
 import { deriveInterimSeedFromFundApplication } from '../../utils/intakeSeedMapping';
+import { getFundSectionLabel, getInterimSectionLabel, logAuditEvent } from '../../utils/auditTrail';
 
 interface IntakeFormsTabProps {
   caseId: string;
@@ -253,7 +254,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
         ...(fundApplication || createEmptyFundApplication()),
         [sectionName]: data,
       };
-      await intakeService.saveIntakeSection(caseId, 'fundApp', updated);
+      await intakeService.saveIntakeSection(caseId, 'fundApp', updated, {
+        action: 'Updated Fund Application',
+        notes: `Section saved: ${getFundSectionLabel(sectionName)}`,
+      });
       setFundApplication(updated);
 
       const completenessData = await intakeService.getCompleteness(caseId);
@@ -272,7 +276,10 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
         ...(interimSummary || createEmptyInterimSummary()),
         [sectionName]: data,
       };
-      await intakeService.saveIntakeSection(caseId, 'interimSummary', updated);
+      await intakeService.saveIntakeSection(caseId, 'interimSummary', updated, {
+        action: 'Updated Interim Summary',
+        notes: `Section saved: ${getInterimSectionLabel(sectionName)}`,
+      });
       setInterimSummary(updated);
 
       const completenessData = await intakeService.getCompleteness(caseId);
@@ -283,6 +290,18 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       console.error('Failed to save section:', error);
       showToast(t('intake.saveFailed', { defaultValue: 'Failed to save section' }), 'error');
     }
+  };
+
+  const handleFundValidationBlocked = (sectionName: string, validation: { errors: Record<string, string> }) => {
+    const hasParentAgeBlocker = ['fatherDob', 'motherDob', 'babyDateOfBirth'].some((field) => validation.errors[field]);
+
+    void logAuditEvent({
+      caseId,
+      action: hasParentAgeBlocker ? 'Fund Application save blocked due to parent age validation' : 'Fund Application save blocked due to validation error',
+      notes: `Fund Application: ${getFundSectionLabel(sectionName)}`,
+    }).catch((error) => {
+      console.error('Failed to log intake validation blocker:', error);
+    });
   };
 
   if (isLoading) {
@@ -396,6 +415,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
               caseId={caseId}
               initialData={fundApplication}
               onSectionSave={handleFundAppSectionSave}
+              onValidationBlocked={handleFundValidationBlocked}
               onFormDataChange={setFundApplication}
               isLoading={isLoading}
               readOnly={!canEdit}

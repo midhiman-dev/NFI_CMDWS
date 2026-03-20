@@ -9,6 +9,7 @@ import {
   FUND_APPLICATION_FIELDS,
   getFundApplicationSectionProgress,
   getSectionStatus,
+  type ValidationResult,
 } from '../../utils/intakeValidation';
 import {
   parseBirthWeightInput,
@@ -22,6 +23,7 @@ interface FundApplicationFormProps {
   caseId: string;
   initialData?: IntakeFundApplication;
   onSectionSave: (section: string, data: any) => Promise<void>;
+  onValidationBlocked?: (section: string, validation: ValidationResult) => void;
   onFormDataChange?: (data: IntakeFundApplication) => void;
   isLoading?: boolean;
   readOnly?: boolean;
@@ -30,6 +32,7 @@ interface FundApplicationFormProps {
 export function FundApplicationForm({
   initialData,
   onSectionSave,
+  onValidationBlocked,
   onFormDataChange,
   readOnly = false,
 }: FundApplicationFormProps) {
@@ -89,6 +92,7 @@ export function FundApplicationForm({
         ...prev,
         [section]: validation.errors,
       }));
+      onValidationBlocked?.(section, validation);
       return;
     }
 
