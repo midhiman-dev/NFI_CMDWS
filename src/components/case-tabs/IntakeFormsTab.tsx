@@ -10,6 +10,7 @@ import { getAuthState } from '../../utils/auth';
 import { providerFactory } from '../../data/providers/ProviderFactory';
 import { deriveMaternalFields, isEmptyDerivedValue, parseDateFlexible } from '../../utils/derivedFields';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
+import { deriveInterimSeedFromFundApplication } from '../../utils/intakeSeedMapping';
 
 interface IntakeFormsTabProps {
   caseId: string;
@@ -90,15 +91,21 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
         },
       };
       const resolvedInterim = data.interimSummary || createEmptyInterimSummary();
+      const interimSeed = deriveInterimSeedFromFundApplication(patchedFund, resolvedInterim);
       const patchedBirthSummary = {
         ...resolvedInterim.birthSummarySection,
         babyName: resolvedInterim.birthSummarySection?.babyName || formatBabyDisplayName(family?.motherName, beneficiary?.beneficiaryName),
-        dateOfBirth: resolvedInterim.birthSummarySection?.dateOfBirth || beneficiary?.dob || undefined,
-        gender: resolvedInterim.birthSummarySection?.gender || beneficiary?.gender || undefined,
+        ...(interimSeed.birthSummarySection || {}),
+        dateOfBirth: resolvedInterim.birthSummarySection?.dateOfBirth || patchedFund.birthDetailsSection?.babyDateOfBirth || beneficiary?.dob || undefined,
+        gender: resolvedInterim.birthSummarySection?.gender || patchedFund.birthDetailsSection?.babyGender || beneficiary?.gender || undefined,
       };
       const patchedInterim = {
         ...resolvedInterim,
         birthSummarySection: patchedBirthSummary,
+        maternalDetailsSection: {
+          ...(resolvedInterim.maternalDetailsSection || {}),
+          ...(interimSeed.maternalDetailsSection || {}),
+        },
       };
 
       setFundApplication(patchedFund);
@@ -121,7 +128,14 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       if (
         patchedInterim.birthSummarySection?.babyName !== resolvedInterim.birthSummarySection?.babyName ||
         patchedInterim.birthSummarySection?.dateOfBirth !== resolvedInterim.birthSummarySection?.dateOfBirth ||
-        patchedInterim.birthSummarySection?.gender !== resolvedInterim.birthSummarySection?.gender
+        patchedInterim.birthSummarySection?.gender !== resolvedInterim.birthSummarySection?.gender ||
+        patchedInterim.birthSummarySection?.babyBirthWeightKg !== resolvedInterim.birthSummarySection?.babyBirthWeightKg ||
+        patchedInterim.birthSummarySection?.isInborn !== resolvedInterim.birthSummarySection?.isInborn ||
+        patchedInterim.birthSummarySection?.outbornHospitalName !== resolvedInterim.birthSummarySection?.outbornHospitalName ||
+        patchedInterim.birthSummarySection?.gestationalAgeWeeks !== resolvedInterim.birthSummarySection?.gestationalAgeWeeks ||
+        patchedInterim.maternalDetailsSection?.gravida !== resolvedInterim.maternalDetailsSection?.gravida ||
+        patchedInterim.maternalDetailsSection?.parity !== resolvedInterim.maternalDetailsSection?.parity ||
+        patchedInterim.maternalDetailsSection?.conceptionMode !== resolvedInterim.maternalDetailsSection?.conceptionMode
       ) {
         await intakeService.saveIntakeSection(caseId, 'interimSummary', patchedInterim);
       }
@@ -209,66 +223,18 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
     if (!canEdit) return;
     if (!interimSummary) return;
 
-    const birthSummary = interimSummary.birthSummarySection || {};
-    const fundBirth = fundApplication?.birthDetailsSection || {};
-
-    let hasChanges = false;
-    const updatedBirthSummary = { ...birthSummary };
-
-    if (updatedBirthSummary.babyBirthWeightKg === undefined && fundBirth.babyBirthWeightKg !== undefined) {
-      updatedBirthSummary.babyBirthWeightKg = fundBirth.babyBirthWeightKg;
-      hasChanges = true;
-    }
-
-    if (updatedBirthSummary.gestationalAgeWeeks === undefined && fundBirth.gestationalAgeWeeks !== undefined) {
-      updatedBirthSummary.gestationalAgeWeeks = fundBirth.gestationalAgeWeeks;
-      hasChanges = true;
-    }
-
-    if (updatedBirthSummary.isInborn === undefined && fundBirth.isInborn !== undefined) {
-      updatedBirthSummary.isInborn = fundBirth.isInborn;
-      hasChanges = true;
-    }
-
-    if (
-      updatedBirthSummary.outbornHospitalName === undefined &&
-      fundBirth.isInborn === false &&
-      fundBirth.outbornHospitalName
-    ) {
-      updatedBirthSummary.outbornHospitalName = fundBirth.outbornHospitalName;
-      hasChanges = true;
-    }
-
-    if (!hasChanges) return;
+    const interimSeed = deriveInterimSeedFromFundApplication(fundApplication, interimSummary);
+    if (!interimSeed.birthSummarySection && !interimSeed.maternalDetailsSection) return;
 
     const updatedInterimSummary: IntakeInterimSummary = {
       ...interimSummary,
-      birthSummarySection: updatedBirthSummary,
-    };
-
-    setInterimSummary(updatedInterimSummary);
-    void intakeService.saveIntakeSection(caseId, 'interimSummary', updatedInterimSummary)
-      .then(() => intakeService.getCompleteness(caseId))
-      .then(setCompleteness)
-      .catch(error => {
-        console.error('Failed to persist linked birth summary details:', error);
-      });
-  }, [canEdit, caseId, fundApplication, interimSummary]);
-
-  useEffect(() => {
-    if (!canEdit) return;
-    if (!interimSummary) return;
-
-    const conceptionType = fundApplication?.birthDetailsSection?.conceptionType;
-    if (!conceptionType) return;
-    if (!['Natural', 'IUI', 'IVF'].includes(conceptionType)) return;
-    if (interimSummary.maternalDetailsSection?.conceptionMode) return;
-
-    const updatedInterimSummary: IntakeInterimSummary = {
-      ...interimSummary,
+      birthSummarySection: {
+        ...(interimSummary.birthSummarySection || {}),
+        ...(interimSeed.birthSummarySection || {}),
+      },
       maternalDetailsSection: {
         ...(interimSummary.maternalDetailsSection || {}),
-        conceptionMode: conceptionType as 'Natural' | 'IUI' | 'IVF',
+        ...(interimSeed.maternalDetailsSection || {}),
       },
     };
 
@@ -277,7 +243,7 @@ export function IntakeFormsTab({ caseId, variant = 'detail', section = 'both' }:
       .then(() => intakeService.getCompleteness(caseId))
       .then(setCompleteness)
       .catch(error => {
-        console.error('Failed to seed maternal conception mode:', error);
+        console.error('Failed to persist linked interim summary defaults:', error);
       });
   }, [canEdit, caseId, fundApplication, interimSummary]);
 

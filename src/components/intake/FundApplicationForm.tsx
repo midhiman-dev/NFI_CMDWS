@@ -324,16 +324,6 @@ export function FundApplicationForm({
               <NfiField label="Advance Paid by Family (INR)" required type="input" inputProps={{ type: 'number', min: 0, value: formData.nicuFinancialSection?.advancePaidByFamily ?? '', onChange: e => handleFieldChange('nicuFinancialSection', 'advancePaidByFamily', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
               <NfiField label="Current Outstanding / Running Bill (INR)" required type="input" inputProps={{ type: 'number', min: 0, value: formData.nicuFinancialSection?.currentOutstandingBillAmount ?? '', onChange: e => handleFieldChange('nicuFinancialSection', 'currentOutstandingBillAmount', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
             </div>
-
-            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-medium text-slate-700">Legacy Financial Fields (Optional)</p>
-              <p className="text-xs text-slate-500 mt-1">These fields are retained for backward compatibility and do not affect completion.</p>
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <NfiField label="NFI Requested Amount (INR)" type="input" inputProps={{ type: 'number', value: formData.nicuFinancialSection?.nfiRequestedAmount ?? '', onChange: e => handleFieldChange('nicuFinancialSection', 'nfiRequestedAmount', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-                <NfiField label="Estimate Billed Amount (INR)" type="input" inputProps={{ type: 'number', value: formData.nicuFinancialSection?.estimateBilled ?? '', onChange: e => handleFieldChange('nicuFinancialSection', 'estimateBilled', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-                <NfiField label="Estimate After Discount (INR)" type="input" inputProps={{ type: 'number', value: formData.nicuFinancialSection?.estimateAfterDiscount ?? '', onChange: e => handleFieldChange('nicuFinancialSection', 'estimateAfterDiscount', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-              </div>
-            </div>
           </IntakeSectionAccordion>
         );
       })()}

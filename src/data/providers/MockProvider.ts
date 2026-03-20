@@ -6,7 +6,7 @@ import { mockStore } from '../../store/mockStore';
 import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, saveWorkflowStore } from '../../utils/caseWorkflow';
-import { getChecklistReadinessFromDocuments } from '../../utils/documentChecklistRules';
+import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
 import {
   FUND_APPLICATION_FIELDS,
@@ -38,21 +38,6 @@ const TEMPLATE_BINDINGS_STORAGE_KEY = 'nfi_demo_template_bindings_v1';
 const INTAKE_STORAGE_KEY = 'nfi_demo_intake_v1';
 const SETTLEMENTS_STORAGE_KEY = 'nfi_demo_settlements_v1';
 const DOCTOR_REVIEWS_STORAGE_KEY = 'nfi_demo_doctor_reviews_v1';
-const OPTIONAL_SUPPORTING_DOC_TYPES = new Set([
-  'Consent Form',
-  'Signed Fund Application Copy (Optional)',
-  'Signed Interim Summary Copy (Optional)',
-  'Mother Bank Statement (Optional)',
-  'BPL Card (Optional Supporting)',
-  'Pregnancy / Birth / Initial Treatment Records from Other Hospitals',
-  'Final Bill',
-  'Payment Requisition',
-  'Discharge Summary / Report',
-  'Post-Discharge Baby Photo',
-  'Post-Discharge Parents with Baby Photo',
-  'Testimonial Transcript / Supporting Document (Optional)',
-]);
-
 interface MockData {
   hospitals: Hospital[];
   cases: CaseWithDetails[];
@@ -634,10 +619,9 @@ export class MockProvider implements DataProvider {
   }
 
   private getBuiltInTemplates(): DocumentRequirementTemplate[] {
-    return getBuiltInDocumentTemplates().map((template) => ({
-      ...template,
-      mandatoryFlag: template.mandatoryFlag && !OPTIONAL_SUPPORTING_DOC_TYPES.has(template.docType),
-    }));
+    return getBuiltInDocumentTemplates().map((template) =>
+      normalizeOptionalSupportingDoc(template)
+    );
   }
 
   private getActorMeta(): { by: string; role: string } {
@@ -788,7 +772,7 @@ export class MockProvider implements DataProvider {
     return caseDocs.map(doc => {
       const resolved = resolveDocTypeAlias(doc.docType, doc.category);
       const template = templates.find(t => t.docType === resolved.docType);
-      return {
+      return normalizeOptionalSupportingDoc({
         ...doc,
         mimeType: doc.mimeType || doc.fileType,
         fileSize: doc.fileSize ?? doc.size,
@@ -796,7 +780,7 @@ export class MockProvider implements DataProvider {
         category: resolved.category,
         mandatoryFlag: template?.mandatoryFlag,
         conditionNotes: template?.conditionNotes,
-      };
+      });
     });
   }
 

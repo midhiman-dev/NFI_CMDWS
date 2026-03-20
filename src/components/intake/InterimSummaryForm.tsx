@@ -136,6 +136,11 @@ export function InterimSummaryForm({
     </>
   );
 
+  const treatmentHasCombinedHhfncO2 =
+    formData.treatmentGivenSection?.hhfnc === true && formData.treatmentGivenSection?.o2 === true;
+  const ongoingHasCombinedHhfncO2 =
+    formData.feedingRespirationSection?.ongoingHhfnc === true && formData.feedingRespirationSection?.ongoingO2 === true;
+
   return (
     <div className="space-y-4">
       <IntakeSectionAccordion
@@ -485,6 +490,9 @@ export function InterimSummaryForm({
               <span className="text-sm text-[var(--nfi-text)]">O2</span>
             </label>
           </div>
+          {treatmentHasCombinedHhfncO2 && (
+            <p className="text-xs text-[var(--nfi-text-light)]">Combined support recorded as HHFNC + O2.</p>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             <NfiField
@@ -598,6 +606,9 @@ export function InterimSummaryForm({
             <NfiField label="HFNC / HHFNC" required type="select" selectProps={{ value: toYesNoValue(formData.feedingRespirationSection?.ongoingHhfnc), onChange: e => handleFieldChange('feedingRespirationSection', 'ongoingHhfnc', fromYesNoValue(e.currentTarget.value)), disabled: readOnly, children: yesNoOptions }} />
             <NfiField label="O2" required type="select" selectProps={{ value: toYesNoValue(formData.feedingRespirationSection?.ongoingO2), onChange: e => handleFieldChange('feedingRespirationSection', 'ongoingO2', fromYesNoValue(e.currentTarget.value)), disabled: readOnly, children: yesNoOptions }} />
           </div>
+          {ongoingHasCombinedHhfncO2 && (
+            <p className="text-xs text-[var(--nfi-text-light)]">Ongoing respiration support can be documented as HHFNC + O2 together.</p>
+          )}
 
           <p className="text-sm font-medium text-[var(--nfi-text)]">Feeding</p>
           <div className="grid grid-cols-2 gap-4">

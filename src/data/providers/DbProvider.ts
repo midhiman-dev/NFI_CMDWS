@@ -7,6 +7,7 @@ import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 import { appendCaseWorkflowEvent } from '../../utils/caseWorkflow';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
+import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -252,7 +253,7 @@ export class DbProvider implements DataProvider {
         hasVersionUpdates = true;
       }
 
-      return {
+      return normalizeOptionalSupportingDoc({
         ...doc,
         mimeType: doc.mimeType || doc.fileType,
         fileSize: doc.fileSize ?? doc.size,
@@ -261,7 +262,7 @@ export class DbProvider implements DataProvider {
         mandatoryFlag: template?.mandatory_flag,
         conditionNotes: template?.condition_notes,
         versions,
-      };
+      });
     });
 
     if (hasVersionUpdates) {
@@ -395,20 +396,7 @@ export class DbProvider implements DataProvider {
 
   async getChecklistReadiness(caseId: string): Promise<ChecklistReadiness> {
     const docs = await this.listCaseDocuments(caseId);
-    const mandatoryDocs = docs.filter(d => d.mandatoryFlag);
-    const mandatoryComplete = mandatoryDocs.filter(
-      d => d.status === 'Verified' || d.status === 'Not_Applicable'
-    ).length;
-    const blockingDocs = mandatoryDocs.filter(
-      d => d.status !== 'Verified' && d.status !== 'Not_Applicable'
-    );
-
-    return {
-      mandatoryTotal: mandatoryDocs.length,
-      mandatoryComplete,
-      blockingDocs,
-      isReady: blockingDocs.length === 0 && mandatoryDocs.length > 0,
-    };
+    return getChecklistReadinessFromDocuments(docs);
   }
 
   async getVerification(caseId: string): Promise<VerificationRecord | null> {
