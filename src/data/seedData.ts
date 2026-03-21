@@ -1,4 +1,6 @@
-const SEED_VERSION = '1';
+import { generatePrototypeBeneficiaryNumber, generatePrototypeCaseReference, isApprovedForBeneficiaryNumber } from '../utils/caseIdentifiers';
+
+const SEED_VERSION = '2';
 
 const hospitals = [
   { name: 'Apollo Hospitals', code: 'APL001', city: 'New Delhi', state: 'Delhi' },
@@ -221,19 +223,23 @@ function generateCases(hosp: typeof hospitals) {
     for (let i = 0; i < count; i++) {
       const hospitalIdx = caseCounter % hosp.length;
       const hospital = hosp[hospitalIdx];
+      const serial = caseCounter + 1;
+      const createdAt = new Date(2024, 0, 1 + caseCounter);
+      const decisionAt = ['Approved', 'Rejected'].includes(status) ? new Date(2024, 0, 3 + caseCounter) : null;
       const caseObj = {
-        caseNumber: `CASE-2024-${String(caseCounter + 1).padStart(5, '0')}`,
+        caseNumber: generatePrototypeCaseReference(serial),
+        caseReferenceSerial: serial,
         hospitalId: hospital,
         bgrcCycleId: 'BGRC-2024-Q1',
         processType: getSeededElement(processTypes, seed),
         caseStatus: status,
         createdBy: null,
-        createdAt: new Date(2024, 0, 1 + caseCounter),
-        updatedAt: new Date(2024, 0, 1 + caseCounter),
-        lastActionAt: new Date(2024, 0, 1 + caseCounter),
-        submittedAt: status !== 'Draft' ? new Date(2024, 0, 1 + caseCounter) : null,
+        createdAt,
+        updatedAt: createdAt,
+        lastActionAt: createdAt,
+        submittedAt: status !== 'Draft' ? createdAt : null,
         reviewedAt: ['Under_Review', 'Approved', 'Rejected'].includes(status) ? new Date(2024, 0, 2 + caseCounter) : null,
-        decisionAt: ['Approved', 'Rejected'].includes(status) ? new Date(2024, 0, 3 + caseCounter) : null,
+        decisionAt,
       };
       cases.push(caseObj);
       casesByStatus[status as keyof typeof casesByStatus].push(caseObj);
@@ -252,6 +258,13 @@ function generateBeneficiaryProfiles(casesList: any[]) {
   for (const caseObj of casesList) {
     const profile = {
       caseId: caseObj.caseNumber,
+      beneficiaryNo: isApprovedForBeneficiaryNumber(caseObj.caseStatus)
+        ? generatePrototypeBeneficiaryNumber({
+            serial: caseObj.caseReferenceSerial || parseInt(caseObj.caseNumber, 10),
+            approvedAt: caseObj.decisionAt,
+            intakeDate: caseObj.createdAt?.toISOString?.() || undefined,
+          })
+        : undefined,
       babyName: getSeededElement(beneficiaryNames, seed),
       gender: getSeededElement(['Male', 'Female'], seed + 1),
       dob: new Date(2024, Math.floor(seededRandom(seed + 2) * 12), Math.floor(seededRandom(seed + 3) * 28) + 1),

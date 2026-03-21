@@ -5,6 +5,8 @@ import { NfiField } from '../design-system/NfiField';
 import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
 import type { ChildProfile } from '../../types';
+import { shouldShowBeneficiaryNo } from '../../utils/caseIdentifiers';
+import { getAuthState } from '../../utils/auth';
 
 interface Props {
   caseId: string;
@@ -21,7 +23,9 @@ const EMPTY: ChildProfile = {
 export function BeneficiaryTab({ caseId }: Props) {
   const { provider } = useAppContext();
   const { showToast } = useToast();
+  const authState = getAuthState();
   const [data, setData] = useState<ChildProfile | null>(null);
+  const [caseStatus, setCaseStatus] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ChildProfile>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -30,14 +34,19 @@ export function BeneficiaryTab({ caseId }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const result = await provider.getBeneficiary(caseId);
+      const [result, caseInfo] = await Promise.all([
+        provider.getBeneficiary(caseId),
+        provider.getCaseById(caseId).catch(() => null),
+      ]);
       setData(result);
+      setCaseStatus(caseInfo?.caseStatus || null);
       if (result) setForm(result);
     } catch { /* safe fallback */ }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [caseId]);
+  const showBeneficiaryNumber = shouldShowBeneficiaryNo(authState.activeRole, caseStatus as any);
 
   const startEdit = () => {
     setForm(data || { ...EMPTY, caseId });
@@ -100,9 +109,11 @@ export function BeneficiaryTab({ caseId }: Props) {
           <NfiField label="Current Weight (kg)">
             <input type="number" step="0.01" className="nfi-input" value={form.currentWeightKg ?? ''} onChange={e => setForm({ ...form, currentWeightKg: e.target.value ? +e.target.value : undefined })} />
           </NfiField>
-          <NfiField label="Beneficiary No">
-            <input type="text" className="nfi-input" value={form.beneficiaryNo ?? ''} onChange={e => setForm({ ...form, beneficiaryNo: e.target.value })} />
-          </NfiField>
+          {showBeneficiaryNumber && (
+            <NfiField label="Beneficiary No">
+              <input type="text" className="nfi-input bg-[var(--nfi-bg-light)] text-[var(--nfi-text-secondary)]" value={form.beneficiaryNo ?? ''} readOnly />
+            </NfiField>
+          )}
           <div className="md:col-span-2">
             <NfiField label="Morbidity / Conditions">
               <textarea className="nfi-input resize-none" rows={2} value={form.morbidity ?? ''} onChange={e => setForm({ ...form, morbidity: e.target.value })} />
@@ -142,7 +153,7 @@ export function BeneficiaryTab({ caseId }: Props) {
           <KV label="Birth Weight" value={data.birthWeightKg != null ? `${data.birthWeightKg} kg` : undefined} />
           <KV label="Gestational Age" value={data.gestationalAgeWeeks != null ? `${data.gestationalAgeWeeks} weeks` : undefined} />
           <KV label="Current Weight" value={data.currentWeightKg != null ? `${data.currentWeightKg} kg` : undefined} />
-          <KV label="Beneficiary No" value={data.beneficiaryNo} />
+          {showBeneficiaryNumber && <KV label="Beneficiary No" value={data.beneficiaryNo} />}
           <KV label="Admission Date" value={data.admissionDate ? new Date(data.admissionDate).toLocaleDateString() : undefined} />
           <div className="md:col-span-2 lg:col-span-3">
             <KV label="Morbidity / Conditions" value={data.morbidity} />

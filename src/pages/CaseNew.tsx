@@ -276,7 +276,9 @@ export function CaseNew() {
           processType: caseInfo.processType || prev.processType,
           intakeDate: normalizeDateForInput(caseInfo.intakeDate) || prev.intakeDate,
           admissionDate: normalizeDateForInput(beneficiary?.admissionDate || clinical?.admissionDate) || prev.admissionDate,
-          beneficiaryNo: beneficiary?.beneficiaryNo || caseInfo.beneficiaryNo || prev.beneficiaryNo,
+          beneficiaryNo: caseInfo.caseStatus === 'Approved' || caseInfo.caseStatus === 'Closed'
+            ? beneficiary?.beneficiaryNo || caseInfo.beneficiaryNo || prev.beneficiaryNo
+            : '',
           beneficiaryName: beneficiary?.beneficiaryName || caseInfo.childName || prev.beneficiaryName,
           dob: normalizeDateForInput(beneficiary?.dob) || prev.dob,
           gender: beneficiary?.gender || prev.gender,
@@ -321,7 +323,6 @@ export function CaseNew() {
 
     await Promise.all([
       provider.upsertBeneficiary(caseId, {
-        beneficiaryNo: formData.beneficiaryNo || undefined,
         beneficiaryName: resolvedBabyName || undefined,
         dob: formData.dob || undefined,
         gender: (formData.gender || undefined) as 'Male' | 'Female' | 'Other' | undefined,
@@ -561,7 +562,6 @@ export function CaseNew() {
         admissionDate: formData.admissionDate,
         intakeDate: formData.intakeDate,
         caseStatus: status,
-        beneficiaryNo: formData.beneficiaryNo || undefined,
         beneficiaryName: (isHospitalSpoc ? buildDerivedBabyName(formData.motherName) : formData.beneficiaryName) || undefined,
         gender: (formData.gender || undefined) as 'Male' | 'Female' | 'Other' | undefined,
         dob: formData.dob || undefined,

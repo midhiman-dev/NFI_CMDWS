@@ -152,6 +152,7 @@
     "title": "Cases",
     "subtitle": "Manage and track all cases",
     "searchPlaceholder": "Search by case ref, beneficiary no, baby name, or hospital...",
+    "searchPlaceholderHospital": "Search by case ref, baby name, or hospital...",
     "noCasesFound": "No cases found",
     "adjustFilters": "Try adjusting your filters or search criteria",
     "caseRef": "Case Ref",

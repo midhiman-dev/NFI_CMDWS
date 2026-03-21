@@ -37,6 +37,7 @@ import { FUNDING_CAMPAIGN_OPTIONS, FUNDING_PROGRAM_OPTIONS, toCurrency } from '.
 import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/DataProvider';
 import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
 import { formatBabyDisplayName } from '../utils/casePresentation';
+import { shouldShowBeneficiaryNo } from '../utils/caseIdentifiers';
 import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
 import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
@@ -212,6 +213,7 @@ export function CaseDetail() {
   const isHospitalRejectedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Rejected';
   const isHospitalReturnedView = authState.activeRole === 'hospital_spoc' && displayStatus === 'Returned';
   const caseDisplayName = formatBabyDisplayName(familyProfile?.motherName, childProfile?.beneficiaryName || caseData.childName);
+  const showBeneficiaryNo = shouldShowBeneficiaryNo(authState.activeRole, caseData.caseStatus);
 
   const caseDataTabs = [
     { id: 'overview', label: translateLiteral('Overview'), icon: <FileText size={16} /> },
@@ -268,6 +270,11 @@ export function CaseDetail() {
             <p className="text-[var(--nfi-text-secondary)] mt-1">
               {normalizeSeparator(`${caseDisplayName}${CASE_SUBTITLE_SEPARATOR}${hospitalName}`)}
             </p>
+            {showBeneficiaryNo && caseData.beneficiaryNo && (
+              <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
+                Beneficiary No: {caseData.beneficiaryNo}
+              </p>
+            )}
           </div>
           <NfiBadge
             tone={
@@ -397,6 +404,7 @@ function OverviewTab({
   onUpdate: () => void;
 }) {
   const authState = getAuthState();
+  const showBeneficiaryNo = shouldShowBeneficiaryNo(authState.activeRole, caseData.caseStatus);
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const [isEditing, setIsEditing] = useState(false);
@@ -516,14 +524,16 @@ function OverviewTab({
               />
             </NfiField>
 
-            <NfiField label="Beneficiary No">
-              <input
-                type="text"
-                value={editData.beneficiaryNo}
-                onChange={(e) => setEditData({ ...editData, beneficiaryNo: e.target.value })}
-                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
-              />
-            </NfiField>
+            {showBeneficiaryNo && (
+              <NfiField label="Beneficiary No">
+                <input
+                  type="text"
+                  value={editData.beneficiaryNo}
+                  readOnly
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)] text-[var(--nfi-text-secondary)] outline-none"
+                />
+              </NfiField>
+            )}
 
             <NfiField label="Gender" required>
               <select
@@ -641,7 +651,7 @@ function OverviewTab({
         <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Case Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InfoItem label="Case Reference" value={caseData.caseRef} />
-          <InfoItem label="Beneficiary No" value={caseData.beneficiaryNo || 'Not assigned'} />
+          {showBeneficiaryNo && <InfoItem label="Beneficiary No" value={caseData.beneficiaryNo || 'Not assigned'} />}
           <InfoItem label="Baby Name" value={formatBabyDisplayName(familyProfile?.motherName, caseData.childName)} />
           <InfoItem label="Hospital" value={caseData.hospitalName} />
           {authState.activeRole !== 'hospital_spoc' && <InfoItem label="Process Type" value={caseData.processType} />}

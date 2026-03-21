@@ -14,6 +14,7 @@ import type { CaseWithDetails } from '../data/providers/DataProvider';
 import type { CaseStatus } from '../types';
 import { translateCaseStatus } from '../i18n/helpers';
 import { formatBabyDisplayName, getOrderedCaseStatuses, isNewCase } from '../utils/casePresentation';
+import { shouldShowBeneficiaryNo } from '../utils/caseIdentifiers';
 
 interface CaseRow extends CaseWithDetails {
   checklistProgress: number;
@@ -38,6 +39,9 @@ export function Cases() {
   const scopedHospitalId = getScopedHospitalId(authState);
   const canFilterHospital = !scopedHospitalId;
   const isHospitalUser = authState.activeRole === 'hospital_spoc';
+  const searchPlaceholder = isHospitalUser
+    ? t('cases.searchPlaceholderHospital', { defaultValue: 'Search by case ref, baby name, or hospital...' })
+    : t('cases.searchPlaceholder');
 
   useEffect(() => {
     loadCases();
@@ -91,7 +95,7 @@ export function Cases() {
       filtered = filtered.filter(
         (c) =>
           c.caseRef.toLowerCase().includes(term) ||
-          c.beneficiaryNo?.toLowerCase().includes(term) ||
+          (!isHospitalUser && c.beneficiaryNo?.toLowerCase().includes(term)) ||
           c.childName?.toLowerCase().includes(term) ||
           c.hospitalName?.toLowerCase().includes(term)
       );
@@ -291,7 +295,7 @@ export function Cases() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder={t('cases.searchPlaceholder')}
+                placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-[var(--nfi-border)] rounded-lg focus:ring-2 focus:ring-[var(--nfi-primary)] focus:border-[var(--nfi-primary)] outline-none"
@@ -396,9 +400,11 @@ export function Cases() {
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
                       {t('cases.caseRef')}
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
-                      {t('cases.beneficiaryNo')}
-                    </th>
+                    {!isHospitalUser && (
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
+                        {t('cases.beneficiaryNo')}
+                      </th>
+                    )}
                     <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--nfi-text)]">
                       {t('cases.babyName')}
                     </th>
@@ -424,6 +430,7 @@ export function Cases() {
                     const action = getRoleAction(caseItem);
                     const showNewCase = isNewCase(caseItem.createdAt);
                     const babyDisplayName = formatBabyDisplayName(caseItem.motherName, caseItem.childName);
+                    const showBeneficiaryNo = shouldShowBeneficiaryNo(authState.activeRole, caseItem.caseStatus);
                     return (
                       <tr
                         key={caseItem.caseId}
@@ -442,9 +449,11 @@ export function Cases() {
                             {showNewCase && <NfiBadge tone="status">New</NfiBadge>}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
-                          {caseItem.beneficiaryNo || '-'}
-                        </td>
+                        {!isHospitalUser && (
+                          <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
+                            {showBeneficiaryNo ? caseItem.beneficiaryNo || '-' : '-'}
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-sm text-[var(--nfi-text)]">
                           <span className="font-medium">{babyDisplayName}</span>
                         </td>

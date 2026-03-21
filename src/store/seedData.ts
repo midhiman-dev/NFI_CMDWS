@@ -17,8 +17,9 @@ import {
   FollowupMetricDef,
   AuditEvent,
 } from '../types';
+import { resolvePrototypeIdentifiers } from '../utils/caseIdentifiers';
 
-export const SEED_VERSION = 'docs_u3_v5_l3';
+export const SEED_VERSION = 'docs_u3_v5_h1';
 
 export function seedData(): AppStore {
   const users: User[] = [
@@ -338,10 +339,19 @@ export function seedData(): AppStore {
     },
   ];
 
-  caseData.forEach((cd) => {
+  caseData.forEach((cd, index) => {
+    const identifiers = resolvePrototypeIdentifiers({
+      caseReferenceSerial: index + 1,
+      beneficiaryNo: cd.child.beneficiaryNo,
+      caseStatus: cd.caseStatus,
+      decisionAt: cd.decision?.decisionDate,
+      intakeDate: cd.intakeDate,
+    });
+
     cases.push({
       caseId: cd.caseId,
-      caseRef: cd.caseRef,
+      caseRef: identifiers.caseRef,
+      caseReferenceSerial: identifiers.caseReferenceSerial,
       processType: cd.processType,
       hospitalId: cd.hospitalId,
       caseStatus: cd.caseStatus,
@@ -352,7 +362,12 @@ export function seedData(): AppStore {
       lastActionAt: new Date().toISOString(),
     });
 
-    childProfiles.push({ caseId: cd.caseId, ...cd.child });
+    childProfiles.push({
+      caseId: cd.caseId,
+      ...cd.child,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+    });
     familyProfiles.push({ caseId: cd.caseId, ...cd.family });
     clinicalDetails.push({ caseId: cd.caseId, ...cd.clinical });
     financialDetails.push({ caseId: cd.caseId, ...cd.financial });
@@ -408,7 +423,7 @@ export function seedData(): AppStore {
       }
     }
 
-    if (cd.processType === 'BGRC' || (cd.caseStatus === 'Approved' && cd.child.beneficiaryNo)) {
+    if (cd.processType === 'BGRC' || (cd.caseStatus === 'Approved' && identifiers.beneficiaryNo)) {
       [6, 12, 18].forEach((months) => {
         followupEvents.push({
           followupId: `fu_${cd.caseId}_${months}`,

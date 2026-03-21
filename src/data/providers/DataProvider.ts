@@ -5,6 +5,7 @@ export interface CaseWithDetails extends Case {
   childName?: string;
   motherName?: string;
   beneficiaryNo?: string;
+  beneficiaryNumberAllocatedAt?: string;
   approvedAmount?: number;
 }
 

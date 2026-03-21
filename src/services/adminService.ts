@@ -513,7 +513,7 @@ export const adminService = {
 
     return (cases || []).map((c, index) => ({
       slNo: index + 1,
-      nfiBn: c.case_number,
+      nfiBn: c.beneficiary?.beneficiary_no || '',
       nameOfBeneficiary: c.beneficiary?.baby_name || '',
       gender: c.beneficiary?.gender || '',
       dob: c.beneficiary?.dob || '',
@@ -555,7 +555,7 @@ export const adminService = {
 
     return (rejections || []).map((r, index) => ({
       fySlNo: index + 1,
-      nfiBn: r.case?.case_number || '',
+      nfiBn: '',
       nameOfBeneficiary: r.case?.beneficiary?.baby_name || '',
       ageInDays: r.case?.beneficiary?.dob
         ? Math.floor((new Date().getTime() - new Date(r.case.beneficiary.dob).getTime()) / (1000 * 60 * 60 * 24))

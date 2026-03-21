@@ -15,6 +15,7 @@ import { MIS_KPI_LABELS } from '../utils/misReporting';
 import type { CaseStatus, UserRole } from '../types';
 import { translateCaseStatus } from '../i18n/helpers';
 import { formatBabyDisplayName, isNewCase } from '../utils/casePresentation';
+import { shouldShowBeneficiaryNo } from '../utils/caseIdentifiers';
 import {
   AlertCircle,
   AlertTriangle,
@@ -208,7 +209,12 @@ export function Dashboard() {
             <p className="text-[var(--nfi-text-secondary)] text-center py-8">{t('dashboard.noCases')}</p>
           ) : (
             <div className="space-y-3">
-              {cases.slice(0, 10).map((c) => (
+              {cases.slice(0, 10).map((c) => {
+                const showBeneficiaryNo = shouldShowBeneficiaryNo(authState.activeRole, c.caseStatus);
+                const identifierSubtitle = showBeneficiaryNo && c.beneficiaryNo
+                  ? `${c.caseRef}${CASE_SUBTITLE_SEPARATOR}${c.beneficiaryNo}`
+                  : c.caseRef;
+                return (
                 <div
                   key={c.caseId}
                   className={`flex items-center justify-between p-4 border rounded-lg transition-colors cursor-pointer ${
@@ -220,7 +226,9 @@ export function Dashboard() {
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium text-[var(--nfi-text)]">{c.caseRef}</p>
+                      <div>
+                        <p className="font-medium text-[var(--nfi-text)]">{identifierSubtitle}</p>
+                      </div>
                       {isNewCase(c.createdAt) && <NfiBadge tone="status">New</NfiBadge>}
                       <NfiBadge tone={getStatusTone(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus)}>
                         {translateCaseStatus(authState.activeRole === 'hospital_spoc' ? c.displayStatus : c.caseStatus)}
@@ -234,7 +242,8 @@ export function Dashboard() {
                   </div>
                   <p className="text-xs text-[var(--nfi-text-secondary)]">{new Date(c.updatedAt).toLocaleDateString()}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </NfiCard>

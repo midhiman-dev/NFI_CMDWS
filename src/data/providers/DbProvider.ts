@@ -7,6 +7,7 @@ import { getAuthState } from '../../utils/auth';
 import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalizeHospitalId } from '../../utils/roleAccess';
 import { appendCaseWorkflowEvent } from '../../utils/caseWorkflow';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
+import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
 import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import {
   FUND_APPLICATION_FIELDS,
@@ -68,6 +69,23 @@ export class DbProvider implements DataProvider {
     localStorage.setItem(BENI_OPS_ENHANCEMENT_STORAGE_KEY, JSON.stringify(data));
   }
 
+  private async syncBeneficiaryIdentifiers(caseId: string, input: {
+    caseRef?: string | number | null;
+    caseReferenceSerial?: number | null;
+    beneficiaryNo?: string | null;
+    beneficiaryNumberAllocatedAt?: string | null;
+    caseStatus?: CaseStatus | null;
+    decisionAt?: string | null;
+    intakeDate?: string | null;
+  }): Promise<ReturnType<typeof resolvePrototypeIdentifiers>> {
+    const identifiers = resolvePrototypeIdentifiers(input);
+    await this.upsertBeneficiary(caseId, {
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+    });
+    return identifiers;
+  }
+
   async listCases(): Promise<CaseWithDetails[]> {
     const cases = await caseService.getCases();
     const visibleCases = filterCasesForAuth(getAuthState(), cases);
@@ -91,13 +109,25 @@ export class DbProvider implements DataProvider {
       beneficiaryMap = new Map((beneficiaries || []).map((row) => [row.case_id, row.baby_name]));
     }
 
-    return visibleCases.map(c => ({
-      ...c,
-      caseRef: c.caseNumber,
-      intakeDate: c.createdAt,
-      motherName: familyMap.get(c.caseId),
-      childName: formatBabyDisplayName(familyMap.get(c.caseId), beneficiaryMap.get(c.caseId)),
-    }));
+    return visibleCases.map((c) => {
+      const identifiers = resolvePrototypeIdentifiers({
+        caseRef: c.caseNumber,
+        caseStatus: c.caseStatus,
+        decisionAt: c.decisionAt,
+        intakeDate: c.createdAt,
+      });
+
+      return {
+        ...c,
+        caseRef: identifiers.caseRef,
+        caseReferenceSerial: identifiers.caseReferenceSerial,
+        intakeDate: c.createdAt,
+        motherName: familyMap.get(c.caseId),
+        childName: formatBabyDisplayName(familyMap.get(c.caseId), beneficiaryMap.get(c.caseId)),
+        beneficiaryNo: identifiers.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+      };
+    });
   }
 
   async getCaseById(caseId: string): Promise<CaseWithDetails | null> {
@@ -112,12 +142,24 @@ export class DbProvider implements DataProvider {
       this.getFamily(caseId),
     ]);
 
+    const identifiers = resolvePrototypeIdentifiers({
+      caseRef: caseData.caseNumber,
+      beneficiaryNo: beneficiary?.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: beneficiary?.beneficiaryNumberAllocatedAt,
+      caseStatus: caseData.caseStatus,
+      decisionAt: caseData.decisionAt,
+      intakeDate: caseData.createdAt,
+    });
+
     return {
       ...caseData,
-      caseRef: caseData.caseNumber,
+      caseRef: identifiers.caseRef,
+      caseReferenceSerial: identifiers.caseReferenceSerial,
       intakeDate: caseData.createdAt,
       childName: beneficiary?.beneficiaryName,
       motherName: family?.motherName,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
     };
   }
 
@@ -158,12 +200,11 @@ export class DbProvider implements DataProvider {
   async createCase(payload: CreateCasePayload): Promise<CaseWithDetails> {
     const scopedHospitalId = getScopedHospitalId(getAuthState());
     const hospitalId = scopedHospitalId || normalizeHospitalId(payload.hospitalId) || payload.hospitalId;
-    const year = new Date().getFullYear();
     const { count } = await supabase
       .from('cases')
       .select('id', { count: 'exact', head: true });
     const nextNum = (count || 0) + 1;
-    const caseNumber = `NFI/${payload.processType}/${year}/${String(nextNum).padStart(4, '0')}`;
+    const caseNumber = generatePrototypeCaseReference(nextNum);
 
     const { data: caseRow, error: caseError } = await supabase
       .from('cases')
@@ -182,12 +223,20 @@ export class DbProvider implements DataProvider {
 
     const caseId = caseRow.id;
 
-    if (payload.beneficiaryName || payload.dob || payload.gender) {
+    const identifiers = resolvePrototypeIdentifiers({
+      caseReferenceSerial: nextNum,
+      beneficiaryNo: payload.beneficiaryNo,
+      caseStatus: payload.caseStatus,
+      intakeDate: payload.intakeDate,
+    });
+
+    if (payload.beneficiaryName || payload.dob || payload.gender || identifiers.beneficiaryNo) {
       await supabase.from('beneficiary_profiles').insert({
         case_id: caseId,
         baby_name: payload.beneficiaryName || 'Unnamed',
         gender: payload.gender || 'Male',
         dob: payload.dob || null,
+        beneficiary_no: identifiers.beneficiaryNo || null,
       }).then(r => { if (r.error) console.warn('beneficiary insert:', r.error); });
     }
 
@@ -224,7 +273,8 @@ export class DbProvider implements DataProvider {
 
     const createdCase = {
       caseId,
-      caseRef: caseNumber,
+      caseRef: identifiers.caseRef,
+      caseReferenceSerial: identifiers.caseReferenceSerial,
       processType: payload.processType,
       hospitalId: payload.hospitalId,
       hospitalName: hospital?.name || 'Unknown',
@@ -235,7 +285,8 @@ export class DbProvider implements DataProvider {
       lastActionAt: caseRow.last_action_at,
       childName: formatBabyDisplayName(payload.motherName, payload.beneficiaryName),
       motherName: payload.motherName,
-      beneficiaryNo: payload.beneficiaryNo,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
     };
     await this.appendWorkflowTransition(caseId, undefined, payload.caseStatus, payload.caseStatus === 'Draft' ? 'Case created in wizard' : undefined, 'Intake');
     return createdCase;
@@ -505,6 +556,17 @@ export class DbProvider implements DataProvider {
   async updateCaseStatus(caseId: string, status: CaseStatus): Promise<void> {
     const currentCase = await this.getCaseById(caseId);
     await caseService.updateCaseStatus(caseId, status);
+    if (currentCase) {
+      await this.syncBeneficiaryIdentifiers(caseId, {
+        caseRef: currentCase.caseRef,
+        caseReferenceSerial: currentCase.caseReferenceSerial,
+        beneficiaryNo: currentCase.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: currentCase.beneficiaryNumberAllocatedAt,
+        caseStatus: status,
+        decisionAt: new Date().toISOString(),
+        intakeDate: currentCase.intakeDate,
+      });
+    }
     await this.appendWorkflowTransition(
       caseId,
       currentCase?.caseStatus,
@@ -728,8 +790,16 @@ export class DbProvider implements DataProvider {
     try {
       const { data, error } = await supabase.from('beneficiary_profiles').select('*').eq('case_id', caseId).maybeSingle();
       if (error || !data) return null;
+      const caseData = await caseService.getCaseById(caseId).catch(() => null);
+      const identifiers = resolvePrototypeIdentifiers({
+        caseRef: caseData?.caseNumber,
+        beneficiaryNo: data.beneficiary_no,
+        caseStatus: caseData?.caseStatus,
+        decisionAt: caseData?.decisionAt,
+        intakeDate: caseData?.createdAt,
+      });
       return {
-        caseId: data.case_id, beneficiaryNo: data.beneficiary_no, beneficiaryName: data.baby_name,
+        caseId: data.case_id, beneficiaryNo: identifiers.beneficiaryNo, beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt, beneficiaryName: data.baby_name,
         gender: data.gender, dob: data.dob, admissionDate: data.admission_date || '',
         gestationalAgeWeeks: data.gestational_age_weeks, birthWeightKg: data.birth_weight_kg,
         currentWeightKg: data.current_weight_kg, morbidity: data.morbidity, mortality: data.mortality,

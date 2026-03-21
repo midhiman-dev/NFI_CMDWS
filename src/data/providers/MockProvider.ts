@@ -8,6 +8,7 @@ import { filterCasesForAuth, getScopedHospitalId, isCaseVisibleToAuth, normalize
 import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, saveWorkflowStore } from '../../utils/caseWorkflow';
 import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
+import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
 import { FOLLOWUP_REMARK_FIELDS, getFollowupQuestionnaire } from '../../utils/followupQuestionnaires';
 import {
   FUND_APPLICATION_FIELDS,
@@ -19,7 +20,7 @@ import {
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_l3';
+const DEMO_DATA_VERSION = 'v3_5_h1';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -141,10 +142,55 @@ export class MockProvider implements DataProvider {
     this.reportTemplates = this.loadOrGenerateReportTemplates();
     this.reportRuns = this.loadOrGenerateReportRuns();
     this.doctorReviews = this.loadOrGenerateDoctorReviews();
+    this.normalizePrototypeIdentifiers();
     this.seedWorkflowHistoryIfNeeded();
     this.seedInstallmentsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
     this.seedClinicalIfNeeded();
+  }
+
+  private saveData(): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+  }
+
+  private normalizePrototypeIdentifiers(): void {
+    const beneficiaryMap = this.readMap<ChildProfile>(MockProvider.BENE_KEY);
+    let beneficiaryMapChanged = false;
+
+    this.data.cases = this.data.cases.map((caseItem, index) => {
+      const identifiers = resolvePrototypeIdentifiers({
+        caseRef: caseItem.caseRef,
+        caseReferenceSerial: caseItem.caseReferenceSerial ?? index + 1,
+        beneficiaryNo: beneficiaryMap[caseItem.caseId]?.beneficiaryNo ?? caseItem.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: beneficiaryMap[caseItem.caseId]?.beneficiaryNumberAllocatedAt ?? caseItem.beneficiaryNumberAllocatedAt,
+        caseStatus: caseItem.caseStatus,
+        decisionAt: caseItem.updatedAt,
+        intakeDate: caseItem.intakeDate,
+      });
+
+      const beneficiary = beneficiaryMap[caseItem.caseId];
+      if (beneficiary) {
+        beneficiaryMap[caseItem.caseId] = {
+          ...beneficiary,
+          beneficiaryNo: identifiers.beneficiaryNo,
+          beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+        };
+        beneficiaryMapChanged = true;
+      }
+
+      return {
+        ...caseItem,
+        caseRef: identifiers.caseRef || generatePrototypeCaseReference(index + 1),
+        caseReferenceSerial: identifiers.caseReferenceSerial ?? index + 1,
+        beneficiaryNo: identifiers.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+      };
+    });
+
+    this.saveData();
+    if (beneficiaryMapChanged) {
+      this.writeMap(MockProvider.BENE_KEY, beneficiaryMap);
+    }
   }
 
   private seedInstallmentsIfNeeded(): void {
@@ -545,9 +591,17 @@ export class MockProvider implements DataProvider {
 
       const hospital = hospitals[template.hosp];
 
+      const identifiers = resolvePrototypeIdentifiers({
+        caseReferenceSerial: idx + 1,
+        caseStatus: template.status as any,
+        decisionAt: caseDate.toISOString(),
+        intakeDate: caseDate.toISOString().split('T')[0],
+      });
+
       return {
         caseId: `case-demo-${idx + 1}`,
-        caseRef: `NFI/2026/${String(1000 + idx).padStart(4, '0')}`,
+        caseRef: identifiers.caseRef,
+        caseReferenceSerial: identifiers.caseReferenceSerial,
         processType: template.processType as any,
         hospitalId: hospital.hospitalId,
         hospitalName: hospital.name,
@@ -558,7 +612,8 @@ export class MockProvider implements DataProvider {
         lastActionAt: caseDate.toISOString(),
         childName: formatBabyDisplayName(template.motherName),
         motherName: template.motherName,
-        beneficiaryNo: template.status === 'Draft' ? undefined : `BEN-2026-${String(idx + 1).padStart(3, '0')}`,
+        beneficiaryNo: identifiers.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
         approvedAmount: template.status === 'Approved' ? 100000 : undefined,
       };
     });
@@ -735,15 +790,21 @@ export class MockProvider implements DataProvider {
     const scopedHospitalId = getScopedHospitalId(getAuthState());
     const resolvedHospitalId = scopedHospitalId || normalizeHospitalId(payload.hospitalId) || payload.hospitalId;
     const caseId = `case-demo-${Date.now()}`;
-    const year = new Date().getFullYear();
     const nextNum = this.data.cases.length + 1;
-    const caseRef = `NFI/${payload.processType}/${year}/${String(nextNum).padStart(4, '0')}`;
     const hospital = this.data.hospitals.find(h => normalizeHospitalId(h.hospitalId) === resolvedHospitalId);
     const now = new Date().toISOString();
+    const identifiers = resolvePrototypeIdentifiers({
+      caseReferenceSerial: nextNum,
+      beneficiaryNo: payload.beneficiaryNo,
+      caseStatus: payload.caseStatus,
+      decisionAt: now,
+      intakeDate: payload.intakeDate,
+    });
 
     const newCase: CaseWithDetails = {
       caseId,
-      caseRef,
+      caseRef: identifiers.caseRef,
+      caseReferenceSerial: identifiers.caseReferenceSerial,
       processType: payload.processType,
       hospitalId: hospital?.hospitalId || resolvedHospitalId,
       hospitalName: hospital?.name || 'Unknown',
@@ -754,11 +815,12 @@ export class MockProvider implements DataProvider {
       lastActionAt: now,
       childName: formatBabyDisplayName(payload.motherName, payload.beneficiaryName),
       motherName: payload.motherName,
-      beneficiaryNo: payload.beneficiaryNo,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
     };
 
     this.data.cases.push(newCase);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+    this.saveData();
     await this.ensureDocumentChecklist(caseId, payload.processType);
     this.recordStatusTransition(caseId, undefined, payload.caseStatus, payload.caseStatus === 'Draft' ? 'Case created in wizard' : undefined, 'Intake');
 
@@ -1023,8 +1085,25 @@ export class MockProvider implements DataProvider {
       caseItem.caseStatus = 'Returned';
     }
 
+    const identifiers = resolvePrototypeIdentifiers({
+      caseRef: caseItem.caseRef,
+      caseReferenceSerial: caseItem.caseReferenceSerial,
+      beneficiaryNo: caseItem.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: caseItem.beneficiaryNumberAllocatedAt,
+      caseStatus: caseItem.caseStatus,
+      decisionAt: this.committeeReviews[caseId].decidedAt,
+      intakeDate: caseItem.intakeDate,
+    });
+    caseItem.caseRef = identifiers.caseRef;
+    caseItem.caseReferenceSerial = identifiers.caseReferenceSerial;
+    caseItem.beneficiaryNo = identifiers.beneficiaryNo;
+    caseItem.beneficiaryNumberAllocatedAt = identifiers.beneficiaryNumberAllocatedAt;
+    await this.upsertBeneficiary(caseId, {
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+    });
     caseItem.updatedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+    this.saveData();
     this.saveCommitteeReviews();
     this.recordStatusTransition(caseId, previousStatus, caseItem.caseStatus, data.comments, 'Committee');
   }
@@ -1034,8 +1113,25 @@ export class MockProvider implements DataProvider {
     if (caseItem) {
       const previousStatus = caseItem.caseStatus;
       caseItem.caseStatus = status;
+      const identifiers = resolvePrototypeIdentifiers({
+        caseRef: caseItem.caseRef,
+        caseReferenceSerial: caseItem.caseReferenceSerial,
+        beneficiaryNo: caseItem.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: caseItem.beneficiaryNumberAllocatedAt,
+        caseStatus: status,
+        decisionAt: new Date().toISOString(),
+        intakeDate: caseItem.intakeDate,
+      });
+      caseItem.caseRef = identifiers.caseRef;
+      caseItem.caseReferenceSerial = identifiers.caseReferenceSerial;
+      caseItem.beneficiaryNo = identifiers.beneficiaryNo;
+      caseItem.beneficiaryNumberAllocatedAt = identifiers.beneficiaryNumberAllocatedAt;
       caseItem.updatedAt = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      await this.upsertBeneficiary(caseId, {
+        beneficiaryNo: identifiers.beneficiaryNo,
+        beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+      });
+      this.saveData();
       this.recordStatusTransition(caseId, previousStatus, status, status === 'Submitted' && previousStatus === 'Returned'
         ? 'Returned corrections updated and resubmitted'
         : undefined, previousStatus === 'Returned' && status === 'Submitted' ? 'Hospital Resubmission' : 'Case Update');
@@ -1378,12 +1474,45 @@ export class MockProvider implements DataProvider {
   }
 
   async getBeneficiary(caseId: string): Promise<ChildProfile | null> {
-    return this.readMap<ChildProfile>(MockProvider.BENE_KEY)[caseId] || null;
+    const caseItem = this.data.cases.find((entry) => entry.caseId === caseId);
+    const beneficiary = this.readMap<ChildProfile>(MockProvider.BENE_KEY)[caseId];
+    if (!beneficiary) return null;
+
+    const identifiers = resolvePrototypeIdentifiers({
+      caseRef: caseItem?.caseRef,
+      caseReferenceSerial: caseItem?.caseReferenceSerial,
+      beneficiaryNo: beneficiary.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: beneficiary.beneficiaryNumberAllocatedAt,
+      caseStatus: caseItem?.caseStatus,
+      decisionAt: caseItem?.updatedAt,
+      intakeDate: caseItem?.intakeDate,
+    });
+
+    return {
+      ...beneficiary,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+    };
   }
 
   async upsertBeneficiary(caseId: string, data: Partial<Omit<ChildProfile, 'caseId'>>): Promise<void> {
+    const caseItem = this.data.cases.find((entry) => entry.caseId === caseId);
     const map = this.readMap<ChildProfile>(MockProvider.BENE_KEY);
-    map[caseId] = { ...(map[caseId] || { caseId, beneficiaryName: '', gender: 'Male' as const, dob: '', admissionDate: '' }), ...data, caseId } as ChildProfile;
+    const merged = { ...(map[caseId] || { caseId, beneficiaryName: '', gender: 'Male' as const, dob: '', admissionDate: '' }), ...data, caseId } as ChildProfile;
+    const identifiers = resolvePrototypeIdentifiers({
+      caseRef: caseItem?.caseRef,
+      caseReferenceSerial: caseItem?.caseReferenceSerial,
+      beneficiaryNo: merged.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: merged.beneficiaryNumberAllocatedAt,
+      caseStatus: caseItem?.caseStatus,
+      decisionAt: caseItem?.updatedAt,
+      intakeDate: caseItem?.intakeDate,
+    });
+    map[caseId] = {
+      ...merged,
+      beneficiaryNo: identifiers.beneficiaryNo,
+      beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
+    };
     this.writeMap(MockProvider.BENE_KEY, map);
   }
 

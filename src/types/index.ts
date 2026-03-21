@@ -258,6 +258,7 @@ export interface WorkflowExtensions {
 export interface Case {
   caseId: string;
   caseRef: string;
+  caseReferenceSerial?: number;
   processType: ProcessType;
   hospitalId: string;
   caseStatus: CaseStatus;
@@ -273,6 +274,7 @@ export interface Case {
 export interface ChildProfile {
   caseId: string;
   beneficiaryNo?: string;
+  beneficiaryNumberAllocatedAt?: string;
   beneficiaryName: string;
   gender: 'Male' | 'Female' | 'Other';
   dob: string;
