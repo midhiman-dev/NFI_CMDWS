@@ -16,6 +16,10 @@ import {
   getSectionStatus,
 } from '../../utils/intakeValidation';
 
+const BENI_OPS_ENHANCEMENT_STORAGE_KEY = 'nfi_beni_ops_enhancement_v1';
+
+type BeniOpsEnhancementMap = Record<string, Partial<BeniProgramOpsData>>;
+
 export class DbProvider implements DataProvider {
   private static readonly DOC_VERSIONS_STORAGE_KEY = 'nfi_db_document_versions_v1';
 
@@ -50,6 +54,18 @@ export class DbProvider implements DataProvider {
 
   private saveStoredDocVersions(versions: Record<string, DocVersion[]>): void {
     localStorage.setItem(DbProvider.DOC_VERSIONS_STORAGE_KEY, JSON.stringify(versions));
+  }
+
+  private getStoredBeniOpsEnhancements(): BeniOpsEnhancementMap {
+    try {
+      return JSON.parse(localStorage.getItem(BENI_OPS_ENHANCEMENT_STORAGE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  private saveStoredBeniOpsEnhancements(data: BeniOpsEnhancementMap): void {
+    localStorage.setItem(BENI_OPS_ENHANCEMENT_STORAGE_KEY, JSON.stringify(data));
   }
 
   async listCases(): Promise<CaseWithDetails[]> {
@@ -626,9 +642,16 @@ export class DbProvider implements DataProvider {
   }
 
   async getBeniProgramOps(caseId: string): Promise<BeniProgramOpsData | null> {
+    const enhancements = this.getStoredBeniOpsEnhancements()[caseId] || {};
     try {
       const ops = await caseService.getBeniProgramOps(caseId);
-      if (!ops) return null;
+      if (!ops && !Object.keys(enhancements).length) return null;
+      if (!ops) {
+        return {
+          caseId,
+          ...enhancements,
+        };
+      }
       return {
         opsId: ops.opsId,
         caseId: ops.caseId,
@@ -637,9 +660,14 @@ export class DbProvider implements DataProvider {
         hamperSentDate: ops.hamperSentDate,
         voiceNoteReceivedAt: ops.voiceNoteReceivedAt,
         notes: ops.notes,
+        ...enhancements,
       };
     } catch {
-      return null;
+      if (!Object.keys(enhancements).length) return null;
+      return {
+        caseId,
+        ...enhancements,
+      };
     }
   }
 
@@ -650,6 +678,31 @@ export class DbProvider implements DataProvider {
       voiceNoteReceivedAt: ops.voiceNoteReceivedAt,
       notes: ops.notes,
     });
+
+    const stored = this.getStoredBeniOpsEnhancements();
+    stored[caseId] = {
+      ...stored[caseId],
+      volunteerLead: ops.volunteerLead,
+      volunteerLeadName: ops.volunteerLeadName,
+      assignedVolunteer: ops.assignedVolunteer,
+      assignedVolunteerName: ops.assignedVolunteerName,
+      caseAllottedTo: ops.caseAllottedTo,
+      caseAllottedToName: ops.caseAllottedToName,
+      spocContacted: ops.spocContacted,
+      preDischargeCallCompleted: ops.preDischargeCallCompleted,
+      parentContactedBeforeDischarge: ops.parentContactedBeforeDischarge,
+      spocContactedBeforeDischarge: ops.spocContactedBeforeDischarge,
+      plannedDischargeDateDiscussed: ops.plannedDischargeDateDiscussed,
+      preDischargeContactDate: ops.preDischargeContactDate,
+      homeReachedConfirmed: ops.homeReachedConfirmed,
+      postDischargeContactDone: ops.postDischargeContactDone,
+      familyReachedAtHome: ops.familyReachedAtHome,
+      postDischargeContactDate: ops.postDischargeContactDate,
+      hamperStatus: ops.hamperStatus,
+      hamperDeliveryDate: ops.hamperDeliveryDate,
+      hamperDispatchNotes: ops.hamperDispatchNotes,
+    };
+    this.saveStoredBeniOpsEnhancements(stored);
   }
 
   async getDoctorReview(caseId: string): Promise<DoctorReview | null> {

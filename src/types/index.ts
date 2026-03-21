@@ -409,7 +409,23 @@ export interface BeniProgramOps {
   beniId: string;
   caseId: string;
   beniTeamMember?: string;
+  volunteerLead?: string;
+  assignedVolunteer?: string;
+  caseAllottedTo?: string;
+  spocContacted?: boolean;
+  preDischargeCallCompleted?: boolean;
+  parentContactedBeforeDischarge?: boolean;
+  spocContactedBeforeDischarge?: boolean;
+  plannedDischargeDateDiscussed?: boolean;
+  preDischargeContactDate?: string;
+  homeReachedConfirmed?: boolean;
+  postDischargeContactDone?: boolean;
+  familyReachedAtHome?: boolean;
+  postDischargeContactDate?: string;
   hamperSentDate?: string;
+  hamperStatus?: 'Not Started' | 'Sent' | 'Delivered';
+  hamperDeliveryDate?: string;
+  hamperDispatchNotes?: string;
   voiceNoteReceivedAt?: string;
   notes?: string;
 }

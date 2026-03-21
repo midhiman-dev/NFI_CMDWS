@@ -1246,10 +1246,13 @@ export class MockProvider implements DataProvider {
   async getBeniProgramOps(caseId: string): Promise<BeniProgramOpsData | null> {
     const ops = this.beniOps[caseId];
     if (!ops) return null;
-    const volunteer = MockProvider.DEMO_VOLUNTEERS.find(v => v.userId === ops.beniTeamMember);
+    const getVolunteerName = (userId?: string) => MockProvider.DEMO_VOLUNTEERS.find(v => v.userId === userId)?.fullName;
     return {
       ...ops,
-      beniTeamMemberName: volunteer?.fullName,
+      beniTeamMemberName: getVolunteerName(ops.beniTeamMember),
+      volunteerLeadName: getVolunteerName(ops.volunteerLead),
+      assignedVolunteerName: getVolunteerName(ops.assignedVolunteer),
+      caseAllottedToName: getVolunteerName(ops.caseAllottedTo),
     };
   }
 
@@ -1259,7 +1262,23 @@ export class MockProvider implements DataProvider {
       opsId: this.beniOps[caseId]?.opsId || `beni-${caseId}-${Date.now()}`,
       caseId,
       beniTeamMember: ops.beniTeamMember,
+      volunteerLead: ops.volunteerLead,
+      assignedVolunteer: ops.assignedVolunteer,
+      caseAllottedTo: ops.caseAllottedTo,
+      spocContacted: ops.spocContacted,
+      preDischargeCallCompleted: ops.preDischargeCallCompleted,
+      parentContactedBeforeDischarge: ops.parentContactedBeforeDischarge,
+      spocContactedBeforeDischarge: ops.spocContactedBeforeDischarge,
+      plannedDischargeDateDiscussed: ops.plannedDischargeDateDiscussed,
+      preDischargeContactDate: ops.preDischargeContactDate,
+      homeReachedConfirmed: ops.homeReachedConfirmed,
+      postDischargeContactDone: ops.postDischargeContactDone,
+      familyReachedAtHome: ops.familyReachedAtHome,
+      postDischargeContactDate: ops.postDischargeContactDate,
       hamperSentDate: ops.hamperSentDate,
+      hamperStatus: ops.hamperStatus,
+      hamperDeliveryDate: ops.hamperDeliveryDate,
+      hamperDispatchNotes: ops.hamperDispatchNotes,
       voiceNoteReceivedAt: ops.voiceNoteReceivedAt,
       notes: ops.notes,
     };
