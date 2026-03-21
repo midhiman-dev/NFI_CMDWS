@@ -166,6 +166,11 @@ export interface SettlementRecord {
   finalBillAmount?: number;
   nfiPaidAmount?: number;
   otherPaidAmount?: number;
+  paymentStatus?: 'Paid' | 'Unpaid' | 'Partially Paid';
+  dueDate?: string;
+  paymentDate?: string;
+  reductionAmount?: number;
+  reductionNotes?: string;
   variancePct?: number;
   varianceFlag?: boolean;
   directorReview?: DirectorSettlementReview;

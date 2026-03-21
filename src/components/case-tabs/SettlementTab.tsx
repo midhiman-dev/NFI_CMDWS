@@ -7,6 +7,7 @@ import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
 import { getAuthState } from '../../utils/auth';
 import { caseService } from '../../services/caseService';
+import { PAYMENT_STATUS_OPTIONS, getDefaultPaymentStatus, getDonorMappingDisplay } from '../../utils/settlement';
 import type { SettlementRecord, Case, CaseStatus } from '../../types';
 
 interface Props {
@@ -32,6 +33,11 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const [finalBillAmount, setFinalBillAmount] = useState<number | undefined>();
   const [nfiPaidAmount, setNfiPaidAmount] = useState<number | undefined>();
   const [otherPaidAmount, setOtherPaidAmount] = useState<number | undefined>();
+  const [paymentStatus, setPaymentStatus] = useState<NonNullable<SettlementRecord['paymentStatus']>>('Unpaid');
+  const [dueDate, setDueDate] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [reductionAmount, setReductionAmount] = useState<number | undefined>();
+  const [reductionNotes, setReductionNotes] = useState('');
 
   const [directorDecision, setDirectorDecision] = useState<'Approved' | 'Returned' | ''>('');
   const [directorComments, setDirectorComments] = useState('');
@@ -46,8 +52,25 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         setFinalBillAmount(result.finalBillAmount);
         setNfiPaidAmount(result.nfiPaidAmount);
         setOtherPaidAmount(result.otherPaidAmount);
+        setPaymentStatus(getDefaultPaymentStatus(result));
+        setDueDate(result.dueDate || '');
+        setPaymentDate(result.paymentDate || '');
+        setReductionAmount(result.reductionAmount);
+        setReductionNotes(result.reductionNotes || '');
+      } else {
+        setReferenceAmount(undefined);
+        setFinalBillAmount(undefined);
+        setNfiPaidAmount(undefined);
+        setOtherPaidAmount(undefined);
+        setPaymentStatus('Unpaid');
+        setDueDate('');
+        setPaymentDate('');
+        setReductionAmount(undefined);
+        setReductionNotes('');
       }
-    } catch { /* safe fallback */ }
+    } catch {
+      // safe fallback
+    }
     setLoading(false);
   };
 
@@ -68,6 +91,9 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const variance = computeVariance(finalBillAmount, referenceAmount);
   const requiresDirectorReview = variance.flag;
   const directorReviewSubmitted = settlement?.directorReview?.decision;
+  const totalPaidAmount = (nfiPaidAmount ?? 0) + (otherPaidAmount ?? 0);
+  const balanceAmount = finalBillAmount !== undefined ? Math.max(finalBillAmount - totalPaidAmount, 0) : undefined;
+  const donorMapping = getDonorMappingDisplay(caseData, settlement);
 
   const handleSaveSettlement = async () => {
     if (!canEditSettlement) {
@@ -82,6 +108,11 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         finalBillAmount,
         nfiPaidAmount,
         otherPaidAmount,
+        paymentStatus,
+        dueDate: dueDate || undefined,
+        paymentDate: paymentDate || undefined,
+        reductionAmount,
+        reductionNotes: reductionNotes.trim() || undefined,
       };
 
       if (variance.pct !== null) {
@@ -91,7 +122,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
 
       await provider.saveSettlement(caseId, data);
 
-      const auditNotes = `Settlement saved: Reference ₹${referenceAmount || 'N/A'}, Final Bill ₹${finalBillAmount || 'N/A'}, Variance ${variance.pct !== null ? variance.pct + '%' : 'N/A'}`;
+      const auditNotes = `Settlement saved: Reference Rs ${referenceAmount || 'N/A'}, Final Bill Rs ${finalBillAmount || 'N/A'}, Payment ${paymentStatus}, Variance ${variance.pct !== null ? variance.pct + '%' : 'N/A'}`;
       await caseService.addAuditEvent({
         caseId,
         userId: user?.userId || 'unknown',
@@ -168,6 +199,11 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const settlementComplete = finalBillAmount && nfiPaidAmount !== undefined && otherPaidAmount !== undefined;
   const directorApproved = !requiresDirectorReview || (requiresDirectorReview && directorReviewSubmitted === 'Approved');
   const canCloseCaseNow = settlementComplete && directorApproved && !isClosed;
+  const paymentStatusTone = paymentStatus === 'Paid'
+    ? 'bg-emerald-100 text-emerald-800'
+    : paymentStatus === 'Partially Paid'
+      ? 'bg-amber-100 text-amber-800'
+      : 'bg-slate-100 text-slate-700';
 
   const handleCloseCaseWithSettlement = async () => {
     if (!canCloseCaseWithSettlement) {
@@ -210,58 +246,136 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   return (
     <div className="space-y-6">
       <NfiCard className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Settlement Summary</h3>
-          {isClosed && <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-medium text-white bg-green-600 rounded">
-            <CheckCircle size={16} /> Case Closed
-          </span>}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Payment Tracking</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">Settlement-level tracking for payment state, dates, and reductions.</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${paymentStatusTone}`}>
+              {paymentStatus}
+            </span>
+            {isClosed && (
+              <span className="inline-flex items-center gap-1 rounded bg-green-600 px-3 py-1 text-sm font-medium text-white">
+                <CheckCircle size={16} /> Case Closed
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-6 grid gap-3 md:grid-cols-4">
+          <SettlementSummaryCard label="Final Bill" value={fmtCurrency(finalBillAmount)} />
+          <SettlementSummaryCard label="Total Paid" value={fmtCurrency(totalPaidAmount)} />
+          <SettlementSummaryCard label="Balance" value={fmtCurrency(balanceAmount)} />
+          <SettlementSummaryCard label="Reduction" value={fmtCurrency(reductionAmount)} />
         </div>
 
         <div className="space-y-4">
-          <NfiField label="Reference Amount (₹)">
-            <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <NfiField label="Reference Amount (Rs)">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  className="nfi-input flex-1"
+                  value={referenceAmount ?? ''}
+                  onChange={e => setReferenceAmount(e.target.value ? +e.target.value : undefined)}
+                  disabled={!canEditSettlement || isClosed}
+                />
+                {!referenceAmount && <span className="text-sm text-[var(--nfi-text-secondary)]">No reference found</span>}
+              </div>
+            </NfiField>
+
+            <NfiField label="Final Bill Amount (Rs)">
               <input
                 type="number"
-                className="nfi-input flex-1"
-                value={referenceAmount ?? ''}
-                onChange={e => setReferenceAmount(e.target.value ? +e.target.value : undefined)}
+                className="nfi-input"
+                value={finalBillAmount ?? ''}
+                onChange={e => setFinalBillAmount(e.target.value ? +e.target.value : undefined)}
                 disabled={!canEditSettlement || isClosed}
               />
-              {!referenceAmount && <span className="text-sm text-[var(--nfi-text-secondary)]">No reference found</span>}
-            </div>
-          </NfiField>
+            </NfiField>
+          </div>
 
-          <NfiField label="Final Bill Amount (₹)">
-            <input
-              type="number"
-              className="nfi-input"
-              value={finalBillAmount ?? ''}
-              onChange={e => setFinalBillAmount(e.target.value ? +e.target.value : undefined)}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <NfiField label="Amount Paid by NFI (Rs)">
+              <input
+                type="number"
+                className="nfi-input"
+                value={nfiPaidAmount ?? ''}
+                onChange={e => setNfiPaidAmount(e.target.value ? +e.target.value : undefined)}
+                disabled={!canEditSettlement || isClosed}
+              />
+            </NfiField>
+
+            <NfiField label="Amount Paid by Family / Other (Rs)">
+              <input
+                type="number"
+                className="nfi-input"
+                value={otherPaidAmount ?? ''}
+                onChange={e => setOtherPaidAmount(e.target.value ? +e.target.value : undefined)}
+                disabled={!canEditSettlement || isClosed}
+              />
+            </NfiField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <NfiField label="Payment Status">
+              <select
+                className="nfi-input"
+                value={paymentStatus}
+                onChange={e => setPaymentStatus(e.target.value as NonNullable<SettlementRecord['paymentStatus']>)}
+                disabled={!canEditSettlement || isClosed}
+              >
+                {PAYMENT_STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </NfiField>
+
+            <NfiField label="Due Date">
+              <input
+                type="date"
+                className="nfi-input"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                disabled={!canEditSettlement || isClosed}
+              />
+            </NfiField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <NfiField label="Payment Date">
+              <input
+                type="date"
+                className="nfi-input"
+                value={paymentDate}
+                onChange={e => setPaymentDate(e.target.value)}
+                disabled={!canEditSettlement || isClosed}
+              />
+            </NfiField>
+
+            <NfiField label="Reduction / Discount / Concession (Rs)">
+              <input
+                type="number"
+                className="nfi-input"
+                value={reductionAmount ?? ''}
+                onChange={e => setReductionAmount(e.target.value ? +e.target.value : undefined)}
+                disabled={!canEditSettlement || isClosed}
+              />
+            </NfiField>
+          </div>
+
+          <NfiField label="Reduction Notes">
+            <textarea
+              className="nfi-input min-h-[90px]"
+              value={reductionNotes}
+              onChange={e => setReductionNotes(e.target.value)}
               disabled={!canEditSettlement || isClosed}
+              placeholder="Optional note on discount, concession, or negotiated reduction"
             />
           </NfiField>
 
-          <NfiField label="Amount Paid by NFI (₹)">
-            <input
-              type="number"
-              className="nfi-input"
-              value={nfiPaidAmount ?? ''}
-              onChange={e => setNfiPaidAmount(e.target.value ? +e.target.value : undefined)}
-              disabled={!canEditSettlement || isClosed}
-            />
-          </NfiField>
-
-          <NfiField label="Amount Paid by Family/Other (₹)">
-            <input
-              type="number"
-              className="nfi-input"
-              value={otherPaidAmount ?? ''}
-              onChange={e => setOtherPaidAmount(e.target.value ? +e.target.value : undefined)}
-              disabled={!canEditSettlement || isClosed}
-            />
-          </NfiField>
-
-          <div className="p-4 bg-[var(--nfi-bg-secondary)] rounded border border-[var(--nfi-border)]">
+          <div className="rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4">
             <div className="flex items-center justify-between">
               <span className="font-medium text-[var(--nfi-text)]">Variance</span>
               <span className="text-lg font-semibold">
@@ -269,8 +383,8 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
               </span>
             </div>
             {variance.flag && (
-              <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded flex items-start gap-2">
-                <AlertCircle size={16} className="text-amber-700 mt-0.5 flex-shrink-0" />
+              <div className="mt-2 flex items-start gap-2 rounded border border-amber-300 bg-amber-100 p-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
                 <span className="text-sm text-amber-700">Director review required (variance &gt;10%)</span>
               </div>
             )}
@@ -284,19 +398,33 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         </div>
       </NfiCard>
 
-      {requiresDirectorReview && (
-        <NfiCard className="p-6 border-amber-200 bg-amber-50">
-          <h3 className="text-lg font-semibold text-amber-900 mb-4">Director Review Required</h3>
+      <NfiCard className="p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Donor Mapping</h3>
+          <p className="text-sm text-[var(--nfi-text-secondary)]">Visibility-only view of sponsor, allocation, and funding source context.</p>
+        </div>
 
-          <div className="space-y-4 mb-4 p-4 bg-white rounded border border-amber-200">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DonorInfoRow label="Donor / Sponsor" value={donorMapping.donorOrSponsor} />
+          <DonorInfoRow label="Funding Source" value={donorMapping.fundingSource} />
+          <DonorInfoRow label="Donor Allocation" value={donorMapping.donorAllocation} />
+          <DonorInfoRow label="Supported By" value={donorMapping.supportedBy} />
+        </div>
+      </NfiCard>
+
+      {requiresDirectorReview && (
+        <NfiCard className="border-amber-200 bg-amber-50 p-6">
+          <h3 className="mb-4 text-lg font-semibold text-amber-900">Director Review Required</h3>
+
+          <div className="mb-4 space-y-4 rounded border border-amber-200 bg-white p-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-[var(--nfi-text-secondary)]">Reference Amount</span>
-                <p className="font-semibold text-[var(--nfi-text)]">₹{referenceAmount?.toLocaleString() || 'N/A'}</p>
+                <p className="font-semibold text-[var(--nfi-text)]">{fmtCurrency(referenceAmount)}</p>
               </div>
               <div>
                 <span className="text-[var(--nfi-text-secondary)]">Final Bill Amount</span>
-                <p className="font-semibold text-[var(--nfi-text)]">₹{finalBillAmount?.toLocaleString() || 'N/A'}</p>
+                <p className="font-semibold text-[var(--nfi-text)]">{fmtCurrency(finalBillAmount)}</p>
               </div>
               <div>
                 <span className="text-[var(--nfi-text-secondary)]">Variance</span>
@@ -306,9 +434,9 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
           </div>
 
           {directorReviewSubmitted ? (
-            <div className="p-4 bg-white rounded border border-green-300">
+            <div className="rounded border border-green-300 bg-white p-4">
               <div className="mb-3">
-                <span className="inline-block px-3 py-1 text-sm font-medium text-white bg-green-600 rounded">
+                <span className="inline-block rounded bg-green-600 px-3 py-1 text-sm font-medium text-white">
                   {settlement?.directorReview?.decision}
                 </span>
               </div>
@@ -365,16 +493,16 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
       )}
 
       <NfiCard className="p-6">
-        <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-4">Case Closure</h3>
+        <h3 className="mb-4 text-lg font-semibold text-[var(--nfi-text)]">Case Closure</h3>
 
-        <div className="space-y-3 mb-6 p-4 bg-[var(--nfi-bg-secondary)] rounded">
+        <div className="mb-6 space-y-3 rounded bg-[var(--nfi-bg-secondary)] p-4">
           <div className="flex items-center gap-2">
             {settlementComplete ? (
               <CheckCircle size={18} className="text-green-600" />
             ) : (
               <AlertCircle size={18} className="text-gray-400" />
             )}
-            <span className={settlementComplete ? 'text-green-600 font-medium' : 'text-[var(--nfi-text-secondary)]'}>
+            <span className={settlementComplete ? 'font-medium text-green-600' : 'text-[var(--nfi-text-secondary)]'}>
               Settlement Summary complete
             </span>
           </div>
@@ -385,15 +513,15 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
             ) : (
               <AlertCircle size={18} className="text-amber-500" />
             )}
-            <span className={directorApproved ? 'text-green-600 font-medium' : 'text-amber-600 font-medium'}>
+            <span className={directorApproved ? 'font-medium text-green-600' : 'font-medium text-amber-600'}>
               {requiresDirectorReview ? 'Director approval' : 'No director review required'}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <CheckCircle size={18} className="text-blue-500" />
-            <span className="text-[var(--nfi-text-secondary)] text-sm">
-              Final Bill document (recommended but optional)
+            <span className="text-sm text-[var(--nfi-text-secondary)]">
+              Closure document baseline available for review
             </span>
           </div>
         </div>
@@ -406,9 +534,9 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
               </NfiButton>
             ) : (
               <div className="space-y-3">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded">
-                  <p className="font-semibold text-amber-900 mb-2">Confirm Case Closure</p>
-                  <p className="text-sm text-amber-800 mb-4">
+                <div className="rounded border border-amber-200 bg-amber-50 p-4">
+                  <p className="mb-2 font-semibold text-amber-900">Confirm Case Closure</p>
+                  <p className="mb-4 text-sm text-amber-800">
                     This action will mark the case as Closed and cannot be reversed. Ensure all settlement details are correct.
                   </p>
                 </div>
@@ -435,7 +563,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         )}
 
         {isClosed && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded flex items-center gap-3">
+          <div className="flex items-center gap-3 rounded border border-green-200 bg-green-50 p-4">
             <CheckCircle size={20} className="text-green-600" />
             <div>
               <p className="font-semibold text-green-900">Case Closed</p>
@@ -446,30 +574,50 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
       </NfiCard>
 
       <NfiCard className="p-6">
-        <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-4">Final Documents</h3>
-        <p className="text-[var(--nfi-text-secondary)] text-sm mb-4">
-          Upload final case documents (optional, except Final Bill recommended for closure)
+        <h3 className="mb-4 text-lg font-semibold text-[var(--nfi-text)]">Closure Documents</h3>
+        <p className="mb-4 text-sm text-[var(--nfi-text-secondary)]">
+          Keep the final closure pack aligned to the current baseline document set.
         </p>
         <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2 p-2 hover:bg-[var(--nfi-bg-secondary)] rounded cursor-pointer">
+          <div className="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-[var(--nfi-bg-secondary)]">
             <Upload size={16} className="text-blue-600" />
             <span>Final Bill</span>
-            <span className="ml-auto text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Recommended</span>
+            <span className="ml-auto rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">Recommended</span>
           </div>
-          <div className="flex items-center gap-2 p-2 hover:bg-[var(--nfi-bg-secondary)] rounded cursor-pointer">
+          <div className="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-[var(--nfi-bg-secondary)]">
             <Upload size={16} className="text-blue-600" />
-            <span>Payment Receipt</span>
+            <span>Payment Requisition</span>
+            <span className="ml-auto rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">Baseline</span>
           </div>
-          <div className="flex items-center gap-2 p-2 hover:bg-[var(--nfi-bg-secondary)] rounded cursor-pointer">
+          <div className="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-[var(--nfi-bg-secondary)]">
             <Upload size={16} className="text-blue-600" />
-            <span>Discharge Certificate</span>
-          </div>
-          <div className="flex items-center gap-2 p-2 hover:bg-[var(--nfi-bg-secondary)] rounded cursor-pointer">
-            <Upload size={16} className="text-blue-600" />
-            <span>Discharge Summary</span>
+            <span>Discharge Summary / Report</span>
+            <span className="ml-auto rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">Baseline</span>
           </div>
         </div>
       </NfiCard>
     </div>
   );
+}
+
+function SettlementSummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-[var(--nfi-text)]">{value}</p>
+    </div>
+  );
+}
+
+function DonorInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--nfi-text-secondary)]">{label}</p>
+      <p className="mt-2 text-sm font-medium text-[var(--nfi-text)]">{value}</p>
+    </div>
+  );
+}
+
+function fmtCurrency(value?: number) {
+  return value !== undefined ? `Rs ${value.toLocaleString()}` : 'N/A';
 }
