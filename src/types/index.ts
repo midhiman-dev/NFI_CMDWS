@@ -231,10 +231,23 @@ export interface WorkflowFunding {
   sponsorQuantification?: WorkflowSponsorQuantification;
 }
 
+export type PanelAssignmentType = 'clinical' | 'social' | 'financial';
+
+export interface WorkflowPanelAssignment {
+  panelType: PanelAssignmentType;
+  reviewerUserId?: string;
+  reviewerName?: string;
+  panelName?: string;
+  assignedAt?: string;
+  assignedBy?: string;
+  notes?: string;
+}
+
 export interface WorkflowExtensions {
   interview?: WorkflowInterview;
   appeal?: WorkflowAppeal;
   funding?: WorkflowFunding;
+  panelAssignments?: Partial<Record<PanelAssignmentType, WorkflowPanelAssignment>>;
 }
 
 export interface Case {

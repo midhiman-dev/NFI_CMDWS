@@ -39,6 +39,7 @@ import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
 import { formatBabyDisplayName } from '../utils/casePresentation';
 import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
 import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
+import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -234,7 +235,7 @@ export function CaseDetail() {
         { id: 'documents', label: translateLiteral('Documents'), icon: <Upload size={16} />, count: documents.length },
         { id: 'doctor-review', label: t('case.clinicalReview', { defaultValue: 'Clinical Review' }), icon: <Stethoscope size={16} /> },
         { id: 'verification', label: translateLiteral('Verification'), icon: <CheckCircle size={16} /> },
-        { id: 'approval', label: translateLiteral('Approval'), icon: <CheckCircle size={16} /> },
+        { id: 'approval', label: 'Panel Decision', icon: <CheckCircle size={16} /> },
         { id: 'workflow-extensions', label: t('case.workflowExtensions', { defaultValue: 'Workflow Extensions' }), icon: <CheckCircle size={16} /> },
         ...(showPostApproval ? [
           { id: 'settlement', label: t('case.settlementClosure', { defaultValue: 'Settlement & Closure' }), icon: <CheckCircle size={16} /> },
@@ -306,7 +307,7 @@ export function CaseDetail() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-red-800">
               <p><span className="font-medium">{t('common.rejectedBy')}:</span> {latestRejectedEvent?.changedBy || 'N/A'}</p>
               <p><span className="font-medium">{t('common.when')}:</span> {formatDateTimeFriendly(latestRejectedEvent?.changedAt)}</p>
-              <p><span className="font-medium">{t('common.stage')}:</span> {latestRejectedEvent?.source || 'Committee'}</p>
+              <p><span className="font-medium">{t('common.stage')}:</span> {remapCommitteeLabel(latestRejectedEvent?.source, 'Panel')}</p>
             </div>
             <p className="text-xs text-red-700 mt-2">{t('case.rejectedReadonly', { defaultValue: 'Rejected cases are read-only for hospital users in the current workflow.' })}</p>
           </NfiCard>
@@ -1002,7 +1003,7 @@ export function DocumentsTab({
   const committeeMessage = isCommittee && isDemoMode ? (
     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
       <p className="text-sm text-blue-900">
-        In production, this case would be assigned to specific committee members. Demo mode shows all documents to all users.
+        In production, this case would be assigned to specific panel members. Demo mode shows all documents to all users.
       </p>
     </div>
   ) : null;
@@ -1067,7 +1068,7 @@ export function DocumentsTab({
       {mandatoryCompleteCount === mandatoryCount && mandatoryCount > 0 && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            Readiness check: All mandatory documents complete and ready for committee review.
+            Readiness check: All mandatory documents complete and ready for panel review.
           </p>
         </div>
       )}
@@ -1432,7 +1433,7 @@ function VerificationTab({
   const handleSendToCommittee = async () => {
     const doctorGating = getDoctorReviewGatingInfo(doctorReview);
     if (!doctorGating.canSendToCommittee) {
-      showToast(`Cannot send to committee: ${doctorGating.reason}`, 'error');
+      showToast(`Cannot send to panel: ${doctorGating.reason}`, 'error');
       return;
     }
 
@@ -1442,7 +1443,7 @@ function VerificationTab({
       if (!readiness?.interimSummaryComplete) issues.push('Interim Summary incomplete');
       if (!readiness?.documentsReady) issues.push(`${readiness?.missingDocuments?.length || 0} mandatory documents need attention`);
 
-      showToast(`Cannot send to committee: ${issues.join(', ')}`, 'error');
+      showToast(`Cannot send to panel: ${issues.join(', ')}`, 'error');
       return;
     }
 
@@ -1451,10 +1452,10 @@ function VerificationTab({
         comment: 'All intake forms and mandatory documents completed',
       });
       onUpdate();
-      showToast('Case sent to committee for review', 'success');
+      showToast('Case sent to panel for review', 'success');
     } catch (error) {
       console.error('Error sending to committee:', error);
-      showToast('Failed to send to committee', 'error');
+      showToast('Failed to send to panel', 'error');
     }
   };
 
@@ -1502,7 +1503,7 @@ function VerificationTab({
         {canSendToCommittee && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
             <CheckCircle size={20} className="text-green-600" />
-            <p className="text-sm text-green-800">Ready to send to committee. All intake forms, documents, and requirements complete.</p>
+            <p className="text-sm text-green-800">Ready to send to panel. All intake forms, documents, and requirements complete.</p>
           </div>
         )}
         {!canSendToCommittee && (
@@ -1648,7 +1649,7 @@ function VerificationTab({
         </NfiButton>
         <NfiButton onClick={handleSendToCommittee} disabled={!canSendToCommittee}>
           <CheckCircle size={16} className="mr-2" />
-          Send to Committee
+          Send to Panel
         </NfiButton>
       </div>
 
@@ -1730,6 +1731,8 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showLegacyInstallments, setShowLegacyInstallments] = useState(false);
+  const [panelAssignments, setPanelAssignments] = useState(buildPanelAssignmentState());
+  const [savingAssignments, setSavingAssignments] = useState(false);
 
   const [formData, setFormData] = useState({
     outcome: 'Pending',
@@ -1812,6 +1815,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       setInstallments(installmentsData || []);
       setRejectionDetails(rejectionData);
       setWorkflowExt(workflowExtData);
+      setPanelAssignments(buildPanelAssignmentState(workflowExtData?.panelAssignments));
 
       setFormData({
         outcome: decisionData?.outcome || 'Pending',
@@ -1923,11 +1927,134 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     }
   };
 
+  const handleAssignmentChange = (
+    panelType: keyof typeof panelAssignments,
+    field: 'reviewerName' | 'panelName' | 'notes',
+    value: string
+  ) => {
+    setPanelAssignments((current) => ({
+      ...current,
+      [panelType]: {
+        ...current[panelType],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!canEdit) return;
+
+    setSavingAssignments(true);
+    try {
+      const nextAssignments = buildPanelAssignmentsPayload(
+        panelAssignments,
+        workflowExt?.panelAssignments,
+        authState.activeUser?.fullName || authState.activeUser?.userId
+      );
+
+      await provider.saveWorkflowExt(caseId, {
+        panelAssignments: nextAssignments,
+      });
+
+      setWorkflowExt((current: any) => ({
+        ...current,
+        panelAssignments: nextAssignments,
+      }));
+      showToast('Reviewer assignments saved', 'success');
+    } catch (error) {
+      console.error('Error saving panel assignments:', error);
+      showToast('Failed to save reviewer assignments', 'error');
+    } finally {
+      setSavingAssignments(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Reviewer Assignment</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">
+              Lightweight assignment placeholders for the future panel-based review direction. Current workflow routing remains unchanged.
+            </p>
+          </div>
+          {!canEdit && <NfiBadge tone="neutral">Display Only</NfiBadge>}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {PANEL_ASSIGNMENT_ORDER.map((panelType) => {
+            const assignment = workflowExt?.panelAssignments?.[panelType];
+            const state = panelAssignments[panelType];
+            const meta = PANEL_ASSIGNMENT_META[panelType];
+
+            return (
+              <div key={panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--nfi-text)]">{meta.title}</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{meta.subtitle}</p>
+                </div>
+                <div className="rounded-lg bg-[var(--nfi-bg-light)] border border-[var(--nfi-border)] px-3 py-2">
+                  <p className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Current Assignment</p>
+                  <p className="text-sm font-medium text-[var(--nfi-text)] mt-1">{getReviewerAssignmentSummary(assignment)}</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)] mt-1">
+                    {assignment?.assignedAt
+                      ? `Updated ${new Date(assignment.assignedAt).toLocaleDateString()}`
+                      : 'Not yet assigned'}
+                  </p>
+                </div>
+                {canEdit ? (
+                  <div className="space-y-3">
+                    <NfiField label="Reviewer / Panel">
+                      <input
+                        type="text"
+                        value={state.reviewerName}
+                        onChange={(e) => handleAssignmentChange(panelType, 'reviewerName', e.target.value)}
+                        placeholder={`Assign ${meta.subtitle.toLowerCase()}`}
+                        className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                      />
+                    </NfiField>
+                    <NfiField label="Panel Label">
+                      <input
+                        type="text"
+                        value={state.panelName}
+                        onChange={(e) => handleAssignmentChange(panelType, 'panelName', e.target.value)}
+                        placeholder={meta.defaultPanelName}
+                        className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                      />
+                    </NfiField>
+                    <NfiField label="Assignment Note">
+                      <textarea
+                        value={state.notes}
+                        onChange={(e) => handleAssignmentChange(panelType, 'notes', e.target.value)}
+                        rows={2}
+                        placeholder="Optional placeholder note"
+                        className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+                      />
+                    </NfiField>
+                  </div>
+                ) : (
+                  <div className="text-sm text-[var(--nfi-text-secondary)]">
+                    <p><span className="font-medium text-[var(--nfi-text)]">Panel:</span> {assignment?.panelName || meta.defaultPanelName}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Notes:</span> {assignment?.notes || 'No assignment note added'}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {canEdit && (
+          <div className="pt-4 flex justify-end">
+            <NfiButton onClick={handleSaveAssignments} disabled={savingAssignments}>
+              <Save size={16} className="mr-2" />
+              {savingAssignments ? 'Saving...' : 'Save Reviewer Assignments'}
+            </NfiButton>
+          </div>
+        )}
+      </div>
+
       {workflowExt && (
         <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Decision Context</h3>
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Panel Decision Context</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <InfoItem label="Interview Status" value={workflowExt?.interview?.status || 'Not available'} />
             <InfoItem label="Interview Outcome" value={workflowExt?.interview?.outcome || 'Not available'} />
@@ -1953,7 +2080,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
       {caseData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Decision Timeline</h3>
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Panel Decision Timeline</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-[var(--nfi-text-secondary)]">Submitted</p>
@@ -1979,7 +2106,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Committee Decision</h3>
+          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Panel Decision</h3>
           {canEdit && decision && !isEditing && (
             <NfiButton size="sm" onClick={() => setIsEditing(true)}>
               <Edit2 size={16} className="mr-1" />
@@ -2112,7 +2239,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </div>
               {formData.outcome !== 'Approved' && (
                 <p className="text-xs text-[var(--nfi-text-secondary)]">
-                  Funding values are captured now and applied on approval submission.
+                  Funding values are captured now and applied on panel decision submission.
                 </p>
               )}
             </div>
@@ -2730,7 +2857,7 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
       actor: getAuditActorDisplayName(event.changedBy, event.changedByRole as UserRole | null),
       role: event.changedByRole ? getRoleLabel(event.changedByRole as UserRole) : 'Workflow',
       note: event.reason,
-      source: event.source || 'Workflow',
+      source: remapCommitteeLabel(event.source, 'Workflow'),
     })),
     ...events.map((event) => ({
       id: event.eventId,
@@ -2760,7 +2887,7 @@ function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEv
               {event.actor} • {event.role}
             </p>
             <p className="text-xs text-[var(--nfi-text-secondary)] mb-2">
-              {formatDateTimeFriendly(event.timestamp)} • {event.source}
+              {formatDateTimeFriendly(event.timestamp)} • {remapCommitteeLabel(event.source, 'Workflow')}
             </p>
             {event.note && (
               <p className="text-sm text-[var(--nfi-text)] mt-2 p-3 bg-gray-50 rounded">{event.note}</p>

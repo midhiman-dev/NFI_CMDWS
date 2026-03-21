@@ -13,7 +13,7 @@ const ROLES = [
   { value: 'hospital_spoc', label: 'Hospital SPOC' },
   { value: 'hospital_doctor', label: 'Hospital Doctor' },
   { value: 'verifier', label: 'Verifier' },
-  { value: 'committee_member', label: 'Committee Member' },
+  { value: 'committee_member', label: 'Panel Member' },
   { value: 'beni_volunteer', label: 'BENI Volunteer' },
   { value: 'admin', label: 'Admin' },
 ];

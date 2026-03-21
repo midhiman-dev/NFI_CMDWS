@@ -11,7 +11,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   clinical_reviewer: 'Clinical Reviewer',
   hospital_doctor: 'Hospital Doctor',
   verifier: 'Verifier',
-  committee_member: 'Committee Member',
+  committee_member: 'Panel Member',
   accounts: 'Accounts',
   beni_volunteer: 'BENI Volunteer',
   leadership: 'Leadership',
