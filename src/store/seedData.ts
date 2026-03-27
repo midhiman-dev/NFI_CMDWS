@@ -19,7 +19,7 @@ import {
 } from '../types';
 import { resolvePrototypeIdentifiers } from '../utils/caseIdentifiers';
 
-export const SEED_VERSION = 'docs_u3_v5_h1';
+export const SEED_VERSION = 'docs_u3_v5_h2';
 
 export function seedData(): AppStore {
   const users: User[] = [
@@ -241,14 +241,12 @@ export function seedData(): AppStore {
       caseRef: 'NFI/BRC/2024/003',
       processType: 'BRC' as const,
       hospitalId: 'hosp_4',
-      caseStatus: 'Rejected' as const,
+      caseStatus: 'Under_Review' as const,
       intakeDate: '2024-02-25',
       child: { beneficiaryName: 'Baby of Kavita Kaur', gender: 'Male' as const, dob: '2024-02-20', admissionDate: '2024-02-20', gestationalAgeWeeks: 38, birthWeightKg: 2.8 },
       family: { motherName: 'Kavita Kaur', fatherName: 'Harpreet Singh', phone: '+91-9988776658', address: '321, Sector 17', city: 'Chandigarh', state: 'Chandigarh', pincode: '160017', incomeBand: '> 5,00,000' },
       clinical: { diagnosis: 'Mild Infection', summary: 'Short-term care required', doctorName: 'Dr. Simran Kaur', nicuDays: 5 },
       financial: { estimateAmount: 50000 },
-      decision: { outcome: 'Rejected' as const, decisionDate: '2024-03-05', decidedBy: 'usr_committee', comments: 'Income exceeds eligibility criteria' },
-      rejection: { reasonCategory: 'Financial' as const, rejectionLevel: 'BRC' as const, communicationStatus: 'Notified' as const, detailedReason: 'Family income exceeds the eligibility threshold' },
     },
     {
       caseId: 'case_6',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { IntakeFundApplication } from '../../types';
 import { NfiField } from '../design-system/NfiField';
 import { IntakeSectionAccordion } from './IntakeSectionAccordion';
@@ -18,6 +18,8 @@ import {
   fromInbornOutbornValue,
   toInbornOutbornValue,
 } from '../../utils/intakeFormHelpers';
+import { getIncomeCaptureModeByOccupation, evaluateIncomeThreshold } from '../../utils/incomeEligibility';
+import { IncomeEligibilityPanel } from '../case-tabs/IncomeEligibilityPanel';
 
 interface FundApplicationFormProps {
   caseId: string;
@@ -50,6 +52,10 @@ export function FundApplicationForm({
 
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [sectionErrors, setSectionErrors] = useState<Record<string, Record<string, string>>>({});
+  const incomeEvaluation = useMemo(
+    () => evaluateIncomeThreshold(formData.occupationIncomeSection),
+    [formData.occupationIncomeSection]
+  );
 
   useEffect(() => {
     if (initialData) {
@@ -117,6 +123,9 @@ export function FundApplicationForm({
     return { progress, status };
   };
 
+  const fatherIncomeMode = getIncomeCaptureModeByOccupation(formData.occupationIncomeSection?.fatherOccupation);
+  const motherIncomeMode = getIncomeCaptureModeByOccupation(formData.occupationIncomeSection?.motherOccupation);
+
   return (
     <div className="space-y-4">
       {(() => {
@@ -171,15 +180,46 @@ export function FundApplicationForm({
             errors={sectionErrors.occupationIncomeSection || {}}
             isDirty={!readOnly && dirtyFields.has('occupationIncomeSection')}
           >
-            <div className="grid grid-cols-2 gap-4">
-              <NfiField label="Father Occupation" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.fatherOccupation || '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherOccupation', e.target.value), disabled: readOnly }} />
-              <NfiField label="Father Employer / Company Name" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.fatherEmployer || '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherEmployer', e.target.value), disabled: readOnly }} />
-              <NfiField label="Father Monthly Income (INR)" required type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.fatherMonthlyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-              <NfiField label="Father Daily Wages (INR)" required type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.fatherDailyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherDailyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-              <NfiField label="Mother Occupation" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.motherOccupation || '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherOccupation', e.target.value), disabled: readOnly }} />
-              <NfiField label="Mother Employer / Company Name" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.motherEmployer || '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherEmployer', e.target.value), disabled: readOnly }} />
-              <NfiField label="Mother Monthly Income (INR)" required type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.motherMonthlyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
-              <NfiField label="Mother Daily Wages (INR)" required type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.motherDailyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherDailyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly }} />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className={`rounded-lg border p-4 space-y-4 ${fatherIncomeMode === 'monthly_primary' ? 'border-teal-300 bg-teal-50/60' : fatherIncomeMode === 'daily_primary' ? 'border-amber-300 bg-amber-50/60' : 'border-[var(--nfi-border)] bg-white'}`}>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--nfi-text)]">Father income capture</p>
+                    <p className="text-xs text-[var(--nfi-text-secondary)]">
+                      {fatherIncomeMode === 'monthly_primary'
+                        ? 'Monthly income is the primary field for this occupation. Daily wage stays visible for reference if needed.'
+                        : fatherIncomeMode === 'daily_primary'
+                        ? 'Daily wage is the primary field for this occupation. Monthly income stays visible for reference if needed.'
+                        : 'Keep both fields visible and fill the one that best matches the occupation.'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <NfiField label="Father Occupation" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.fatherOccupation || '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherOccupation', e.target.value), disabled: readOnly }} />
+                    <NfiField label="Father Employer / Company Name" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.fatherEmployer || '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherEmployer', e.target.value), disabled: readOnly }} />
+                    <NfiField label="Father Monthly Income (INR)" required={fatherIncomeMode === 'monthly_primary'} error={sectionErrors.occupationIncomeSection?.fatherMonthlyIncome} hint={fatherIncomeMode === 'monthly_primary' ? 'Preferred for salaried or fixed-income occupations.' : 'Optional if daily wage is the active income basis.'} type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.fatherMonthlyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherMonthlyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly, className: fatherIncomeMode === 'monthly_primary' ? 'border-teal-400 bg-white' : undefined }} />
+                    <NfiField label="Father Daily Wages (INR)" required={fatherIncomeMode === 'daily_primary'} error={sectionErrors.occupationIncomeSection?.fatherDailyIncome} hint={fatherIncomeMode === 'daily_primary' ? 'Preferred for daily wage or casual work.' : 'Optional if monthly income is the active income basis.'} type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.fatherDailyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'fatherDailyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly, className: fatherIncomeMode === 'daily_primary' ? 'border-amber-400 bg-white' : undefined }} />
+                  </div>
+                </div>
+
+                <div className={`rounded-lg border p-4 space-y-4 ${motherIncomeMode === 'monthly_primary' ? 'border-teal-300 bg-teal-50/60' : motherIncomeMode === 'daily_primary' ? 'border-amber-300 bg-amber-50/60' : 'border-[var(--nfi-border)] bg-white'}`}>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--nfi-text)]">Mother income capture</p>
+                    <p className="text-xs text-[var(--nfi-text-secondary)]">
+                      {motherIncomeMode === 'monthly_primary'
+                        ? 'Monthly income is the primary field for this occupation. Daily wage stays visible for reference if needed.'
+                        : motherIncomeMode === 'daily_primary'
+                        ? 'Daily wage is the primary field for this occupation. Monthly income stays visible for reference if needed.'
+                        : 'Keep both fields visible and fill the one that best matches the occupation.'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <NfiField label="Mother Occupation" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.motherOccupation || '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherOccupation', e.target.value), disabled: readOnly }} />
+                    <NfiField label="Mother Employer / Company Name" required type="input" inputProps={{ type: 'text', value: formData.occupationIncomeSection?.motherEmployer || '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherEmployer', e.target.value), disabled: readOnly }} />
+                    <NfiField label="Mother Monthly Income (INR)" required={motherIncomeMode === 'monthly_primary'} error={sectionErrors.occupationIncomeSection?.motherMonthlyIncome} hint={motherIncomeMode === 'monthly_primary' ? 'Preferred for salaried or fixed-income occupations.' : 'Optional if daily wage is the active income basis.'} type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.motherMonthlyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherMonthlyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly, className: motherIncomeMode === 'monthly_primary' ? 'border-teal-400 bg-white' : undefined }} />
+                    <NfiField label="Mother Daily Wages (INR)" required={motherIncomeMode === 'daily_primary'} error={sectionErrors.occupationIncomeSection?.motherDailyIncome} hint={motherIncomeMode === 'daily_primary' ? 'Preferred for daily wage or casual work.' : 'Optional if monthly income is the active income basis.'} type="input" inputProps={{ type: 'number', value: formData.occupationIncomeSection?.motherDailyIncome ?? '', onChange: e => handleFieldChange('occupationIncomeSection', 'motherDailyIncome', parseCurrencyInput(e.target.value)), disabled: readOnly, className: motherIncomeMode === 'daily_primary' ? 'border-amber-400 bg-white' : undefined }} />
+                  </div>
+                </div>
+              </div>
               <div className="col-span-2">
                 <NfiField
                   label="Assets / Own Land-House"
@@ -205,6 +245,12 @@ export function FundApplicationForm({
                   <span className="text-sm text-[var(--nfi-text)]">Bank Statement (Last 6 months), if no Income Certificate</span>
                 </label>
               </div>
+
+              <IncomeEligibilityPanel
+                evaluation={incomeEvaluation}
+                audience="hospital"
+                title="Income rule outcome"
+              />
             </div>
           </IntakeSectionAccordion>
         );

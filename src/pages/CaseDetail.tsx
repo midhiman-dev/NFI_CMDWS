@@ -19,7 +19,7 @@ import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
-import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, FollowupMilestone, DocVersion, UserRole } from '../types';
+import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, FollowupMilestone, DocVersion, UserRole, IntakeFundApplication } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
@@ -41,6 +41,8 @@ import { shouldShowBeneficiaryNo } from '../utils/caseIdentifiers';
 import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
 import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
+import { IncomeEligibilityPanel } from '../components/case-tabs/IncomeEligibilityPanel';
+import { evaluateIncomeThreshold } from '../utils/incomeEligibility';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -408,6 +410,7 @@ function OverviewTab({
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const [isEditing, setIsEditing] = useState(false);
+  const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
   const [approvalContext, setApprovalContext] = useState<{
     spocName?: string;
     spocPhone?: string;
@@ -435,6 +438,26 @@ function OverviewTab({
   });
 
   const canEdit = false;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadIntake = async () => {
+      try {
+        const intake = await provider.getIntakeData(caseData.caseId);
+        if (!cancelled) {
+          setFundApplication(intake.fundApplication);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load income summary:', error);
+        }
+      }
+    };
+
+    loadIntake();
+    return () => { cancelled = true; };
+  }, [caseData.caseId, provider]);
 
   useEffect(() => {
     if (authState.activeRole !== 'beni_volunteer') return;
@@ -469,6 +492,11 @@ function OverviewTab({
     loadApprovalContext();
     return () => { cancelled = true; };
   }, [authState.activeRole, caseData.caseId, caseData.hospitalId, provider]);
+
+  const incomeEvaluation = useMemo(
+    () => evaluateIncomeThreshold(fundApplication?.occupationIncomeSection),
+    [fundApplication]
+  );
 
   const handleSave = () => {
 
@@ -660,6 +688,12 @@ function OverviewTab({
           <InfoItem label="Last Updated" value={new Date(caseData.updatedAt).toLocaleDateString()} />
         </div>
       </div>
+
+      <IncomeEligibilityPanel
+        evaluation={incomeEvaluation}
+        audience={getIncomeAudience(authState.activeRole)}
+        title="Income eligibility outcome"
+      />
 
       {authState.activeRole === 'beni_volunteer' && (
         <div>
@@ -1322,15 +1356,18 @@ function VerificationTab({
   const [readiness, setReadiness] = useState<any>(null);
   const [previewDoc, setPreviewDoc] = useState<DocumentMetadata | null>(null);
   const [doctorReview, setDoctorReview] = useState<any>(null);
+  const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
 
   useEffect(() => {
     const loadReadiness = async () => {
-      const [data, review] = await Promise.all([
+      const [data, review, intake] = await Promise.all([
         provider.getCaseSubmitReadiness(caseId),
         caseService.getDoctorReview(caseId),
+        provider.getIntakeData(caseId).catch(() => ({})),
       ]);
       setReadiness(data);
       setDoctorReview(review);
+      setFundApplication(intake.fundApplication);
     };
     loadReadiness();
   }, [caseId, provider, documents]);
@@ -1475,6 +1512,7 @@ function VerificationTab({
   const naDocs = documents.filter(d => d.status === 'Not_Applicable').length;
   const doctorGating = getDoctorReviewGatingInfo(doctorReview);
   const canSendToCommittee = (readiness?.canSubmit ?? false) && doctorGating.canSendToCommittee;
+  const incomeEvaluation = evaluateIncomeThreshold(fundApplication?.occupationIncomeSection);
 
   return (
     <div className="space-y-6">
@@ -1549,6 +1587,12 @@ function VerificationTab({
           </div>
         )}
       </div>
+
+      <IncomeEligibilityPanel
+        evaluation={incomeEvaluation}
+        audience="internal"
+        title="Income review status"
+      />
 
       <div>
         <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Document Verification</h3>
@@ -1738,6 +1782,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const [installments, setInstallments] = useState<any[]>([]);
   const [rejectionDetails, setRejectionDetails] = useState<any>(null);
   const [workflowExt, setWorkflowExt] = useState<any>(null);
+  const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showLegacyInstallments, setShowLegacyInstallments] = useState(false);
@@ -1812,12 +1857,13 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
   const loadData = async () => {
     try {
-      const [caseInfo, decisionData, installmentsData, rejectionData, workflowExtData] = await Promise.all([
+      const [caseInfo, decisionData, installmentsData, rejectionData, workflowExtData, intakeData] = await Promise.all([
         caseService.getCaseById(caseId),
         provider.getCommitteeReview(caseId).catch(() => null),
         caseService.getInstallments(caseId).catch(() => []),
         caseService.getRejectionDetails(caseId).catch(() => null),
         provider.getWorkflowExt(caseId).catch(() => null),
+        provider.getIntakeData(caseId).catch(() => ({})),
       ]);
 
       setCaseData(caseInfo);
@@ -1826,6 +1872,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       setRejectionDetails(rejectionData);
       setWorkflowExt(workflowExtData);
       setPanelAssignments(buildPanelAssignmentState(workflowExtData?.panelAssignments));
+      setFundApplication(intakeData.fundApplication);
 
       setFormData({
         outcome: decisionData?.outcome || 'Pending',
@@ -1979,8 +2026,16 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     }
   };
 
+  const incomeEvaluation = evaluateIncomeThreshold(fundApplication?.occupationIncomeSection);
+
   return (
     <div className="space-y-6">
+      <IncomeEligibilityPanel
+        evaluation={incomeEvaluation}
+        audience="reviewer"
+        title="Financial review summary"
+      />
+
       <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div>
@@ -2856,6 +2911,14 @@ function FollowupsTab({ caseId }: { caseId: string }) {
       )}
     </div>
   );
+}
+
+function getIncomeAudience(role: UserRole | null): 'hospital' | 'internal' | 'reviewer' {
+  if (role === 'hospital_spoc') return 'hospital';
+  if (role === 'committee_member' || role === 'clinical' || role === 'clinical_reviewer' || role === 'leadership') {
+    return 'reviewer';
+  }
+  return 'internal';
 }
 
 function AuditTab({ events, workflowEvents }: { events: AuditEvent[]; workflowEvents: CaseWorkflowEvent[] }) {

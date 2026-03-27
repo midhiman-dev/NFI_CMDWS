@@ -10,6 +10,7 @@ import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } fr
 import { formatBabyDisplayName } from '../../utils/casePresentation';
 import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
 import { FOLLOWUP_REMARK_FIELDS, getFollowupQuestionnaire } from '../../utils/followupQuestionnaires';
+import { getDemoIntakeSeed } from '../demoIntakeSeeds';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -20,7 +21,7 @@ import {
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_h1';
+const DEMO_DATA_VERSION = 'v3_5_h2';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -2053,18 +2054,28 @@ export class MockProvider implements DataProvider {
 
   async getIntakeData(caseId: string): Promise<{ fundApplication?: IntakeFundApplication; interimSummary?: IntakeInterimSummary }> {
     try {
+      const seeded = getDemoIntakeSeed(caseId);
       const stored = localStorage.getItem(INTAKE_STORAGE_KEY);
-      if (!stored) return {};
+      if (!stored) return { fundApplication: seeded };
       const intakeMap: Record<string, any> = JSON.parse(stored);
       const intakeRecord = intakeMap[caseId];
-      if (!intakeRecord) return {};
+      if (!intakeRecord) return { fundApplication: seeded };
       return {
-        fundApplication: intakeRecord.fundApplication,
+        fundApplication: intakeRecord.fundApplication || seeded
+          ? {
+              ...(seeded || {}),
+              ...(intakeRecord.fundApplication || {}),
+              occupationIncomeSection: {
+                ...(seeded?.occupationIncomeSection || {}),
+                ...(intakeRecord.fundApplication?.occupationIncomeSection || {}),
+              },
+            }
+          : undefined,
         interimSummary: intakeRecord.interimSummary,
       };
     } catch (e) {
       console.warn('Failed to load intake data:', e);
-      return {};
+      return { fundApplication: getDemoIntakeSeed(caseId) };
     }
   }
 

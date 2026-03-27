@@ -2,6 +2,7 @@ import { isPresentFieldValue } from './fieldValue';
 import { diffFullYears, parseDateFlexible } from './derivedFields';
 import i18next from '../i18n';
 import type { IntakeFundApplication, IntakeInterimSummary } from '../types';
+import { getIncomeCaptureModeByOccupation } from './incomeEligibility';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -41,12 +42,8 @@ export const FUND_APPLICATION_FIELDS = {
     requiredFields: [
       'fatherOccupation',
       'fatherEmployer',
-      'fatherMonthlyIncome',
-      'fatherDailyIncome',
       'motherOccupation',
       'motherEmployer',
-      'motherMonthlyIncome',
-      'motherDailyIncome',
       'assetsLandHouse',
     ],
   },
@@ -230,6 +227,46 @@ function hasIncomeProofSelection(section: any): boolean {
   return section?.incomeProofTahsildarCertificate === true || section?.incomeProofBankStatement6Months === true;
 }
 
+function hasParentIncome(section: any, parentKey: 'father' | 'mother'): boolean {
+  const monthlyValue = section?.[`${parentKey}MonthlyIncome`];
+  const dailyValue = section?.[`${parentKey}DailyIncome`];
+  return isPresentFieldValue(monthlyValue) || isPresentFieldValue(dailyValue);
+}
+
+function addIncomeCaptureErrors(
+  result: ValidationResult,
+  section: IntakeFundApplication['occupationIncomeSection'] | undefined,
+  parentKey: 'father' | 'mother'
+) {
+  if (hasParentIncome(section, parentKey)) {
+    return;
+  }
+
+  const parentLabel = parentKey === 'father' ? 'Father' : 'Mother';
+  const occupation = section?.[`${parentKey}Occupation` as const];
+  const captureMode = getIncomeCaptureModeByOccupation(occupation);
+  const monthlyField = `${parentKey}MonthlyIncome`;
+  const dailyField = `${parentKey}DailyIncome`;
+
+  const message = captureMode === 'daily_primary'
+    ? `Enter ${parentLabel.toLowerCase()}'s daily wage or monthly income. Daily wage is the primary field for this occupation.`
+    : captureMode === 'monthly_primary'
+    ? `Enter ${parentLabel.toLowerCase()}'s monthly income or daily wage. Monthly income is the primary field for this occupation.`
+    : `Enter ${parentLabel.toLowerCase()}'s monthly income or daily wage.`;
+
+  if (captureMode === 'daily_primary') {
+    result.missingFields.push(dailyField);
+    result.errors[dailyField] = message;
+    return;
+  }
+
+  result.missingFields.push(monthlyField);
+  result.errors[monthlyField] = message;
+  if (captureMode === 'either') {
+    result.errors[dailyField] = message;
+  }
+}
+
 function buildParentAgeErrorMessage(parentLabel: 'Mother' | 'Father'): string {
   return `${parentLabel} must meet the minimum age requirement based on the child's date of birth.`;
 }
@@ -312,6 +349,11 @@ export function validateFundApplicationSection(
   if (sectionKey === 'occupationIncomeSection' && !hasIncomeProofSelection(data)) {
     result.missingFields.push('incomeProofSelection');
     result.errors.incomeProofSelection = buildErrorMessage('incomeProofSelection', FUND_FIELD_LABELS);
+  }
+
+  if (sectionKey === 'occupationIncomeSection') {
+    addIncomeCaptureErrors(result, data, 'father');
+    addIncomeCaptureErrors(result, data, 'mother');
   }
 
   if (sectionKey === 'birthDetailsSection' && data?.isInborn === false && !isPresentFieldValue(data?.outbornHospitalName)) {
@@ -455,13 +497,6 @@ export function getSectionProgress(section: any, requiredFields: string[]): Sect
   return { pct, filled, total };
 }
 
-function getProgressWithExtraRequirement(base: SectionProgress, isExtraSatisfied: boolean): SectionProgress {
-  const total = base.total + 1;
-  const filled = base.filled + (isExtraSatisfied ? 1 : 0);
-  const pct = Math.round((filled / total) * 100);
-  return { pct, filled, total };
-}
-
 export function getFundApplicationSectionProgress(
   sectionKey: keyof typeof FUND_APPLICATION_FIELDS,
   section: any
@@ -473,7 +508,13 @@ export function getFundApplicationSectionProgress(
 
   const baseProgress = getSectionProgress(section, requiredFields);
   if (sectionKey === 'occupationIncomeSection') {
-    return getProgressWithExtraRequirement(baseProgress, hasIncomeProofSelection(section));
+    const total = baseProgress.total + 3;
+    const filled = baseProgress.filled
+      + (hasParentIncome(section, 'father') ? 1 : 0)
+      + (hasParentIncome(section, 'mother') ? 1 : 0)
+      + (hasIncomeProofSelection(section) ? 1 : 0);
+    const pct = Math.round((filled / total) * 100);
+    return { pct, filled, total };
   }
 
   return baseProgress;
