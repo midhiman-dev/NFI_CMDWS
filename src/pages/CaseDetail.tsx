@@ -19,7 +19,7 @@ import { DoctorReviewTab } from '../components/case-tabs/DoctorReviewTab';
 import { SettlementTab } from '../components/case-tabs/SettlementTab';
 import { WorkflowExtensionsTab } from '../components/case-tabs/WorkflowExtensionsTab';
 import { caseService } from '../services/caseService';
-import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, FollowupMilestone, DocVersion, UserRole, IntakeFundApplication } from '../types';
+import { Case, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, AuditEvent, FundingInstallment, InstallmentStatus, FollowupMilestone, DocVersion, UserRole, IntakeFundApplication, PanelAssignmentType, PanelReviewDecision, WorkflowExtensions, WorkflowPanelReview } from '../types';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, Upload, Edit2, Save, X, AlertCircle, Eye, Zap, Baby, Users, Stethoscope, IndianRupee, ChevronDown, Paperclip } from 'lucide-react';
 import { getAuthState } from '../utils/auth';
 import { getDefaultRouteForAuth } from '../utils/roleAccess';
@@ -43,6 +43,7 @@ import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRol
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
 import { IncomeEligibilityPanel } from '../components/case-tabs/IncomeEligibilityPanel';
 import { evaluateIncomeThreshold } from '../utils/incomeEligibility';
+import { buildPanelSummary, getOverallDecisionTone, getOverallPanelDecision, getPanelDecisionOptions, getPanelStatus, isPanelComplete } from '../utils/panelReview';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -1773,21 +1774,65 @@ function VerificationTab({
   );
 }
 
+type PanelReviewFormState = Record<
+  PanelAssignmentType,
+  {
+    decision: PanelReviewDecision;
+    remarks: string;
+    markComplete: boolean;
+  }
+>;
+
+function buildPanelReviewFormState(
+  panelReviews?: WorkflowExtensions['panelReviews']
+): PanelReviewFormState {
+  return PANEL_ASSIGNMENT_ORDER.reduce((acc, panelType) => {
+    const review = panelReviews?.[panelType];
+    acc[panelType] = {
+      decision: review?.decision || 'Pending',
+      remarks: review?.remarks || '',
+      markComplete: !!review?.completedAt,
+    };
+    return acc;
+  }, {} as PanelReviewFormState);
+}
+
+function getPanelStatusTone(status: string): 'neutral' | 'warning' | 'success' | 'error' {
+  if (status === 'Approved recommendation' || status === 'Reviewed') return 'success';
+  if (status === 'Rejected') return 'error';
+  if (status === 'Returned' || status === 'In progress') return 'warning';
+  return 'neutral';
+}
+
+function getPanelDecisionTone(decision: PanelReviewDecision): 'neutral' | 'warning' | 'success' | 'error' {
+  if (decision === 'Approve') return 'success';
+  if (decision === 'Reject') return 'error';
+  if (decision === 'Return') return 'warning';
+  return 'neutral';
+}
+
 function ApprovalTab({ caseId }: { caseId: string }) {
   const authState = getAuthState();
   const { showToast } = useToast();
   const { provider } = useAppContext();
   const [caseData, setCaseData] = useState<Case | null>(null);
+  const [familyData, setFamilyData] = useState<FamilyProfile | null>(null);
+  const [clinicalData, setClinicalData] = useState<ClinicalCaseDetails | null>(null);
+  const [financialData, setFinancialData] = useState<FinancialCaseDetails | null>(null);
   const [decision, setDecision] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [rejectionDetails, setRejectionDetails] = useState<any>(null);
-  const [workflowExt, setWorkflowExt] = useState<any>(null);
+  const [workflowExt, setWorkflowExt] = useState<WorkflowExtensions | null>(null);
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showLegacyInstallments, setShowLegacyInstallments] = useState(false);
   const [panelAssignments, setPanelAssignments] = useState(buildPanelAssignmentState());
+  const [panelReviewForms, setPanelReviewForms] = useState<PanelReviewFormState>(buildPanelReviewFormState());
   const [savingAssignments, setSavingAssignments] = useState(false);
+  const [savingPanelType, setSavingPanelType] = useState<PanelAssignmentType | null>(null);
+  const [consolidatedRemarks, setConsolidatedRemarks] = useState('');
+  const [savingConsolidation, setSavingConsolidation] = useState(false);
 
   const [formData, setFormData] = useState({
     outcome: 'Pending',
@@ -1837,6 +1882,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     '';
 
   const canEdit = authState.activeRole === 'committee_member' || authState.activeRole === 'admin';
+  const canEditPanelReviews = authState.activeRole === 'committee_member' || authState.activeRole === 'admin' || authState.activeRole === 'verifier';
   const showEditor = canEdit && (!decision || isEditing);
 
   const programOptions = useMemo(() => {
@@ -1857,21 +1903,39 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
   const loadData = async () => {
     try {
-      const [caseInfo, decisionData, installmentsData, rejectionData, workflowExtData, intakeData] = await Promise.all([
+      const [
+        caseInfo,
+        decisionData,
+        installmentsData,
+        rejectionData,
+        workflowExtData,
+        intakeData,
+        familyRecord,
+        clinicalRecord,
+        financialRecord,
+      ] = await Promise.all([
         caseService.getCaseById(caseId),
         provider.getCommitteeReview(caseId).catch(() => null),
         caseService.getInstallments(caseId).catch(() => []),
         caseService.getRejectionDetails(caseId).catch(() => null),
         provider.getWorkflowExt(caseId).catch(() => null),
         provider.getIntakeData(caseId).catch(() => ({})),
+        provider.getFamily(caseId).catch(() => null),
+        provider.getClinicalDetails(caseId).catch(() => null),
+        provider.getFinancial(caseId).catch(() => null),
       ]);
 
       setCaseData(caseInfo);
+      setFamilyData(familyRecord);
+      setClinicalData(clinicalRecord);
+      setFinancialData(financialRecord);
       setDecision(decisionData);
       setInstallments(installmentsData || []);
       setRejectionDetails(rejectionData);
       setWorkflowExt(workflowExtData);
       setPanelAssignments(buildPanelAssignmentState(workflowExtData?.panelAssignments));
+      setPanelReviewForms(buildPanelReviewFormState(workflowExtData?.panelReviews));
+      setConsolidatedRemarks(workflowExtData?.panelDecision?.consolidatedRemarks || '');
       setFundApplication(intakeData.fundApplication);
 
       setFormData({
@@ -1911,6 +1975,26 @@ function ApprovalTab({ caseId }: { caseId: string }) {
 
   const handleSubmit = async () => {
     if (!canEdit) return;
+
+    if (formData.outcome !== 'Pending' && computedPanelDecision.completedPanels < computedPanelDecision.totalPanels) {
+      showToast('All three panel reviews must be completed before recording the final internal decision', 'error');
+      return;
+    }
+
+    if (formData.outcome === 'Approved' && computedPanelDecision.overallDecision !== 'Ready for Final Approval') {
+      showToast('Final approval is only available when all three panels approve', 'error');
+      return;
+    }
+
+    if (formData.outcome === 'Rejected' && computedPanelDecision.overallDecision !== 'Reject Recommended') {
+      showToast('Final rejection requires a clear reject recommendation from the completed panel reviews', 'error');
+      return;
+    }
+
+    if (formData.outcome === 'Need_More_Info' && !['Return Recommended', 'Needs Resolution'].includes(computedPanelDecision.overallDecision)) {
+      showToast('Use Need More Info only when the completed panel reviews recommend return or need resolution', 'error');
+      return;
+    }
 
     const approvedAmountValue = parseAmount(formData.approvedAmount);
     const finalApprovedAmount = fundingData.isTopUp ? totalAfterTopUp : approvedAmountValue;
@@ -2027,21 +2111,186 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   };
 
   const incomeEvaluation = evaluateIncomeThreshold(fundApplication?.occupationIncomeSection);
+  const computedPanelDecision = useMemo(
+    () => {
+      const base = getOverallPanelDecision(workflowExt?.panelReviews);
+      return {
+        ...base,
+        consolidatedRemarks: workflowExt?.panelDecision?.consolidatedRemarks || '',
+        recordedAt: workflowExt?.panelDecision?.recordedAt,
+        recordedBy: workflowExt?.panelDecision?.recordedBy,
+        lastUpdatedAt: workflowExt?.panelDecision?.lastUpdatedAt,
+        lastUpdatedBy: workflowExt?.panelDecision?.lastUpdatedBy,
+      };
+    },
+    [workflowExt]
+  );
+  const panelSummary = useMemo(
+    () => buildPanelSummary(workflowExt?.panelReviews, workflowExt?.panelAssignments),
+    [workflowExt]
+  );
+
+  const handlePanelReviewChange = (
+    panelType: PanelAssignmentType,
+    field: 'decision' | 'remarks' | 'markComplete',
+    value: string | boolean
+  ) => {
+    setPanelReviewForms((current) => ({
+      ...current,
+      [panelType]: {
+        ...current[panelType],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSavePanelReview = async (panelType: PanelAssignmentType) => {
+    if (!canEditPanelReviews) return;
+
+    const panelForm = panelReviewForms[panelType];
+    const existingReview = workflowExt?.panelReviews?.[panelType];
+    const actor = authState.activeUser?.fullName || authState.activeUser?.userId || getRoleLabel(authState.activeRole);
+    const now = new Date().toISOString();
+    const nextReview: WorkflowPanelReview = {
+      panelType,
+      decision: panelForm.decision,
+      remarks: panelForm.remarks.trim() || undefined,
+      reviewedBy: panelForm.markComplete ? actor : existingReview?.reviewedBy,
+      reviewedAt: panelForm.markComplete ? (existingReview?.reviewedAt || now) : existingReview?.reviewedAt,
+      completedAt: panelForm.markComplete ? (existingReview?.completedAt || now) : undefined,
+      lastUpdatedAt: now,
+      lastUpdatedBy: actor,
+    };
+
+    const nextPanelReviews: NonNullable<WorkflowExtensions['panelReviews']> = {
+      ...(workflowExt?.panelReviews || {}),
+      [panelType]: nextReview,
+    };
+    const nextPanelDecision = {
+      ...getOverallPanelDecision(nextPanelReviews),
+      consolidatedRemarks,
+      lastUpdatedAt: now,
+      lastUpdatedBy: actor,
+      recordedAt: workflowExt?.panelDecision?.recordedAt,
+      recordedBy: workflowExt?.panelDecision?.recordedBy,
+    };
+
+    setSavingPanelType(panelType);
+    try {
+      await provider.saveWorkflowExt(caseId, {
+        panelReviews: nextPanelReviews,
+        panelDecision: nextPanelDecision,
+      });
+
+      setWorkflowExt((current) => ({
+        ...(current || {}),
+        panelAssignments: current?.panelAssignments,
+        panelReviews: nextPanelReviews,
+        panelDecision: nextPanelDecision,
+      }));
+
+      const panelTitle = PANEL_ASSIGNMENT_META[panelType].title;
+      const decisionLabel = panelForm.decision === 'Pending' ? 'Pending / Not Reviewed' : panelForm.decision;
+      await logAuditEvent({
+        caseId,
+        action: `${panelTitle} saved`,
+        notes: `${decisionLabel} recommendation recorded.${panelForm.remarks.trim() ? ` Remarks: ${panelForm.remarks.trim()}` : ''}`,
+      }).catch(() => {});
+
+      if (panelForm.decision === 'Return') {
+        await logAuditEvent({
+          caseId,
+          action: 'Panel returned case',
+          notes: `${panelTitle} recorded a return recommendation.`,
+        }).catch(() => {});
+      }
+
+      if (panelForm.decision === 'Reject') {
+        await logAuditEvent({
+          caseId,
+          action: 'Panel rejected case',
+          notes: `${panelTitle} recorded a reject recommendation.`,
+        }).catch(() => {});
+      }
+
+      if (panelForm.markComplete) {
+        await logAuditEvent({
+          caseId,
+          action: 'Panel completed review',
+          notes: `${panelTitle} marked review complete.`,
+        }).catch(() => {});
+      }
+
+      await logAuditEvent({
+        caseId,
+        action: 'Panel decision updated',
+        notes: `${panelTitle} updated. Consolidated state: ${nextPanelDecision.overallDecision}.`,
+      }).catch(() => {});
+
+      if (nextPanelDecision.completedPanels === nextPanelDecision.totalPanels) {
+        await logAuditEvent({
+          caseId,
+          action: 'Consolidated panel decision recorded',
+          notes: `${nextPanelDecision.overallDecision}.`,
+        }).catch(() => {});
+      }
+
+      showToast(`${panelTitle} saved`, 'success');
+    } catch (error) {
+      console.error('Error saving panel review:', error);
+      showToast('Failed to save panel review', 'error');
+    } finally {
+      setSavingPanelType(null);
+    }
+  };
+
+  const handleSaveConsolidation = async () => {
+    if (!canEditPanelReviews) return;
+
+    const actor = authState.activeUser?.fullName || authState.activeUser?.userId || getRoleLabel(authState.activeRole);
+    const now = new Date().toISOString();
+    const nextPanelDecision = {
+      ...getOverallPanelDecision(workflowExt?.panelReviews),
+      consolidatedRemarks: consolidatedRemarks.trim() || undefined,
+      recordedAt: now,
+      recordedBy: actor,
+      lastUpdatedAt: now,
+      lastUpdatedBy: actor,
+    };
+
+    setSavingConsolidation(true);
+    try {
+      await provider.saveWorkflowExt(caseId, {
+        panelDecision: nextPanelDecision,
+      });
+      setWorkflowExt((current) => ({
+        ...(current || {}),
+        panelAssignments: current?.panelAssignments,
+        panelReviews: current?.panelReviews,
+        panelDecision: nextPanelDecision,
+      }));
+      await logAuditEvent({
+        caseId,
+        action: 'Consolidated panel decision recorded',
+        notes: `${nextPanelDecision.overallDecision}.${nextPanelDecision.consolidatedRemarks ? ` Notes: ${nextPanelDecision.consolidatedRemarks}` : ''}`,
+      }).catch(() => {});
+      showToast('Panel consolidation saved', 'success');
+    } catch (error) {
+      console.error('Error saving consolidated panel decision:', error);
+      showToast('Failed to save panel consolidation', 'error');
+    } finally {
+      setSavingConsolidation(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <IncomeEligibilityPanel
-        evaluation={incomeEvaluation}
-        audience="reviewer"
-        title="Financial review summary"
-      />
-
       <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div>
             <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Reviewer Assignment</h3>
             <p className="text-sm text-[var(--nfi-text-secondary)]">
-              Lightweight assignment placeholders for the future panel-based review direction. Current workflow routing remains unchanged.
+              Clinical, Social, and Financial assignments drive the prototype three-panel review sections below.
             </p>
           </div>
           {!canEdit && <NfiBadge tone="neutral">Display Only</NfiBadge>}
@@ -2117,36 +2366,214 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         )}
       </div>
 
-      {workflowExt && (
-        <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Panel Decision Context</h3>
+      <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)] space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Panel Summary / Consolidation</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">{computedPanelDecision.readinessLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <NfiBadge tone={getOverallDecisionTone(computedPanelDecision.overallDecision)}>
+              {computedPanelDecision.overallDecision}
+            </NfiBadge>
+            <NfiBadge tone={computedPanelDecision.completedPanels === computedPanelDecision.totalPanels ? 'success' : 'warning'}>
+              {computedPanelDecision.completedPanels}/{computedPanelDecision.totalPanels} panels completed
+            </NfiBadge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {panelSummary.map((panel) => (
+            <div key={panel.panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-[var(--nfi-text)]">{panel.title}</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)]">{panel.panelLabel}</p>
+                </div>
+                <NfiBadge tone={getPanelStatusTone(panel.status)}>{panel.status}</NfiBadge>
+              </div>
+              <p className="text-sm text-[var(--nfi-text)]">{panel.reviewerLabel}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Recommendation</span>
+                <NfiBadge tone={getPanelDecisionTone(panel.decision as PanelReviewDecision)}>{panel.decision === 'Pending' ? 'Pending / Not Reviewed' : panel.decision}</NfiBadge>
+              </div>
+              <p className="text-xs text-[var(--nfi-text-secondary)]">
+                {panel.updatedAt ? `Updated ${new Date(panel.updatedAt).toLocaleDateString()}` : 'No panel activity yet'}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {PANEL_ASSIGNMENT_ORDER.map((panelType) => {
+            const meta = PANEL_ASSIGNMENT_META[panelType];
+            const assignment = workflowExt?.panelAssignments?.[panelType];
+            const review = workflowExt?.panelReviews?.[panelType];
+            const form = panelReviewForms[panelType];
+            const panelStatus = getPanelStatus(review);
+            const panelTitle = meta.title;
+
+            return (
+              <div key={panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="font-semibold text-[var(--nfi-text)]">{panelTitle}</h4>
+                    <p className="text-xs text-[var(--nfi-text-secondary)]">{assignment?.panelName || meta.defaultPanelName}</p>
+                  </div>
+                  <NfiBadge tone={getPanelStatusTone(panelStatus)}>{panelStatus}</NfiBadge>
+                </div>
+
+                <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 text-sm">
+                  <p><span className="font-medium text-[var(--nfi-text)]">Assigned reviewer:</span> {getReviewerAssignmentSummary(assignment)}</p>
+                  <p><span className="font-medium text-[var(--nfi-text)]">Assignment note:</span> {assignment?.notes || 'No assignment note added'}</p>
+                  <p><span className="font-medium text-[var(--nfi-text)]">Last completed:</span> {review?.completedAt ? new Date(review.completedAt).toLocaleDateString() : 'Pending'}</p>
+                </div>
+
+                {panelType === 'clinical' && (
+                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
+                    <p className="font-medium text-[var(--nfi-text)]">Clinical context</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Diagnosis:</span> {clinicalData?.diagnosis || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Interim summary:</span> {clinicalData?.summary || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Doctor:</span> {clinicalData?.doctorName || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">NICU days:</span> {clinicalData?.nicuDays ?? 'Not available'}</p>
+                  </div>
+                )}
+
+                {panelType === 'social' && (
+                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
+                    <p className="font-medium text-[var(--nfi-text)]">Social context</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Mother:</span> {familyData?.motherName || (caseData as any)?.motherName || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Father:</span> {familyData?.fatherName || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Phone:</span> {familyData?.phone || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Address:</span> {familyData?.address || 'Not available'}</p>
+                    <p><span className="font-medium text-[var(--nfi-text)]">Interview outcome:</span> {workflowExt?.interview?.outcome || 'Not available'}</p>
+                  </div>
+                )}
+
+                {panelType === 'financial' && (
+                  <div className="space-y-3">
+                    <IncomeEligibilityPanel
+                      evaluation={incomeEvaluation}
+                      audience="reviewer"
+                      title="Financial Review Summary"
+                    />
+                    <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
+                      <p className="font-medium text-[var(--nfi-text)]">Financial context</p>
+                      <p><span className="font-medium text-[var(--nfi-text)]">Estimate Amount:</span> {toCurrency(financialData?.estimateAmount)}</p>
+                      <p><span className="font-medium text-[var(--nfi-text)]">Approved Amount:</span> {toCurrency(financialData?.approvedAmount)}</p>
+                      <p><span className="font-medium text-[var(--nfi-text)]">Program:</span> {workflowExt?.funding?.program || 'Not available'}</p>
+                      <p><span className="font-medium text-[var(--nfi-text)]">Proposed Sponsor Amount:</span> {toCurrency(workflowExt?.funding?.sponsorQuantification?.proposedAmount)}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <NfiField label="Recommendation">
+                    <select
+                      className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                      value={form.decision}
+                      onChange={(e) => handlePanelReviewChange(panelType, 'decision', e.target.value)}
+                      disabled={!canEditPanelReviews}
+                    >
+                      {getPanelDecisionOptions().map((option) => (
+                        <option key={option} value={option}>
+                          {option === 'Pending' ? 'Pending / Not Reviewed' : option}
+                        </option>
+                      ))}
+                    </select>
+                  </NfiField>
+
+                  <NfiField label="Remarks / Notes">
+                    <textarea
+                      rows={4}
+                      value={form.remarks}
+                      onChange={(e) => handlePanelReviewChange(panelType, 'remarks', e.target.value)}
+                      placeholder={`Add ${panelTitle.toLowerCase()} remarks`}
+                      disabled={!canEditPanelReviews}
+                      className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+                    />
+                  </NfiField>
+
+                  <label className="flex items-center gap-2 text-sm text-[var(--nfi-text)]">
+                    <input
+                      type="checkbox"
+                      checked={form.markComplete}
+                      onChange={(e) => handlePanelReviewChange(panelType, 'markComplete', e.target.checked)}
+                      disabled={!canEditPanelReviews}
+                    />
+                    Mark this panel review as completed
+                  </label>
+
+                  {review?.lastUpdatedAt && (
+                    <p className="text-xs text-[var(--nfi-text-secondary)]">
+                      Last updated {new Date(review.lastUpdatedAt).toLocaleDateString()} by {review?.lastUpdatedBy || 'Internal reviewer'}
+                    </p>
+                  )}
+
+                  <div className="flex justify-end">
+                    <NfiButton
+                      onClick={() => handleSavePanelReview(panelType)}
+                      disabled={!canEditPanelReviews || savingPanelType === panelType}
+                    >
+                      {savingPanelType === panelType ? 'Saving...' : `Save ${panelTitle}`}
+                    </NfiButton>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="font-semibold text-[var(--nfi-text)]">Panel Decision</h4>
+              <p className="text-sm text-[var(--nfi-text-secondary)]">
+                Consolidated state across Clinical, Social, and Financial reviews.
+              </p>
+            </div>
+            <NfiBadge tone={getOverallDecisionTone(computedPanelDecision.overallDecision)}>
+              {computedPanelDecision.overallDecision}
+            </NfiBadge>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <InfoItem label="Interview Status" value={workflowExt?.interview?.status || 'Not available'} />
-            <InfoItem label="Interview Outcome" value={workflowExt?.interview?.outcome || 'Not available'} />
-            <InfoItem label="Proposed Sponsor Amount" value={toCurrency(workflowExt?.funding?.sponsorQuantification?.proposedAmount)} />
+            <InfoItem label="Overall Panel Readiness" value={computedPanelDecision.readinessLabel} />
+            <InfoItem label="Mixed Recommendations" value={computedPanelDecision.mixedRecommendations ? 'Yes' : 'No'} />
             <InfoItem label="Program" value={workflowExt?.funding?.program || 'Not available'} />
             <InfoItem label="Campaign" value={workflowExt?.funding?.campaign?.campaignName || 'Not available'} />
-            <InfoItem label="Top-up" value={workflowExt?.funding?.isTopUp ? 'Yes' : 'No'} />
-            {workflowExt?.funding?.isTopUp && (
-              <InfoItem label="Previous Approved Amount" value={toCurrency(workflowExt?.funding?.previousApprovedAmount)} />
-            )}
-            {workflowExt?.funding?.isTopUp && (
-              <InfoItem label="Total Approved Amount" value={toCurrency(workflowExt?.funding?.totalApprovedAmount)} />
+          </div>
+
+          <NfiField label="Consolidated Remarks">
+            <textarea
+              rows={3}
+              value={consolidatedRemarks}
+              onChange={(e) => setConsolidatedRemarks(e.target.value)}
+              placeholder="Capture the panel summary, conflicts, or next-step recommendation"
+              disabled={!canEditPanelReviews}
+              className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+            />
+          </NfiField>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-[var(--nfi-text-secondary)]">
+              {computedPanelDecision.lastUpdatedAt
+                ? `Last consolidated update ${new Date(computedPanelDecision.lastUpdatedAt).toLocaleDateString()}`
+                : 'No consolidated panel note recorded yet'}
+            </p>
+            {canEditPanelReviews && (
+              <NfiButton onClick={handleSaveConsolidation} disabled={savingConsolidation}>
+                {savingConsolidation ? 'Saving...' : 'Save Panel Consolidation'}
+              </NfiButton>
             )}
           </div>
-          {workflowExt?.interview?.notes && (
-            <div className="mt-3 p-3 rounded bg-white border border-[var(--nfi-border)]">
-              <p className="text-xs font-semibold text-[var(--nfi-text-secondary)] mb-1">Interview Notes</p>
-              <p className="text-sm text-[var(--nfi-text)]">{workflowExt.interview.notes}</p>
-            </div>
-          )}
         </div>
-      )}
+      </div>
 
       {caseData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3">Panel Decision Timeline</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-[var(--nfi-text-secondary)]">Submitted</p>
               <p className="font-medium text-[var(--nfi-text)]">
@@ -2154,7 +2581,11 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </p>
             </div>
             <div>
-              <p className="text-[var(--nfi-text-secondary)]">Decision Date</p>
+              <p className="text-[var(--nfi-text-secondary)]">Panel Readiness</p>
+              <p className="font-medium text-[var(--nfi-text)]">{computedPanelDecision.overallDecision}</p>
+            </div>
+            <div>
+              <p className="text-[var(--nfi-text-secondary)]">Final Decision Date</p>
               <p className="font-medium text-[var(--nfi-text)]">
                 {(caseData as any).decisionAt ? new Date((caseData as any).decisionAt).toLocaleDateString() : 'Pending'}
               </p>

@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions, WorkflowPanelReview } from '../../types';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { getBuiltInDocumentTemplates } from '../../utils/documentTemplateCatalog';
 import { mockStore } from '../../store/mockStore';
@@ -18,10 +18,12 @@ import {
   getInterimSummarySectionProgress,
   getSectionStatus,
 } from '../../utils/intakeValidation';
+import { getOverallPanelDecision } from '../../utils/panelReview';
+import { PANEL_ASSIGNMENT_META } from '../../utils/panelAssignments';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_h2';
+const DEMO_DATA_VERSION = 'v3_5_h3';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -106,6 +108,105 @@ interface DoctorReviewsData {
   [caseId: string]: DoctorReview;
 }
 
+function buildSeededPanelReviews(caseId: string): WorkflowExtensions | undefined {
+  const now = new Date().toISOString();
+  const assignmentBase = {
+    clinical: {
+      panelType: 'clinical' as const,
+      reviewerName: 'Dr. NFI Clinical Reviewer',
+      panelName: PANEL_ASSIGNMENT_META.clinical.defaultPanelName,
+      assignedAt: now,
+      assignedBy: 'Admin User',
+    },
+    social: {
+      panelType: 'social' as const,
+      reviewerName: 'Anjali Social Worker',
+      panelName: PANEL_ASSIGNMENT_META.social.defaultPanelName,
+      assignedAt: now,
+      assignedBy: 'Admin User',
+    },
+    financial: {
+      panelType: 'financial' as const,
+      reviewerName: 'Rohit Finance Reviewer',
+      panelName: PANEL_ASSIGNMENT_META.financial.defaultPanelName,
+      assignedAt: now,
+      assignedBy: 'Admin User',
+    },
+  };
+
+  const complete = (panelType: keyof typeof assignmentBase, decision: WorkflowPanelReview['decision'], remarks: string): WorkflowPanelReview => ({
+    panelType,
+    decision,
+    remarks,
+    reviewedBy: assignmentBase[panelType].reviewerName,
+    reviewedAt: now,
+    completedAt: now,
+    lastUpdatedAt: now,
+    lastUpdatedBy: assignmentBase[panelType].reviewerName,
+  });
+
+  const inProgress = (panelType: keyof typeof assignmentBase, remarks: string): WorkflowPanelReview => ({
+    panelType,
+    decision: 'Pending',
+    remarks,
+    lastUpdatedAt: now,
+    lastUpdatedBy: assignmentBase[panelType].reviewerName,
+  });
+
+  const seededByCase: Record<string, WorkflowExtensions> = {
+    'case-demo-7': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Approve', 'Clinical condition and interim summary support continuation.'),
+        social: complete('social', 'Approve', 'Family support and follow-up readiness confirmed.'),
+        financial: complete('financial', 'Approve', 'Income summary is within threshold and documents support eligibility.'),
+      },
+    },
+    'case-demo-8': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Approve', 'Clinical review completed with approval recommendation.'),
+        social: inProgress('social', 'Home verification notes are being compiled.'),
+      },
+    },
+    'case-demo-9': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Approve', 'Clinical support approved for the current episode.'),
+        social: complete('social', 'Approve', 'Counselling and family engagement are in place.'),
+        financial: complete('financial', 'Approve', 'Financial review aligned with the H2 income summary.'),
+      },
+    },
+    'case-demo-10': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Approve', 'Medical review supports funding.'),
+        social: complete('social', 'Return', 'Need updated parent contact and support details before closure.'),
+        financial: complete('financial', 'Reject', 'Income capture needs exception handling and the current proof set is insufficient.'),
+      },
+    },
+    'case-demo-11': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Return', 'Return requested for revised treatment plan and fresh doctor note.'),
+        social: inProgress('social', 'Awaiting updated counselling notes.'),
+      },
+    },
+  };
+
+  const seeded = seededByCase[caseId];
+  if (!seeded) return undefined;
+
+  return {
+    ...seeded,
+    panelDecision: {
+      ...getOverallPanelDecision(seeded.panelReviews),
+      lastUpdatedAt: now,
+      lastUpdatedBy: 'Admin User',
+    },
+  };
+}
+
 export class MockProvider implements DataProvider {
   private data: MockData;
   private documents: DocumentsData;
@@ -144,6 +245,7 @@ export class MockProvider implements DataProvider {
     this.reportRuns = this.loadOrGenerateReportRuns();
     this.doctorReviews = this.loadOrGenerateDoctorReviews();
     this.normalizePrototypeIdentifiers();
+    this.seedPanelWorkflowIfNeeded();
     this.seedWorkflowHistoryIfNeeded();
     this.seedInstallmentsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
@@ -191,6 +293,37 @@ export class MockProvider implements DataProvider {
     this.saveData();
     if (beneficiaryMapChanged) {
       this.writeMap(MockProvider.BENE_KEY, beneficiaryMap);
+    }
+  }
+
+  private seedPanelWorkflowIfNeeded(): void {
+    let changed = false;
+
+    this.data.cases = this.data.cases.map((caseItem) => {
+      const seededWorkflow = buildSeededPanelReviews(caseItem.caseId);
+      if (!seededWorkflow) return caseItem;
+
+      const nextWorkflow = {
+        ...seededWorkflow,
+        ...caseItem.workflowExt,
+        panelAssignments: caseItem.workflowExt?.panelAssignments || seededWorkflow.panelAssignments,
+        panelReviews: caseItem.workflowExt?.panelReviews || seededWorkflow.panelReviews,
+        panelDecision: caseItem.workflowExt?.panelDecision || seededWorkflow.panelDecision,
+      };
+
+      if (caseItem.workflowExt?.panelReviews && caseItem.workflowExt?.panelAssignments && caseItem.workflowExt?.panelDecision) {
+        return caseItem;
+      }
+
+      changed = true;
+      return {
+        ...caseItem,
+        workflowExt: nextWorkflow,
+      };
+    });
+
+    if (changed) {
+      this.saveData();
     }
   }
 
@@ -616,6 +749,7 @@ export class MockProvider implements DataProvider {
         beneficiaryNo: identifiers.beneficiaryNo,
         beneficiaryNumberAllocatedAt: identifiers.beneficiaryNumberAllocatedAt,
         approvedAmount: template.status === 'Approved' ? 100000 : undefined,
+        workflowExt: buildSeededPanelReviews(`case-demo-${idx + 1}`),
       };
     });
 

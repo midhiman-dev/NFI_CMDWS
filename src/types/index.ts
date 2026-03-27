@@ -38,6 +38,23 @@ export type CommitteeOutcome =
   | 'Need_More_Info'
   | 'Deferred';
 
+export type PanelReviewDecision = 'Pending' | 'Approve' | 'Return' | 'Reject';
+
+export type PanelReviewStatus =
+  | 'Not started'
+  | 'In progress'
+  | 'Reviewed'
+  | 'Returned'
+  | 'Rejected'
+  | 'Approved recommendation';
+
+export type PanelOverallDecision =
+  | 'Pending'
+  | 'Ready for Final Approval'
+  | 'Return Recommended'
+  | 'Reject Recommended'
+  | 'Needs Resolution';
+
 export type RejectionLevel = 'NFI' | 'BRC' | 'BRRC' | 'BGRC' | 'BCRC' | 'Other';
 
 export type InstallmentStatus = 'Scheduled' | 'Requested' | 'Disbursed' | 'Delayed' | 'Cancelled';
@@ -248,11 +265,37 @@ export interface WorkflowPanelAssignment {
   notes?: string;
 }
 
+export interface WorkflowPanelReview {
+  panelType: PanelAssignmentType;
+  decision?: PanelReviewDecision;
+  remarks?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  completedAt?: string;
+  lastUpdatedAt?: string;
+  lastUpdatedBy?: string;
+}
+
+export interface WorkflowPanelDecisionSummary {
+  overallDecision: PanelOverallDecision;
+  readinessLabel: string;
+  completedPanels: number;
+  totalPanels: number;
+  mixedRecommendations: boolean;
+  consolidatedRemarks?: string;
+  recordedAt?: string;
+  recordedBy?: string;
+  lastUpdatedAt?: string;
+  lastUpdatedBy?: string;
+}
+
 export interface WorkflowExtensions {
   interview?: WorkflowInterview;
   appeal?: WorkflowAppeal;
   funding?: WorkflowFunding;
   panelAssignments?: Partial<Record<PanelAssignmentType, WorkflowPanelAssignment>>;
+  panelReviews?: Partial<Record<PanelAssignmentType, WorkflowPanelReview>>;
+  panelDecision?: WorkflowPanelDecisionSummary;
 }
 
 export interface Case {

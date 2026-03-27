@@ -125,7 +125,10 @@ const demoIncomeSeeds: Record<string, IntakeFundApplication['occupationIncomeSec
 };
 
 export function getDemoIntakeSeed(caseId: string): Partial<IntakeFundApplication> | undefined {
-  const occupationIncomeSection = demoIncomeSeeds[caseId];
+  const normalizedCaseId = caseId.startsWith('case-demo-')
+    ? `case_${caseId.replace('case-demo-', '')}`
+    : caseId;
+  const occupationIncomeSection = demoIncomeSeeds[normalizedCaseId];
   if (!occupationIncomeSection) return undefined;
 
   return {
