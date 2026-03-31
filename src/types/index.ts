@@ -232,6 +232,7 @@ export interface WorkflowSponsorQuantification {
   sponsorName?: string;
   proposedAmount?: number;
   notes?: string;
+  reviewerRationale?: string;
   status?: 'NotStarted' | 'PendingDirectorApproval' | 'Approved' | 'Returned';
   submittedAt?: string;
   submittedByUserId?: string;
@@ -249,6 +250,9 @@ export interface WorkflowFunding {
   previousApprovedAmount?: number;
   topUpAmount?: number;
   totalApprovedAmount?: number;
+  recommendationNote?: string;
+  blockerNote?: string;
+  manualReviewNote?: string;
   campaign?: WorkflowCampaign;
   sponsorQuantification?: WorkflowSponsorQuantification;
 }

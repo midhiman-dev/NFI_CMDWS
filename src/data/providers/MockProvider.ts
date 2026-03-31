@@ -23,7 +23,7 @@ import { PANEL_ASSIGNMENT_META } from '../../utils/panelAssignments';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_h3';
+const DEMO_DATA_VERSION = 'v3_5_h4';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -159,7 +159,12 @@ function buildSeededPanelReviews(caseId: string): WorkflowExtensions | undefined
       panelReviews: {
         clinical: complete('clinical', 'Approve', 'Clinical condition and interim summary support continuation.'),
         social: complete('social', 'Approve', 'Family support and follow-up readiness confirmed.'),
-        financial: complete('financial', 'Approve', 'Income summary is within threshold and documents support eligibility.'),
+        financial: complete('financial', 'Approve', 'Daily wage capture needs reviewer interpretation before sponsor recommendation.'),
+      },
+      funding: {
+        recommendationNote: 'Needs manual financial assessment before sponsor recommendation.',
+        blockerNote: 'Primary financial proof and payment requisition are still pending.',
+        manualReviewNote: 'H2 shows daily wage capture only; no monthly conversion is applied.',
       },
     },
     'case-demo-8': {
@@ -168,13 +173,35 @@ function buildSeededPanelReviews(caseId: string): WorkflowExtensions | undefined
         clinical: complete('clinical', 'Approve', 'Clinical review completed with approval recommendation.'),
         social: inProgress('social', 'Home verification notes are being compiled.'),
       },
+      funding: {
+        recommendationNote: 'Awaiting reviewer input',
+        blockerNote: 'Primary financial proof is missing.',
+        manualReviewNote: 'Financial artifacts are incomplete, so no strong recommendation is surfaced yet.',
+      },
     },
     'case-demo-9': {
       panelAssignments: assignmentBase,
       panelReviews: {
         clinical: complete('clinical', 'Approve', 'Clinical support approved for the current episode.'),
         social: complete('social', 'Approve', 'Counselling and family engagement are in place.'),
-        financial: complete('financial', 'Approve', 'Financial review aligned with the H2 income summary.'),
+        financial: complete('financial', 'Approve', 'Financial review aligned with H2, available artifacts, and existing donor mapping context.'),
+      },
+      funding: {
+        program: 'Core NICU Support',
+        channel: 'Campaign',
+        recommendationNote: 'Proceed with the mapped sponsor allocation against the visible outstanding amount.',
+        manualReviewNote: 'Income is within threshold and core financial artifacts are visible.',
+        campaign: {
+          campaignName: 'SRT',
+          status: 'Active',
+        },
+        sponsorQuantification: {
+          sponsorName: 'Asha Trust',
+          proposedAmount: 90000,
+          notes: 'Existing donor mapping supports the current recommendation.',
+          reviewerRationale: 'Income is within threshold, proof is available, and settlement context supports a clear recommendation.',
+          status: 'Approved',
+        },
       },
     },
     'case-demo-10': {
@@ -182,7 +209,27 @@ function buildSeededPanelReviews(caseId: string): WorkflowExtensions | undefined
       panelReviews: {
         clinical: complete('clinical', 'Approve', 'Medical review supports funding.'),
         social: complete('social', 'Return', 'Need updated parent contact and support details before closure.'),
-        financial: complete('financial', 'Reject', 'Income capture needs exception handling and the current proof set is insufficient.'),
+        financial: complete('financial', 'Approve', 'Mixed income capture and settlement context support an advisory top-up recommendation only.'),
+      },
+      funding: {
+        program: 'Emergency Support',
+        recommendationNote: 'Use the existing donor mapping as context and treat the proposed top-up as reviewer-led.',
+        blockerNote: 'Refresh payment requisition before final sponsor confirmation.',
+        manualReviewNote: 'Mixed monthly and daily income capture remains a manual-review case.',
+        isTopUp: true,
+        previousApprovedAmount: 100000,
+        topUpAmount: 65000,
+        campaign: {
+          campaignName: 'TBD',
+          status: 'Draft',
+        },
+        sponsorQuantification: {
+          sponsorName: 'Hope Circle',
+          proposedAmount: 65000,
+          notes: 'Settlement-informed top-up recommendation only.',
+          reviewerRationale: 'Outstanding settlement context exists, but mixed income capture keeps this advisory.',
+          status: 'PendingDirectorApproval',
+        },
       },
     },
     'case-demo-11': {
@@ -190,6 +237,25 @@ function buildSeededPanelReviews(caseId: string): WorkflowExtensions | undefined
       panelReviews: {
         clinical: complete('clinical', 'Return', 'Return requested for revised treatment plan and fresh doctor note.'),
         social: inProgress('social', 'Awaiting updated counselling notes.'),
+        financial: complete('financial', 'Reject', 'Combined monthly income exceeds the threshold, so the case stays in manual financial review.'),
+      },
+      funding: {
+        recommendationNote: 'No strong recommendation yet',
+        blockerNote: 'Financial review should stay in exception handling while threshold exceedance is reviewed.',
+        manualReviewNote: 'Combined monthly family income exceeds INR 40,000.',
+      },
+    },
+    'case-demo-12': {
+      panelAssignments: assignmentBase,
+      panelReviews: {
+        clinical: complete('clinical', 'Return', 'Updated treatment summary is needed.'),
+        social: inProgress('social', 'Counselling notes are being refreshed.'),
+        financial: complete('financial', 'Return', 'Threshold exceedance and incomplete artifacts require a returned financial review.'),
+      },
+      funding: {
+        recommendationNote: 'Needs manual financial assessment',
+        blockerNote: 'Primary financial proof is partial and no funding recommendation should be finalized yet.',
+        manualReviewNote: 'Above-threshold monthly income requires exception review before recommendation.',
       },
     },
   };
@@ -248,6 +314,7 @@ export class MockProvider implements DataProvider {
     this.seedPanelWorkflowIfNeeded();
     this.seedWorkflowHistoryIfNeeded();
     this.seedInstallmentsIfNeeded();
+    this.seedSettlementsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
     this.seedClinicalIfNeeded();
   }
@@ -376,6 +443,48 @@ export class MockProvider implements DataProvider {
       }
     }
     this.saveInstallments();
+  }
+
+  private seedSettlementsIfNeeded(): void {
+    try {
+      const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
+      const settlements: Record<string, SettlementRecord> = stored ? JSON.parse(stored) : {};
+      let changed = false;
+
+      const seedMap: Record<string, SettlementRecord> = {
+        'case-demo-9': {
+          referenceAmount: 90000,
+          finalBillAmount: 124000,
+          nfiPaidAmount: 34000,
+          otherPaidAmount: 0,
+          paymentStatus: 'Partially Paid',
+          paymentDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          updatedAt: new Date().toISOString(),
+        },
+        'case-demo-10': {
+          referenceAmount: 65000,
+          finalBillAmount: 168000,
+          nfiPaidAmount: 50000,
+          otherPaidAmount: 18000,
+          paymentStatus: 'Partially Paid',
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      Object.entries(seedMap).forEach(([caseId, seed]) => {
+        if (!settlements[caseId]) {
+          settlements[caseId] = seed;
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        localStorage.setItem(SETTLEMENTS_STORAGE_KEY, JSON.stringify(settlements));
+      }
+    } catch {
+      // safe demo fallback
+    }
   }
 
   private seedVisitsAndMilestonesIfNeeded(): void {
@@ -767,6 +876,12 @@ export class MockProvider implements DataProvider {
     const templates = this.getBuiltInTemplates();
     const docs: DocumentsData = {};
     const preUploadStatuses = ['Under_Verification', 'Under_Review', 'Approved', 'Closed'];
+    const seededFinancialDocs: Record<string, string[]> = {
+      'case-demo-7': ['Income Certificate'],
+      'case-demo-9': ['Father Bank Statement', 'Income Certificate', 'Payment Requisition', 'Final Bill'],
+      'case-demo-10': ['Father Bank Statement', 'Payment Requisition', 'Final Bill'],
+      'case-demo-11': ['Income Certificate'],
+    };
 
     for (const caseItem of this.data.cases) {
       const shouldPreUpload = preUploadStatuses.includes(caseItem.caseStatus);
@@ -777,14 +892,15 @@ export class MockProvider implements DataProvider {
         const isBlocking = MockProvider.BLOCKING_DOC_TYPES.some(
           dt => dt.toLowerCase() === template.docType.toLowerCase()
         );
+        const isSeededFinancialDoc = !!seededFinancialDocs[caseItem.caseId]?.includes(template.docType);
 
-        if (shouldPreUpload && isBlocking) {
+        if ((shouldPreUpload && isBlocking) || isSeededFinancialDoc) {
           return {
             docId: `doc-${caseItem.caseId}-${idx}`,
             caseId: caseItem.caseId,
             category: template.category,
             docType: template.docType,
-            status: 'Uploaded' as DocumentStatus,
+            status: isSeededFinancialDoc ? 'Verified' as DocumentStatus : 'Uploaded' as DocumentStatus,
             fileName: `${template.docType.replace(/\s+/g, '_')}_${caseIdShort}.pdf`,
             fileType: 'application/pdf',
             size: Math.floor(200 * 1024 + Math.random() * 1300 * 1024),

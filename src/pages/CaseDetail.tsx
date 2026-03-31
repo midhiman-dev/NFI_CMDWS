@@ -42,7 +42,9 @@ import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/
 import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
 import { IncomeEligibilityPanel } from '../components/case-tabs/IncomeEligibilityPanel';
+import { FinancialArtifactReadinessCard, FinancialReviewArtifactCard, SponsorIntelligenceCard } from '../components/case-tabs/FinancialReviewArtifact';
 import { evaluateIncomeThreshold } from '../utils/incomeEligibility';
+import { getFinancialReviewContext } from '../utils/financialReview';
 import { buildPanelSummary, getOverallDecisionTone, getOverallPanelDecision, getPanelDecisionOptions, getPanelStatus, isPanelComplete } from '../utils/panelReview';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
@@ -1819,11 +1821,13 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const [familyData, setFamilyData] = useState<FamilyProfile | null>(null);
   const [clinicalData, setClinicalData] = useState<ClinicalCaseDetails | null>(null);
   const [financialData, setFinancialData] = useState<FinancialCaseDetails | null>(null);
+  const [documents, setDocuments] = useState<DocumentWithTemplate[]>([]);
   const [decision, setDecision] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [rejectionDetails, setRejectionDetails] = useState<any>(null);
   const [workflowExt, setWorkflowExt] = useState<WorkflowExtensions | null>(null);
   const [fundApplication, setFundApplication] = useState<IntakeFundApplication | undefined>();
+  const [settlement, setSettlement] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showLegacyInstallments, setShowLegacyInstallments] = useState(false);
@@ -1847,6 +1851,9 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     isTopUp: false,
     previousApprovedAmount: '',
     topUpAmount: '',
+    recommendationNote: '',
+    missingArtifactNote: '',
+    manualReviewNote: '',
   });
 
   const [rejectionForm, setRejectionForm] = useState({
@@ -1913,6 +1920,8 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         familyRecord,
         clinicalRecord,
         financialRecord,
+        caseDocuments,
+        settlementRecord,
       ] = await Promise.all([
         caseService.getCaseById(caseId),
         provider.getCommitteeReview(caseId).catch(() => null),
@@ -1923,12 +1932,15 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         provider.getFamily(caseId).catch(() => null),
         provider.getClinicalDetails(caseId).catch(() => null),
         provider.getFinancial(caseId).catch(() => null),
+        provider.listCaseDocuments(caseId).catch(() => [] as DocumentWithTemplate[]),
+        provider.getSettlement(caseId).catch(() => null),
       ]);
 
       setCaseData(caseInfo);
       setFamilyData(familyRecord);
       setClinicalData(clinicalRecord);
       setFinancialData(financialRecord);
+      setDocuments(caseDocuments || []);
       setDecision(decisionData);
       setInstallments(installmentsData || []);
       setRejectionDetails(rejectionData);
@@ -1937,6 +1949,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       setPanelReviewForms(buildPanelReviewFormState(workflowExtData?.panelReviews));
       setConsolidatedRemarks(workflowExtData?.panelDecision?.consolidatedRemarks || '');
       setFundApplication(intakeData.fundApplication);
+      setSettlement(settlementRecord);
 
       setFormData({
         outcome: decisionData?.outcome || 'Pending',
@@ -1957,6 +1970,9 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         isTopUp,
         previousApprovedAmount: isTopUp ? String(fallbackPreviousAmount || '') : '',
         topUpAmount: workflowFunding?.topUpAmount?.toString() || '',
+        recommendationNote: workflowFunding?.recommendationNote || workflowFunding?.sponsorQuantification?.notes || '',
+        missingArtifactNote: workflowFunding?.blockerNote || '',
+        manualReviewNote: workflowFunding?.manualReviewNote || '',
       });
 
       if (rejectionData) {
@@ -2129,6 +2145,20 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     () => buildPanelSummary(workflowExt?.panelReviews, workflowExt?.panelAssignments),
     [workflowExt]
   );
+  const financialReviewContext = useMemo(
+    () =>
+      getFinancialReviewContext({
+        caseData,
+        familyData,
+        financialData,
+        workflowExt,
+        settlement,
+        documents,
+        fundApplication,
+        evaluation: incomeEvaluation,
+      }),
+    [caseData, familyData, financialData, workflowExt, settlement, documents, fundApplication, incomeEvaluation]
+  );
 
   const handlePanelReviewChange = (
     panelType: PanelAssignmentType,
@@ -2174,23 +2204,124 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       recordedAt: workflowExt?.panelDecision?.recordedAt,
       recordedBy: workflowExt?.panelDecision?.recordedBy,
     };
+    const workflowPatch: Partial<WorkflowExtensions> = {
+      panelReviews: nextPanelReviews,
+      panelDecision: nextPanelDecision,
+    };
+
+    if (panelType === 'financial') {
+      workflowPatch.funding = {
+        ...workflowExt?.funding,
+        program: fundingData.program.trim() || undefined,
+        isTopUp: fundingData.isTopUp,
+        previousApprovedAmount: fundingData.isTopUp ? previousApprovedAmount : undefined,
+        topUpAmount: fundingData.isTopUp ? topUpAmount : undefined,
+        recommendationNote: fundingData.recommendationNote.trim() || undefined,
+        blockerNote: fundingData.missingArtifactNote.trim() || undefined,
+        manualReviewNote: fundingData.manualReviewNote.trim() || undefined,
+        campaign: {
+          ...workflowExt?.funding?.campaign,
+          campaignName: fundingData.campaign.trim() || undefined,
+        },
+        sponsorQuantification: {
+          ...workflowExt?.funding?.sponsorQuantification,
+          proposedAmount: parseAmount(fundingData.proposedSponsorAmount),
+          notes: fundingData.recommendationNote.trim() || undefined,
+          reviewerRationale: panelForm.remarks.trim() || undefined,
+        },
+      };
+    }
 
     setSavingPanelType(panelType);
     try {
-      await provider.saveWorkflowExt(caseId, {
-        panelReviews: nextPanelReviews,
-        panelDecision: nextPanelDecision,
-      });
+      await provider.saveWorkflowExt(caseId, workflowPatch);
 
       setWorkflowExt((current) => ({
         ...(current || {}),
         panelAssignments: current?.panelAssignments,
         panelReviews: nextPanelReviews,
         panelDecision: nextPanelDecision,
+        funding: panelType === 'financial'
+          ? {
+              ...current?.funding,
+              ...workflowPatch.funding,
+              campaign: {
+                ...current?.funding?.campaign,
+                ...workflowPatch.funding?.campaign,
+              },
+              sponsorQuantification: {
+                ...current?.funding?.sponsorQuantification,
+                ...workflowPatch.funding?.sponsorQuantification,
+              },
+            }
+          : current?.funding,
       }));
 
       const panelTitle = PANEL_ASSIGNMENT_META[panelType].title;
       const decisionLabel = panelForm.decision === 'Pending' ? 'Pending / Not Reviewed' : panelForm.decision;
+      if (panelType === 'financial') {
+        const previousFunding = workflowExt?.funding;
+        const nextFunding = workflowPatch.funding;
+        await logAuditEvent({
+          caseId,
+          action: 'Financial reviewer artifact updated',
+          notes: `Threshold: ${incomeEvaluation.thresholdOutcomeLabel}. Manual review: ${incomeEvaluation.manualReviewRequired ? 'Yes' : 'No'}. Proof readiness: ${financialReviewContext.artifact.proofReadinessLabel}.`,
+        }).catch(() => {});
+
+        await logAuditEvent({
+          caseId,
+          action: 'Financial review recommendation saved',
+          notes: `${decisionLabel}.${panelForm.remarks.trim() ? ` Rationale: ${panelForm.remarks.trim()}` : ''}`,
+        }).catch(() => {});
+
+        if (
+          previousFunding?.sponsorQuantification?.proposedAmount !==
+          nextFunding?.sponsorQuantification?.proposedAmount
+        ) {
+          await logAuditEvent({
+            caseId,
+            action: 'Proposed sponsor amount updated',
+            notes: `Proposed sponsor amount set to ${toCurrency(nextFunding?.sponsorQuantification?.proposedAmount)}.`,
+          }).catch(() => {});
+        }
+
+        if ((previousFunding?.program || '') !== (nextFunding?.program || '')) {
+          await logAuditEvent({
+            caseId,
+            action: 'Program recommendation updated',
+            notes: `Program: ${nextFunding?.program || 'Awaiting reviewer input'}.`,
+          }).catch(() => {});
+        }
+
+        if ((previousFunding?.campaign?.campaignName || '') !== (nextFunding?.campaign?.campaignName || '')) {
+          await logAuditEvent({
+            caseId,
+            action: 'Campaign recommendation updated',
+            notes: `Campaign: ${nextFunding?.campaign?.campaignName || 'Awaiting reviewer input'}.`,
+          }).catch(() => {});
+        }
+
+        if (
+          (previousFunding?.recommendationNote || '') !== (nextFunding?.recommendationNote || '') ||
+          (previousFunding?.blockerNote || '') !== (nextFunding?.blockerNote || '') ||
+          (previousFunding?.manualReviewNote || '') !== (nextFunding?.manualReviewNote || '')
+        ) {
+          await logAuditEvent({
+            caseId,
+            action: 'Sponsor intelligence updated',
+            notes: `${financialReviewContext.sponsorIntelligence.state.label}.${nextFunding?.recommendationNote ? ` Note: ${nextFunding.recommendationNote}` : ''}`,
+          }).catch(() => {});
+        }
+
+        if (nextFunding?.recommendationNote) {
+          await logAuditEvent({
+            caseId,
+            action: 'Funding recommendation saved',
+            notes: nextFunding.recommendationNote,
+          }).catch(() => {});
+        }
+      }
+
       await logAuditEvent({
         caseId,
         action: `${panelTitle} saved`,
@@ -2200,7 +2331,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       if (panelForm.decision === 'Return') {
         await logAuditEvent({
           caseId,
-          action: 'Panel returned case',
+          action: panelType === 'financial' ? 'Financial review returned case' : 'Panel returned case',
           notes: `${panelTitle} recorded a return recommendation.`,
         }).catch(() => {});
       }
@@ -2208,7 +2339,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       if (panelForm.decision === 'Reject') {
         await logAuditEvent({
           caseId,
-          action: 'Panel rejected case',
+          action: panelType === 'financial' ? 'Financial review rejected case' : 'Panel rejected case',
           notes: `${panelTitle} recorded a reject recommendation.`,
         }).catch(() => {});
       }
@@ -2283,8 +2414,54 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     }
   };
 
+  const clinicalSocialPanelTypes = PANEL_ASSIGNMENT_ORDER.filter((panelType) => panelType !== 'financial');
+  const financialAssignment = workflowExt?.panelAssignments?.financial;
+  const financialReview = workflowExt?.panelReviews?.financial;
+  const financialForm = panelReviewForms.financial;
+  const financialPanelTitle = PANEL_ASSIGNMENT_META.financial.title;
+  const financialPanelStatus = getPanelStatus(financialReview);
+
   return (
     <div className="space-y-6">
+      <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)] space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Panel Summary / Consolidation</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">{computedPanelDecision.readinessLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <NfiBadge tone={getOverallDecisionTone(computedPanelDecision.overallDecision)}>
+              {computedPanelDecision.overallDecision}
+            </NfiBadge>
+            <NfiBadge tone={computedPanelDecision.completedPanels === computedPanelDecision.totalPanels ? 'success' : 'warning'}>
+              {computedPanelDecision.completedPanels}/{computedPanelDecision.totalPanels} panels completed
+            </NfiBadge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {panelSummary.map((panel) => (
+            <div key={panel.panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-2 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[var(--nfi-text)] break-words">{panel.title}</p>
+                  <p className="text-xs text-[var(--nfi-text-secondary)] break-words">{panel.panelLabel}</p>
+                </div>
+                <NfiBadge tone={getPanelStatusTone(panel.status)}>{panel.status}</NfiBadge>
+              </div>
+              <p className="text-sm text-[var(--nfi-text)] break-words">{panel.reviewerLabel}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Recommendation</span>
+                <NfiBadge tone={getPanelDecisionTone(panel.decision as PanelReviewDecision)}>{panel.decision === 'Pending' ? 'Pending / Not Reviewed' : panel.decision}</NfiBadge>
+              </div>
+              <p className="text-xs text-[var(--nfi-text-secondary)]">
+                {panel.updatedAt ? `Updated ${new Date(panel.updatedAt).toLocaleDateString()}` : 'No panel activity yet'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)]">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div>
@@ -2366,46 +2543,8 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         )}
       </div>
 
-      <div className="p-4 border border-[var(--nfi-border)] rounded-lg bg-[var(--nfi-bg-light)] space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Panel Summary / Consolidation</h3>
-            <p className="text-sm text-[var(--nfi-text-secondary)]">{computedPanelDecision.readinessLabel}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <NfiBadge tone={getOverallDecisionTone(computedPanelDecision.overallDecision)}>
-              {computedPanelDecision.overallDecision}
-            </NfiBadge>
-            <NfiBadge tone={computedPanelDecision.completedPanels === computedPanelDecision.totalPanels ? 'success' : 'warning'}>
-              {computedPanelDecision.completedPanels}/{computedPanelDecision.totalPanels} panels completed
-            </NfiBadge>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {panelSummary.map((panel) => (
-            <div key={panel.panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[var(--nfi-text)]">{panel.title}</p>
-                  <p className="text-xs text-[var(--nfi-text-secondary)]">{panel.panelLabel}</p>
-                </div>
-                <NfiBadge tone={getPanelStatusTone(panel.status)}>{panel.status}</NfiBadge>
-              </div>
-              <p className="text-sm text-[var(--nfi-text)]">{panel.reviewerLabel}</p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-[var(--nfi-text-secondary)]">Recommendation</span>
-                <NfiBadge tone={getPanelDecisionTone(panel.decision as PanelReviewDecision)}>{panel.decision === 'Pending' ? 'Pending / Not Reviewed' : panel.decision}</NfiBadge>
-              </div>
-              <p className="text-xs text-[var(--nfi-text-secondary)]">
-                {panel.updatedAt ? `Updated ${new Date(panel.updatedAt).toLocaleDateString()}` : 'No panel activity yet'}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {PANEL_ASSIGNMENT_ORDER.map((panelType) => {
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          {clinicalSocialPanelTypes.map((panelType) => {
             const meta = PANEL_ASSIGNMENT_META[panelType];
             const assignment = workflowExt?.panelAssignments?.[panelType];
             const review = workflowExt?.panelReviews?.[panelType];
@@ -2414,23 +2553,23 @@ function ApprovalTab({ caseId }: { caseId: string }) {
             const panelTitle = meta.title;
 
             return (
-              <div key={panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4">
+              <div key={panelType} className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4 min-w-0">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="font-semibold text-[var(--nfi-text)]">{panelTitle}</h4>
-                    <p className="text-xs text-[var(--nfi-text-secondary)]">{assignment?.panelName || meta.defaultPanelName}</p>
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-[var(--nfi-text)] break-words">{panelTitle}</h4>
+                    <p className="text-xs text-[var(--nfi-text-secondary)] break-words">{assignment?.panelName || meta.defaultPanelName}</p>
                   </div>
                   <NfiBadge tone={getPanelStatusTone(panelStatus)}>{panelStatus}</NfiBadge>
                 </div>
 
-                <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 text-sm">
+                <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 text-sm space-y-1 break-words">
                   <p><span className="font-medium text-[var(--nfi-text)]">Assigned reviewer:</span> {getReviewerAssignmentSummary(assignment)}</p>
                   <p><span className="font-medium text-[var(--nfi-text)]">Assignment note:</span> {assignment?.notes || 'No assignment note added'}</p>
                   <p><span className="font-medium text-[var(--nfi-text)]">Last completed:</span> {review?.completedAt ? new Date(review.completedAt).toLocaleDateString() : 'Pending'}</p>
                 </div>
 
                 {panelType === 'clinical' && (
-                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
+                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm break-words">
                     <p className="font-medium text-[var(--nfi-text)]">Clinical context</p>
                     <p><span className="font-medium text-[var(--nfi-text)]">Diagnosis:</span> {clinicalData?.diagnosis || 'Not available'}</p>
                     <p><span className="font-medium text-[var(--nfi-text)]">Interim summary:</span> {clinicalData?.summary || 'Not available'}</p>
@@ -2440,7 +2579,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                 )}
 
                 {panelType === 'social' && (
-                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
+                  <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm break-words">
                     <p className="font-medium text-[var(--nfi-text)]">Social context</p>
                     <p><span className="font-medium text-[var(--nfi-text)]">Mother:</span> {familyData?.motherName || (caseData as any)?.motherName || 'Not available'}</p>
                     <p><span className="font-medium text-[var(--nfi-text)]">Father:</span> {familyData?.fatherName || 'Not available'}</p>
@@ -2450,24 +2589,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                   </div>
                 )}
 
-                {panelType === 'financial' && (
-                  <div className="space-y-3">
-                    <IncomeEligibilityPanel
-                      evaluation={incomeEvaluation}
-                      audience="reviewer"
-                      title="Financial Review Summary"
-                    />
-                    <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 space-y-2 text-sm">
-                      <p className="font-medium text-[var(--nfi-text)]">Financial context</p>
-                      <p><span className="font-medium text-[var(--nfi-text)]">Estimate Amount:</span> {toCurrency(financialData?.estimateAmount)}</p>
-                      <p><span className="font-medium text-[var(--nfi-text)]">Approved Amount:</span> {toCurrency(financialData?.approvedAmount)}</p>
-                      <p><span className="font-medium text-[var(--nfi-text)]">Program:</span> {workflowExt?.funding?.program || 'Not available'}</p>
-                      <p><span className="font-medium text-[var(--nfi-text)]">Proposed Sponsor Amount:</span> {toCurrency(workflowExt?.funding?.sponsorQuantification?.proposedAmount)}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
+                <div className="space-y-3 min-w-0">
                   <NfiField label="Recommendation">
                     <select
                       className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
@@ -2510,7 +2632,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                     </p>
                   )}
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end pt-1">
                     <NfiButton
                       onClick={() => handleSavePanelReview(panelType)}
                       disabled={!canEditPanelReviews || savingPanelType === panelType}
@@ -2522,6 +2644,219 @@ function ApprovalTab({ caseId }: { caseId: string }) {
               </div>
             );
           })}
+        </div>
+
+        <div className="rounded-lg border border-[var(--nfi-border)] bg-white p-5 space-y-5 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h4 className="font-semibold text-[var(--nfi-text)] break-words">{financialPanelTitle}</h4>
+              <p className="text-xs text-[var(--nfi-text-secondary)] break-words">
+                {financialAssignment?.panelName || PANEL_ASSIGNMENT_META.financial.defaultPanelName}
+              </p>
+            </div>
+            <NfiBadge tone={getPanelStatusTone(financialPanelStatus)}>{financialPanelStatus}</NfiBadge>
+          </div>
+
+          <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-4 py-4 text-sm space-y-1 break-words">
+            <p><span className="font-medium text-[var(--nfi-text)]">Assigned reviewer:</span> {getReviewerAssignmentSummary(financialAssignment)}</p>
+            <p><span className="font-medium text-[var(--nfi-text)]">Assignment note:</span> {financialAssignment?.notes || 'No assignment note added'}</p>
+            <p><span className="font-medium text-[var(--nfi-text)]">Last completed:</span> {financialReview?.completedAt ? new Date(financialReview.completedAt).toLocaleDateString() : 'Pending'}</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(22rem,1fr)] gap-5 items-start">
+            <IncomeEligibilityPanel
+              evaluation={incomeEvaluation}
+              audience="reviewer"
+              title="Financial Review Summary"
+            />
+            <FinancialReviewArtifactCard context={financialReviewContext} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            <FinancialArtifactReadinessCard context={financialReviewContext} />
+            <SponsorIntelligenceCard context={financialReviewContext} />
+          </div>
+
+          <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] p-5 space-y-4 min-w-0">
+            <div>
+              <h5 className="font-semibold text-[var(--nfi-text)]">Financial recommendation</h5>
+              <p className="text-sm text-[var(--nfi-text-secondary)]">
+                Capture the internal financial recommendation, rationale, and funding guidance without changing the current H3/H4 behavior.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <NfiField label="Recommendation">
+                <select
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  value={financialForm.decision}
+                  onChange={(e) => handlePanelReviewChange('financial', 'decision', e.target.value)}
+                  disabled={!canEditPanelReviews}
+                >
+                  {getPanelDecisionOptions().map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'Pending' ? 'Pending / Not Reviewed' : option}
+                    </option>
+                  ))}
+                </select>
+              </NfiField>
+
+              <NfiField label="Proposed Sponsor Amount">
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  value={fundingData.proposedSponsorAmount}
+                  onChange={(e) => setFundingData({ ...fundingData, proposedSponsorAmount: e.target.value })}
+                  placeholder={financialReviewContext.sponsorIntelligence.proposedSponsorAmount?.toString() || 'Enter amount'}
+                  disabled={!canEditPanelReviews}
+                />
+              </NfiField>
+            </div>
+
+            <NfiField label="Financial rationale">
+              <textarea
+                rows={5}
+                value={financialForm.remarks}
+                onChange={(e) => handlePanelReviewChange('financial', 'remarks', e.target.value)}
+                placeholder="Capture financial rationale, exception context, or reviewer judgment"
+                disabled={!canEditPanelReviews}
+                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+              />
+            </NfiField>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <NfiField label="Program">
+                <select
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  value={fundingData.program}
+                  onChange={(e) => setFundingData({ ...fundingData, program: e.target.value })}
+                  disabled={!canEditPanelReviews}
+                >
+                  <option value="">Awaiting recommendation</option>
+                  {programOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </NfiField>
+
+              <NfiField label="Campaign">
+                <select
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  value={fundingData.campaign}
+                  onChange={(e) => setFundingData({ ...fundingData, campaign: e.target.value })}
+                  disabled={!canEditPanelReviews}
+                >
+                  <option value="">No strong recommendation yet</option>
+                  {campaignOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </NfiField>
+
+              <NfiField label="Top-up">
+                <select
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                  value={fundingData.isTopUp ? 'Yes' : 'No'}
+                  onChange={(e) =>
+                    setFundingData({
+                      ...fundingData,
+                      isTopUp: e.target.value === 'Yes',
+                      previousApprovedAmount: e.target.value === 'Yes' ? (fundingData.previousApprovedAmount || topUpPreviousBase) : '',
+                      topUpAmount: e.target.value === 'Yes' ? fundingData.topUpAmount : '',
+                    })
+                  }
+                  disabled={!canEditPanelReviews}
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </NfiField>
+            </div>
+
+            {fundingData.isTopUp && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <NfiField label="Previous Approved Amount">
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.previousApprovedAmount || topUpPreviousBase}
+                    onChange={(e) => setFundingData({ ...fundingData, previousApprovedAmount: e.target.value })}
+                    disabled={!canEditPanelReviews}
+                  />
+                </NfiField>
+
+                <NfiField label="Top-up Amount">
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)]"
+                    value={fundingData.topUpAmount}
+                    onChange={(e) => setFundingData({ ...fundingData, topUpAmount: e.target.value })}
+                    disabled={!canEditPanelReviews}
+                  />
+                </NfiField>
+              </div>
+            )}
+
+            <NfiField label="Funding recommendation note">
+              <textarea
+                rows={4}
+                value={fundingData.recommendationNote}
+                onChange={(e) => setFundingData({ ...fundingData, recommendationNote: e.target.value })}
+                placeholder="Capture the sponsor/program/campaign recommendation note"
+                disabled={!canEditPanelReviews}
+                className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+              />
+            </NfiField>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <NfiField label="Missing artifact / blocker note">
+                <textarea
+                  rows={4}
+                  value={fundingData.missingArtifactNote}
+                  onChange={(e) => setFundingData({ ...fundingData, missingArtifactNote: e.target.value })}
+                  placeholder="Capture missing proof, bill, or settlement blockers"
+                  disabled={!canEditPanelReviews}
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+                />
+              </NfiField>
+
+              <NfiField label="Manual review / exception note">
+                <textarea
+                  rows={4}
+                  value={fundingData.manualReviewNote}
+                  onChange={(e) => setFundingData({ ...fundingData, manualReviewNote: e.target.value })}
+                  placeholder="Capture manual review or exception handling note"
+                  disabled={!canEditPanelReviews}
+                  className="w-full px-3 py-2 border border-[var(--nfi-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nfi-primary)] resize-none"
+                />
+              </NfiField>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-[var(--nfi-text)]">
+              <input
+                type="checkbox"
+                checked={financialForm.markComplete}
+                onChange={(e) => handlePanelReviewChange('financial', 'markComplete', e.target.checked)}
+                disabled={!canEditPanelReviews}
+              />
+              Mark this panel review as completed
+            </label>
+
+            {financialReview?.lastUpdatedAt && (
+              <p className="text-xs text-[var(--nfi-text-secondary)]">
+                Last updated {new Date(financialReview.lastUpdatedAt).toLocaleDateString()} by {financialReview?.lastUpdatedBy || 'Internal reviewer'}
+              </p>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <NfiButton
+                onClick={() => handleSavePanelReview('financial')}
+                disabled={!canEditPanelReviews || savingPanelType === 'financial'}
+              >
+                {savingPanelType === 'financial' ? 'Saving...' : `Save ${financialPanelTitle}`}
+              </NfiButton>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4">
@@ -2568,7 +2903,6 @@ function ApprovalTab({ caseId }: { caseId: string }) {
             )}
           </div>
         </div>
-      </div>
 
       {caseData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -2880,6 +3214,19 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                     <InfoItem label="Total Approved Amount" value={toCurrency(workflowExt?.funding?.totalApprovedAmount)} />
                   )}
                 </div>
+                {(workflowExt?.funding?.recommendationNote || workflowExt?.funding?.manualReviewNote || workflowExt?.funding?.blockerNote) && (
+                  <div className="mt-4 space-y-2 text-sm">
+                    {workflowExt?.funding?.recommendationNote && (
+                      <p className="text-[var(--nfi-text)]"><span className="font-medium">Funding recommendation note:</span> {workflowExt.funding.recommendationNote}</p>
+                    )}
+                    {workflowExt?.funding?.manualReviewNote && (
+                      <p className="text-[var(--nfi-text)]"><span className="font-medium">Manual review / exception note:</span> {workflowExt.funding.manualReviewNote}</p>
+                    )}
+                    {workflowExt?.funding?.blockerNote && (
+                      <p className="text-[var(--nfi-text)]"><span className="font-medium">Missing artifact / blocker note:</span> {workflowExt.funding.blockerNote}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
