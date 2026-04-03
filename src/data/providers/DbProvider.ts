@@ -10,6 +10,13 @@ import { formatBabyDisplayName } from '../../utils/casePresentation';
 import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
 import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import {
+  FOLLOWUP_META_KEYS,
+  FOLLOWUP_REMARK_FIELDS,
+  computeFollowupDueDate,
+  deriveFollowupMilestoneSnapshot,
+  getFollowupQuestionnaire,
+} from '../../utils/followupQuestionnaires';
+import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
   getFundApplicationSectionProgress,
@@ -18,8 +25,12 @@ import {
 } from '../../utils/intakeValidation';
 
 const BENI_OPS_ENHANCEMENT_STORAGE_KEY = 'nfi_beni_ops_enhancement_v1';
+const FOLLOWUP_MILESTONE_OVERLAY_STORAGE_KEY = 'nfi_db_followup_milestones_v1';
+const FOLLOWUP_METRIC_VALUE_OVERLAY_STORAGE_KEY = 'nfi_db_followup_metric_values_v1';
 
 type BeniOpsEnhancementMap = Record<string, Partial<BeniProgramOpsData>>;
+type FollowupMilestoneOverlayMap = Record<string, FollowupMilestone[]>;
+type FollowupMetricOverlayMap = Record<string, FollowupMetricValue>;
 
 export class DbProvider implements DataProvider {
   private static readonly DOC_VERSIONS_STORAGE_KEY = 'nfi_db_document_versions_v1';
@@ -67,6 +78,59 @@ export class DbProvider implements DataProvider {
 
   private saveStoredBeniOpsEnhancements(data: BeniOpsEnhancementMap): void {
     localStorage.setItem(BENI_OPS_ENHANCEMENT_STORAGE_KEY, JSON.stringify(data));
+  }
+
+  private getStoredFollowupMilestones(): FollowupMilestoneOverlayMap {
+    try {
+      return JSON.parse(localStorage.getItem(FOLLOWUP_MILESTONE_OVERLAY_STORAGE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  private saveStoredFollowupMilestones(data: FollowupMilestoneOverlayMap): void {
+    localStorage.setItem(FOLLOWUP_MILESTONE_OVERLAY_STORAGE_KEY, JSON.stringify(data));
+  }
+
+  private getStoredFollowupMetricValues(): FollowupMetricOverlayMap {
+    try {
+      return JSON.parse(localStorage.getItem(FOLLOWUP_METRIC_VALUE_OVERLAY_STORAGE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  private saveStoredFollowupMetricValues(data: FollowupMetricOverlayMap): void {
+    localStorage.setItem(FOLLOWUP_METRIC_VALUE_OVERLAY_STORAGE_KEY, JSON.stringify(data));
+  }
+
+  private getMilestoneOverlayValues(caseId: string, milestoneMonths: number): FollowupMetricValue[] {
+    return Object.values(this.getStoredFollowupMetricValues()).filter(
+      (value) => value.caseId === caseId && value.milestoneMonths === milestoneMonths,
+    );
+  }
+
+  private syncStoredFollowupMilestone(caseId: string, milestoneMonths: FollowupMilestone['milestoneMonths']): void {
+    const milestoneMap = this.getStoredFollowupMilestones();
+    const milestone = milestoneMap[caseId]?.find((item) => item.milestoneMonths === milestoneMonths);
+    if (!milestone) return;
+
+    const snapshot = deriveFollowupMilestoneSnapshot(milestone, this.getMilestoneOverlayValues(caseId, milestoneMonths));
+    milestone.followupDate = snapshot.followupDate;
+    milestone.status = snapshot.status;
+    milestone.notes = snapshot.notes;
+    milestone.summary = snapshot.summary;
+    milestone.answeredCount = snapshot.answeredCount;
+    milestone.questionCount = snapshot.questionCount;
+    milestone.completionPercent = snapshot.completionPercent;
+    milestone.completedAt = snapshot.completedAt;
+    milestone.completedBy = snapshot.completedBy;
+    milestone.keyObservations = snapshot.keyObservations;
+    milestone.redFlags = snapshot.redFlags;
+    milestone.escalationNote = snapshot.escalationNote;
+    milestone.updatedAt = snapshot.updatedAt || new Date().toISOString();
+
+    this.saveStoredFollowupMilestones(milestoneMap);
   }
 
   private async syncBeneficiaryIdentifiers(caseId: string, input: {
@@ -630,27 +694,128 @@ export class DbProvider implements DataProvider {
   }
 
   async listFollowupMilestones(caseId: string): Promise<FollowupMilestone[]> {
-    return [];
+    const milestoneMap = this.getStoredFollowupMilestones();
+    const milestones = milestoneMap[caseId] || [];
+    milestones.forEach((milestone) => this.syncStoredFollowupMilestone(caseId, milestone.milestoneMonths));
+    return this.getStoredFollowupMilestones()[caseId] || [];
   }
 
   async ensureFollowupMilestones(caseId: string, anchorDate: string): Promise<FollowupMilestone[]> {
-    return [];
+    const milestoneMap = this.getStoredFollowupMilestones();
+    const existing = milestoneMap[caseId] || [];
+    const now = new Date().toISOString();
+    const monthsList = [3, 6, 9, 12, 18, 24] as const;
+
+    milestoneMap[caseId] = monthsList.map((milestoneMonths) => {
+      const current = existing.find((item) => item.milestoneMonths === milestoneMonths);
+      return {
+        milestoneId: current?.milestoneId || `db-followup-${caseId}-${milestoneMonths}`,
+        caseId,
+        milestoneMonths,
+        dueDate: computeFollowupDueDate(anchorDate, milestoneMonths),
+        followupDate: current?.followupDate,
+        status: current?.status || 'Upcoming',
+        notes: current?.notes,
+        summary: current?.summary,
+        answeredCount: current?.answeredCount,
+        questionCount: current?.questionCount,
+        completionPercent: current?.completionPercent,
+        completedAt: current?.completedAt,
+        completedBy: current?.completedBy,
+        keyObservations: current?.keyObservations,
+        redFlags: current?.redFlags,
+        escalationNote: current?.escalationNote,
+        createdAt: current?.createdAt || now,
+        updatedAt: current?.updatedAt || now,
+      };
+    });
+
+    this.saveStoredFollowupMilestones(milestoneMap);
+    milestoneMap[caseId].forEach((milestone) => this.syncStoredFollowupMilestone(caseId, milestone.milestoneMonths));
+    return this.getStoredFollowupMilestones()[caseId] || [];
   }
 
   async listFollowupMetricDefs(milestoneMonths: number): Promise<FollowupMetricDef[]> {
-    return [];
+    const questionnaire = getFollowupQuestionnaire(milestoneMonths);
+    const questionDefs = questionnaire.questions.map((questionItem) => ({
+      metricId: `db-followup-def-${milestoneMonths}-${questionItem.metricKey}`,
+      milestoneMonths: questionnaire.milestoneMonths,
+      metricKey: questionItem.metricKey,
+      metricLabel: questionItem.label,
+      valueType: 'TEXT' as const,
+      allowNA: true,
+    }));
+    const remarkDefs = FOLLOWUP_REMARK_FIELDS.map((field, index) => ({
+      metricId: `db-followup-def-${milestoneMonths}-${field.metricKey}-${index}`,
+      milestoneMonths: questionnaire.milestoneMonths,
+      metricKey: field.metricKey,
+      metricLabel: field.label,
+      valueType: 'TEXT' as const,
+      allowNA: true,
+    }));
+    return [...questionDefs, ...remarkDefs];
   }
 
   async saveFollowupMetricValues(caseId: string, milestoneMonths: number, values: Omit<FollowupMetricValue, 'valueId'>[]): Promise<void> {
-    return;
+    const metricMap = this.getStoredFollowupMetricValues();
+    values.forEach((value) => {
+      const key = `${caseId}-${milestoneMonths}-${value.metricKey}`;
+      metricMap[key] = {
+        valueId: key,
+        ...value,
+        capturedAt: new Date().toISOString(),
+        capturedBy: value.capturedBy,
+      };
+    });
+    this.saveStoredFollowupMetricValues(metricMap);
+    this.syncStoredFollowupMilestone(caseId, milestoneMonths as FollowupMilestone['milestoneMonths']);
   }
 
   async getFollowupMetricValues(caseId: string, milestoneMonths: number): Promise<FollowupMetricValue[]> {
-    return [];
+    return this.getMilestoneOverlayValues(caseId, milestoneMonths);
   }
 
   async setFollowupDate(caseId: string, milestoneMonths: number, followupDate: string, notes?: string): Promise<void> {
-    return;
+    const metricMap = this.getStoredFollowupMetricValues();
+    const actor = this.getActorMeta().by;
+    const values: FollowupMetricValue[] = [
+      {
+        valueId: `${caseId}-${milestoneMonths}-${FOLLOWUP_META_KEYS.followupDate}`,
+        caseId,
+        milestoneMonths: milestoneMonths as FollowupMilestone['milestoneMonths'],
+        metricKey: FOLLOWUP_META_KEYS.followupDate,
+        valueText: followupDate.split('T')[0],
+        capturedAt: new Date().toISOString(),
+        capturedBy: actor,
+      },
+      {
+        valueId: `${caseId}-${milestoneMonths}-${FOLLOWUP_META_KEYS.questionnaireStatus}`,
+        caseId,
+        milestoneMonths: milestoneMonths as FollowupMilestone['milestoneMonths'],
+        metricKey: FOLLOWUP_META_KEYS.questionnaireStatus,
+        valueText: 'Completed',
+        capturedAt: new Date().toISOString(),
+        capturedBy: actor,
+      },
+    ];
+
+    if (notes) {
+      values.push({
+        valueId: `${caseId}-${milestoneMonths}-${FOLLOWUP_META_KEYS.summary}`,
+        caseId,
+        milestoneMonths: milestoneMonths as FollowupMilestone['milestoneMonths'],
+        metricKey: FOLLOWUP_META_KEYS.summary,
+        valueText: notes,
+        capturedAt: new Date().toISOString(),
+        capturedBy: actor,
+      });
+    }
+
+    values.forEach((value) => {
+      metricMap[value.valueId] = value;
+    });
+    this.saveStoredFollowupMetricValues(metricMap);
+    this.syncStoredFollowupMilestone(caseId, milestoneMonths as FollowupMilestone['milestoneMonths']);
   }
 
   async listVolunteers(): Promise<User[]> {

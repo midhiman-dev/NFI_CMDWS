@@ -523,14 +523,25 @@ export interface MonitoringVisit {
   updatedBy?: string;
 }
 
+export type FollowupMilestoneStatus = 'Due' | 'Upcoming' | 'In Progress' | 'Completed' | 'Overdue';
+
 export interface FollowupMilestone {
   milestoneId: string;
   caseId: string;
   milestoneMonths: 3 | 6 | 9 | 12 | 18 | 24;
   dueDate: string;
   followupDate?: string;
-  status?: 'Due' | 'Upcoming' | 'Completed' | 'Overdue';
+  status?: FollowupMilestoneStatus;
   notes?: string;
+  summary?: string;
+  answeredCount?: number;
+  questionCount?: number;
+  completionPercent?: number;
+  completedAt?: string;
+  completedBy?: string;
+  keyObservations?: string;
+  redFlags?: string;
+  escalationNote?: string;
   createdAt: string;
   updatedAt: string;
 }

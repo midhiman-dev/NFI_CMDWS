@@ -8,7 +8,7 @@ import { CaseDetailNav } from '../components/case-tabs/CaseDetailNav';
 import type { NavGroup } from '../components/case-tabs/CaseDetailNav';
 import { NfiButton } from '../components/design-system/NfiButton';
 import { NfiField } from '../components/design-system/NfiField';
-import { CompactMilestoneModal } from '../components/CompactMilestoneModal';
+import { FollowupMilestoneWorkspace } from '../components/FollowupMilestoneWorkspace';
 import { MonitoringTab } from '../components/MonitoringTab';
 import { BeneficiaryTab } from '../components/case-tabs/BeneficiaryTab';
 import { FamilyTab } from '../components/case-tabs/FamilyTab';
@@ -38,8 +38,7 @@ import type { CaseWithDetails, DocumentWithTemplate } from '../data/providers/Da
 import { translateCaseStatus, translateLiteral } from '../i18n/helpers';
 import { formatBabyDisplayName } from '../utils/casePresentation';
 import { shouldShowBeneficiaryNo } from '../utils/caseIdentifiers';
-import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
-import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
+import { getAuditActorDisplayName, getAuditEvents, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
 import { IncomeEligibilityPanel } from '../components/case-tabs/IncomeEligibilityPanel';
 import { FinancialArtifactReadinessCard, FinancialReviewArtifactCard, SponsorIntelligenceCard, VarianceGovernanceCard } from '../components/case-tabs/FinancialReviewArtifact';
@@ -3614,145 +3613,61 @@ function InstallmentsTab({ caseId, caseData, onUpdate }: { caseId: string; caseD
 }
 
 function FollowupsTab({ caseId }: { caseId: string }) {
-  const authState = getAuthState();
   const { showToast } = useToast();
   const { provider } = useAppContext();
-  const [milestones, setMilestones] = useState<FollowupMilestone[]>([]);
+  const [anchorDate, setAnchorDate] = useState<string | undefined>(undefined);
+  const [anchorLabel, setAnchorLabel] = useState('Milestone schedule anchor');
+  const [caseAllottedToLabel, setCaseAllottedToLabel] = useState('Not assigned');
   const [loading, setLoading] = useState(true);
-  const [selectedMilestone, setSelectedMilestone] = useState<FollowupMilestone | null>(null);
-
-  const canEdit = authState.activeRole === 'beni_volunteer' || authState.activeRole === 'admin';
 
   useEffect(() => {
-    loadData();
-  }, [caseId]);
+    let mounted = true;
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const milestonesData = await provider.ensureFollowupMilestones(caseId, new Date().toISOString().split('T')[0]);
-      setMilestones(sortMilestonesBySourceOrder(milestonesData));
-    } catch (error) {
-      console.error('Error loading follow-ups:', error);
-      showToast('Failed to load follow-ups', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+    async function loadFollowupContext() {
+      try {
+        setLoading(true);
+        const [clinical, beniOps, volunteers] = await Promise.all([
+          provider.getClinicalDetails(caseId),
+          provider.getBeniProgramOps(caseId),
+          provider.listVolunteers(),
+        ]);
+        if (!mounted) return;
 
-  const handleMarkFollowupDone = async (milestoneMonths: number) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      await provider.setFollowupDate(caseId, milestoneMonths, today);
-      await logAuditEvent({
-        caseId,
-        action: `Saved ${getFollowupAuditLabel(milestoneMonths)}`,
-        notes: `Follow-up completed on ${today}.`,
-      });
-      await loadData();
-      showToast('Follow-up marked as complete', 'success');
-    } catch (error) {
-      console.error('Error marking follow-up:', error);
-      showToast('Failed to mark follow-up', 'error');
+        const nextAnchorDate = clinical?.dischargeDate || clinical?.admissionDate || undefined;
+        setAnchorDate(nextAnchorDate);
+        setAnchorLabel(clinical?.dischargeDate ? 'Discharge date anchor' : clinical?.admissionDate ? 'Admission date anchor' : 'Milestone schedule anchor');
+
+        const owner = volunteers.find((user) => user.userId === beniOps?.caseAllottedTo)?.fullName || beniOps?.caseAllottedToName || 'Not assigned';
+        setCaseAllottedToLabel(owner);
+      } catch (error) {
+        console.error('Error loading follow-up context:', error);
+        showToast('Failed to load follow-up context', 'error');
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     }
-  };
+
+    void loadFollowupContext();
+    return () => {
+      mounted = false;
+    };
+  }, [caseId, provider, showToast]);
 
   if (loading) {
-    return <div className="text-center py-6">Loading follow-ups...</div>;
+    return <div className="py-6 text-center">Loading follow-ups...</div>;
   }
 
-  const completedCount = milestones.filter(m => m.status === 'Completed').length;
-  const nextDue = milestones.find(m => m.status === 'Due' || m.status === 'Overdue');
-
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-[var(--nfi-text-secondary)]">Completed Milestones</p>
-          <p className="text-2xl font-bold text-blue-600">{completedCount}/{milestones.length}</p>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <p className="text-sm text-[var(--nfi-text-secondary)]">Next Due</p>
-          <p className="text-lg font-bold text-purple-600">{nextDue ? getFollowupQuestionnaire(nextDue.milestoneMonths).shortLabel : 'None'}</p>
-          {nextDue && <p className="text-xs text-purple-500">{formatDateDMY(nextDue.dueDate)}</p>}
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm text-[var(--nfi-text-secondary)]">Progress</p>
-          <div className="mt-2 bg-green-200 rounded-full h-2">
-            <div className="bg-green-600 h-2 rounded-full" style={{width: `${(completedCount / milestones.length) * 100}%`}} />
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Milestones</h3>
-          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">
-            Each milestone opens its own questionnaire. Questions change by milestone instead of reusing a generic form.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {milestones.map((milestone) => {
-            const questionnaire = getFollowupQuestionnaire(milestone.milestoneMonths);
-            const isCompleted = milestone.status === 'Completed' || !!milestone.followupDate;
-            return (
-              <div key={milestone.milestoneId} className="rounded-xl border border-[var(--nfi-border)] bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="font-semibold text-[var(--nfi-text)]">{questionnaire.milestoneLabel}</h4>
-                    <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">{questionnaire.sectionTitle}</p>
-                  </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    isCompleted ? 'bg-green-100 text-green-700' :
-                    milestone.status === 'Due' ? 'bg-red-100 text-red-700' :
-                    milestone.status === 'Overdue' ? 'bg-orange-100 text-orange-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {isCompleted ? 'Completed' : milestone.status}
-                  </span>
-                </div>
-                <div className="mt-4 space-y-2 text-sm text-[var(--nfi-text-secondary)]">
-                  <p>Due date: {formatDateDMY(milestone.dueDate)}</p>
-                  <p>Follow-up date: {milestone.followupDate ? formatDateDMY(milestone.followupDate) : 'Not recorded'}</p>
-                  <p>Questions: {questionnaire.questions.length}</p>
-                </div>
-                <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[var(--nfi-text-secondary)]">
-                  {questionnaire.questions[0]?.label}
-                </div>
-                <div className="mt-4 flex gap-3">
-                  {canEdit && (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedMilestone(milestone);
-                        }}
-                        className="text-blue-600 hover:text-blue-700 text-sm"
-                      >
-                        Open Questionnaire
-                      </button>
-                      {milestone.status !== 'Completed' && (
-                        <button onClick={() => handleMarkFollowupDone(milestone.milestoneMonths)} className="text-green-600 hover:text-green-700 text-sm">Mark Done</button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {selectedMilestone && (
-        <CompactMilestoneModal
-          caseId={caseId}
-          milestone={selectedMilestone}
-          title={getFollowupQuestionnaire(selectedMilestone.milestoneMonths).milestoneLabel}
-          mode="followup"
-          onSaved={loadData}
-          onClose={() => setSelectedMilestone(null)}
-        />
-      )}
-    </div>
+    <FollowupMilestoneWorkspace
+      caseId={caseId}
+      anchorDate={anchorDate}
+      anchorLabel={anchorLabel}
+      caseAllottedToLabel={caseAllottedToLabel}
+      title="Volunteer Follow-up Overview"
+      description="This tab reuses the same milestone questionnaire source of truth and structured flow used in Monitoring."
+    />
   );
 }
 

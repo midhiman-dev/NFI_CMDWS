@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Calendar, CheckCircle, Edit2, FileText, Home, Package, PhoneCall, Play, UserRound } from 'lucide-react';
-import { NfiBadge } from './design-system/NfiBadge';
+import { Edit2, Home, Package, PhoneCall, UserRound } from 'lucide-react';
 import { NfiButton } from './design-system/NfiButton';
 import { NfiField } from './design-system/NfiField';
 import { useToast } from './design-system/Toast';
-import { CompactMilestoneModal } from './CompactMilestoneModal';
+import { FollowupMilestoneWorkspace } from './FollowupMilestoneWorkspace';
 import { getAuthState } from '../utils/auth';
 import { useAppContext } from '../App';
 import { formatDateDMY } from '../utils/dateFormat';
 import { logAuditEvent } from '../utils/auditTrail';
-import type { Case, FamilyProfile, Hospital, User, ClinicalCaseDetails, FollowupMilestone } from '../types';
+import type { Case, FamilyProfile, Hospital, User, ClinicalCaseDetails } from '../types';
 import type { BeniProgramOpsData } from '../data/providers/DataProvider';
-import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/followupQuestionnaires';
 
 interface MonitoringTabProps {
   caseId: string;
@@ -72,14 +70,11 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
   const { provider } = useAppContext();
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [beniOps, setBeniOps] = useState<BeniProgramOpsData | null>(null);
-  const [milestones, setMilestones] = useState<FollowupMilestone[]>([]);
   const [volunteers, setVolunteers] = useState<User[]>([]);
   const [clinicalDetails, setClinicalDetails] = useState<ClinicalCaseDetails | null>(null);
   const [hospital, setHospital] = useState<Hospital | null>(null);
   const [family, setFamily] = useState<FamilyProfile | null>(null);
   const [isEditingBeni, setIsEditingBeni] = useState(false);
-  const [selectedMilestone, setSelectedMilestone] = useState<FollowupMilestone | null>(null);
-  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,28 +94,19 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         setError('Case not found');
         return;
       }
-      const [beniOpsData, milestonesData, volunteersData, clinicalData, hospitals, familyData] = await Promise.all([
+      const [beniOpsData, volunteersData, clinicalData, hospitals, familyData] = await Promise.all([
         provider.getBeniProgramOps(caseId),
-        provider.listFollowupMilestones(caseId),
         provider.listVolunteers(),
         provider.getClinicalDetails(caseId),
         provider.getHospitals(),
         provider.getFamily(caseId),
       ]);
       setBeniOps(beniOpsData);
-      setMilestones(sortMilestonesBySourceOrder(milestonesData));
       setVolunteers(volunteersData);
       setClinicalDetails(clinicalData);
       setHospital(hospitals.find((item) => item.hospitalId === caseInfo.hospitalId) || null);
       setFamily(familyData);
       setBeniForm(buildBeniFormState(beniOpsData));
-      if (milestonesData.length === 0 && clinicalData) {
-        const anchorDate = clinicalData.dischargeDate || clinicalData.admissionDate;
-        if (anchorDate) {
-          const newMilestones = await provider.ensureFollowupMilestones(caseId, anchorDate);
-          setMilestones(sortMilestonesBySourceOrder(newMilestones));
-        }
-      }
     } catch (err) {
       console.error('Error loading monitoring data:', err);
       setError('Failed to load monitoring data');
@@ -180,60 +166,11 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
     }
   };
 
-  const handleInitializeMilestones = async () => {
-    const anchorDate = clinicalDetails?.dischargeDate || clinicalDetails?.admissionDate;
-    if (!anchorDate) {
-      showToast('Please set admission or discharge date first (in Overview tab)', 'error');
-      return;
-    }
-    try {
-      const newMilestones = await provider.ensureFollowupMilestones(caseId, anchorDate);
-      setMilestones(sortMilestonesBySourceOrder(newMilestones));
-      await logAuditEvent({ caseId, action: 'Initialized follow-up milestones', notes: `Anchor date set from ${clinicalDetails?.dischargeDate ? 'discharge' : 'admission'} details.` });
-      showToast('Milestones initialized successfully', 'success');
-    } catch (err) {
-      console.error('Error initializing milestones:', err);
-      showToast('Failed to initialize milestones', 'error');
-    }
-  };
-
-  const completedMilestones = milestones.filter((m) => m.status === 'Completed' || m.followupDate).length;
-  const nextDueMilestone = milestones.find((m) => m.status !== 'Completed' && !m.followupDate && m.dueDate);
   const anchorDate = clinicalDetails?.dischargeDate || clinicalDetails?.admissionDate;
   const currentOwner = getVolunteerDisplayName(volunteers, beniOps?.caseAllottedTo, beniOps?.caseAllottedToName);
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-[var(--nfi-text)] mb-3 flex items-center gap-2">
-          <CheckCircle size={20} className="text-green-600" />
-          Volunteer Follow-up Overview
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div>
-            <p className="text-sm text-[var(--nfi-text-secondary)]">Completed Milestones</p>
-            <p className="text-2xl font-bold text-[var(--nfi-text)]">{completedMilestones} / {milestones.length}</p>
-          </div>
-          {nextDueMilestone && (
-            <div>
-              <p className="text-sm text-[var(--nfi-text-secondary)]">Next Due Milestone</p>
-              <p className="text-lg font-semibold text-[var(--nfi-text)]">{getFollowupQuestionnaire(nextDueMilestone.milestoneMonths).shortLabel}</p>
-              <p className="text-sm text-blue-600">Due: {formatDateDMY(nextDueMilestone.dueDate)}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-sm text-[var(--nfi-text-secondary)]">Anchor Date</p>
-            <p className="text-base font-medium text-[var(--nfi-text)]">{anchorDate ? formatDateDMY(anchorDate) : 'Not set'}</p>
-            <p className="text-xs text-[var(--nfi-text-secondary)]">{clinicalDetails?.dischargeDate ? '(Discharge)' : clinicalDetails?.admissionDate ? '(Admission)' : ''}</p>
-          </div>
-          <div>
-            <p className="text-sm text-[var(--nfi-text-secondary)]">Case Allotted To</p>
-            <p className="text-base font-medium text-[var(--nfi-text)]">{currentOwner || 'Not assigned'}</p>
-            <p className="text-xs text-[var(--nfi-text-secondary)]">{getDischargeContactStatus(beniOps)}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="rounded-xl border border-[var(--nfi-border)] bg-white p-5">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
@@ -371,75 +308,14 @@ export function MonitoringTab({ caseId }: MonitoringTabProps) {
         </div>
       </div>
 
-      <div>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Milestone Follow-up</h3>
-          <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">Milestones remain separate from case-level operations and each card opens its own questionnaire.</p>
-        </div>
-        {milestones.length === 0 ? (
-          <div className="text-center py-8 border border-[var(--nfi-border)] rounded-lg">
-            {anchorDate ? (
-              <div>
-                <p className="text-[var(--nfi-text-secondary)] mb-4">Milestones have not been initialized yet.</p>
-                <NfiButton onClick={handleInitializeMilestones}>
-                  <Play size={16} className="mr-2" />
-                  Initialize Milestones
-                </NfiButton>
-              </div>
-            ) : (
-              <p className="text-[var(--nfi-text-secondary)]">No milestones initialized. Please set admission or discharge date in the Overview tab first.</p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {milestones.map((milestone) => {
-              const questionnaire = getFollowupQuestionnaire(milestone.milestoneMonths);
-              const isCompleted = milestone.status === 'Completed' || !!milestone.followupDate;
-              const tone = isCompleted ? 'success' : milestone.status === 'Due' ? 'warning' : 'neutral';
-              return (
-                <div key={milestone.milestoneId} className="rounded-xl border border-[var(--nfi-border)] bg-white p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h4 className="font-semibold text-[var(--nfi-text)]">{questionnaire.milestoneLabel}</h4>
-                      <p className="text-sm text-[var(--nfi-text-secondary)] mt-1">{questionnaire.sectionTitle}</p>
-                    </div>
-                    <NfiBadge tone={tone}>{isCompleted ? 'Completed' : milestone.status === 'Due' ? 'Due' : 'Upcoming'}</NfiBadge>
-                  </div>
-                  <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-[var(--nfi-text-secondary)]">
-                      <Calendar size={14} />
-                      Due: {milestone.dueDate ? formatDateDMY(milestone.dueDate) : 'Not set'}
-                    </div>
-                    <div className="text-[var(--nfi-text-secondary)]">Follow-up date: {milestone.followupDate ? formatDateDMY(milestone.followupDate) : 'Not recorded'}</div>
-                    <div className="text-[var(--nfi-text-secondary)]">Questions: {questionnaire.questions.length}</div>
-                  </div>
-                  <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[var(--nfi-text-secondary)]">{questionnaire.questions[0]?.label}</div>
-                  <div className="mt-4">
-                    <NfiButton size="sm" variant="secondary" onClick={() => { setSelectedMilestone(milestone); setShowQuestionnaire(true); }}>
-                      <FileText size={14} className="mr-1" />
-                      Open Questionnaire
-                    </NfiButton>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {showQuestionnaire && selectedMilestone && (
-        <CompactMilestoneModal
-          caseId={caseId}
-          milestone={selectedMilestone}
-          title={getFollowupQuestionnaire(selectedMilestone.milestoneMonths).milestoneLabel}
-          mode="monitoring"
-          onSaved={loadData}
-          onClose={() => {
-            setShowQuestionnaire(false);
-            setSelectedMilestone(null);
-          }}
-        />
-      )}
+      <FollowupMilestoneWorkspace
+        caseId={caseId}
+        anchorDate={anchorDate}
+        anchorLabel={clinicalDetails?.dischargeDate ? 'Discharge date anchor' : clinicalDetails?.admissionDate ? 'Admission date anchor' : 'Milestone schedule anchor'}
+        caseAllottedToLabel={currentOwner || 'Not assigned'}
+        title="Volunteer Follow-up Overview"
+        description="Milestone questionnaires remain separate from BENI / Program Ops, pre-discharge coordination, post-discharge confirmation, and hamper tracking."
+      />
     </div>
   );
 }

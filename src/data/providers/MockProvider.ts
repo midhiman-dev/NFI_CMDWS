@@ -9,7 +9,13 @@ import { appendCaseWorkflowEvent, type CaseWorkflowEvent, loadWorkflowStore, sav
 import { getChecklistReadinessFromDocuments, normalizeOptionalSupportingDoc } from '../../utils/documentChecklistRules';
 import { formatBabyDisplayName } from '../../utils/casePresentation';
 import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
-import { FOLLOWUP_REMARK_FIELDS, getFollowupQuestionnaire } from '../../utils/followupQuestionnaires';
+import {
+  FOLLOWUP_META_KEYS,
+  FOLLOWUP_REMARK_FIELDS,
+  computeFollowupDueDate,
+  deriveFollowupMilestoneSnapshot,
+  getFollowupQuestionnaire,
+} from '../../utils/followupQuestionnaires';
 import { getDemoIntakeSeed } from '../demoIntakeSeeds';
 import { buildVarianceGovernanceSnapshot, evaluateVarianceGovernance } from '../../utils/varianceGovernance';
 import {
@@ -24,7 +30,7 @@ import { PANEL_ASSIGNMENT_META } from '../../utils/panelAssignments';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_h5';
+const DEMO_DATA_VERSION = 'v3_5_h6';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -318,6 +324,7 @@ export class MockProvider implements DataProvider {
     this.seedSettlementsIfNeeded();
     this.seedVisitsAndMilestonesIfNeeded();
     this.seedClinicalIfNeeded();
+    this.seedFollowupQuestionnaireDataIfNeeded();
   }
 
   private saveData(): void {
@@ -628,6 +635,16 @@ export class MockProvider implements DataProvider {
     const storedVersion = localStorage.getItem(DEMO_DATA_VERSION_KEY);
     if (storedVersion !== DEMO_DATA_VERSION) {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(DOCUMENTS_STORAGE_KEY);
+      localStorage.removeItem(VERIFICATIONS_STORAGE_KEY);
+      localStorage.removeItem(COMMITTEE_REVIEWS_STORAGE_KEY);
+      localStorage.removeItem(INSTALLMENTS_STORAGE_KEY);
+      localStorage.removeItem(VISITS_STORAGE_KEY);
+      localStorage.removeItem(MILESTONES_STORAGE_KEY);
+      localStorage.removeItem(METRIC_VALUES_STORAGE_KEY);
+      localStorage.removeItem(CLINICAL_STORAGE_KEY);
+      localStorage.removeItem(BENI_OPS_STORAGE_KEY);
+      localStorage.removeItem(DOCTOR_REVIEWS_STORAGE_KEY);
       localStorage.setItem(DEMO_DATA_VERSION_KEY, DEMO_DATA_VERSION);
     }
 
@@ -840,9 +857,15 @@ export class MockProvider implements DataProvider {
         const caseDate = new Date(caseItem.intakeDate);
         const admDate = new Date(caseDate);
         admDate.setDate(admDate.getDate() - 14);
-        const dischDate = caseItem.caseStatus === 'Approved' || caseItem.caseStatus === 'Closed'
-          ? new Date(caseDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-          : undefined;
+        const seededDischargeByCase: Record<string, string> = {
+          'case-demo-9': '2025-09-15',
+          'case-demo-10': '2024-10-03',
+        };
+        const dischDate = seededDischargeByCase[caseItem.caseId] || (
+          caseItem.caseStatus === 'Approved' || caseItem.caseStatus === 'Closed'
+            ? new Date(caseDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            : undefined
+        );
 
         this.clinicalData[caseItem.caseId] = {
           caseId: caseItem.caseId,
@@ -854,6 +877,310 @@ export class MockProvider implements DataProvider {
       }
     }
     this.saveClinical();
+  }
+
+  private getMilestoneMetricValues(caseId: string, milestoneMonths: number): FollowupMetricValue[] {
+    return Object.values(this.metricValues).filter(
+      (value) => value.caseId === caseId && value.milestoneMonths === milestoneMonths,
+    );
+  }
+
+  private upsertMilestoneMetricValue(value: Omit<FollowupMetricValue, 'valueId'>): void {
+    const key = `${value.caseId}-${value.milestoneMonths}-${value.metricKey}`;
+    this.metricValues[key] = {
+      valueId: key,
+      ...value,
+      capturedAt: new Date().toISOString(),
+      capturedBy: value.capturedBy,
+    };
+  }
+
+  private syncFollowupMilestone(caseId: string, milestoneMonths: FollowupMilestone['milestoneMonths']): void {
+    const milestone = this.milestones[caseId]?.find((item) => item.milestoneMonths === milestoneMonths);
+    if (!milestone) return;
+
+    const snapshot = deriveFollowupMilestoneSnapshot(milestone, this.getMilestoneMetricValues(caseId, milestoneMonths));
+    milestone.followupDate = snapshot.followupDate;
+    milestone.status = snapshot.status;
+    milestone.notes = snapshot.notes;
+    milestone.summary = snapshot.summary;
+    milestone.answeredCount = snapshot.answeredCount;
+    milestone.questionCount = snapshot.questionCount;
+    milestone.completionPercent = snapshot.completionPercent;
+    milestone.completedAt = snapshot.completedAt;
+    milestone.completedBy = snapshot.completedBy;
+    milestone.keyObservations = snapshot.keyObservations;
+    milestone.redFlags = snapshot.redFlags;
+    milestone.escalationNote = snapshot.escalationNote;
+    milestone.updatedAt = snapshot.updatedAt || new Date().toISOString();
+  }
+
+  private ensureMilestoneSchedule(caseId: string, anchorDate: string): void {
+    const monthsList = [3, 6, 9, 12, 18, 24] as const;
+    const now = new Date().toISOString();
+    const existing = this.milestones[caseId] || [];
+
+    this.milestones[caseId] = monthsList.map((milestoneMonths) => {
+      const current = existing.find((item) => item.milestoneMonths === milestoneMonths);
+      return {
+        milestoneId: current?.milestoneId || `milestone-${caseId}-${milestoneMonths}`,
+        caseId,
+        milestoneMonths,
+        dueDate: computeFollowupDueDate(anchorDate, milestoneMonths),
+        followupDate: current?.followupDate,
+        status: current?.status || 'Upcoming',
+        notes: current?.notes,
+        summary: current?.summary,
+        answeredCount: current?.answeredCount,
+        questionCount: current?.questionCount,
+        completionPercent: current?.completionPercent,
+        completedAt: current?.completedAt,
+        completedBy: current?.completedBy,
+        keyObservations: current?.keyObservations,
+        redFlags: current?.redFlags,
+        escalationNote: current?.escalationNote,
+        createdAt: current?.createdAt || now,
+        updatedAt: current?.updatedAt || now,
+      };
+    });
+  }
+
+  private seedFollowupQuestionnaireDataIfNeeded(): void {
+    const actor = 'Priya Deshmukh';
+    const seededScenarios = [
+      {
+        caseId: 'case-demo-9',
+        milestones: {
+          3: {
+            followupDate: '2025-12-20',
+            answers: {
+              smilesAtMother: 'Yes',
+              turnsHeadAtLoudSound: 'Yes',
+              eyesFollowMovement: 'Yes',
+              vaccinesUpdated: 'Yes',
+              influenzaVaccineYear1: 'No',
+              growthIncreasing: 'Yes',
+            },
+            remarks: {
+              doctorRemarks: 'Pediatrician reviewed weight gain and advised routine stimulation activities.',
+              parentWorries: 'Parent asked about the missed influenza vaccine timing.',
+            },
+            summary: '3-month developmental checks are on track. Influenza Year 1 vaccine is still pending.',
+            keyObservations: 'Smiles, tracks objects, and responds to loud sound during the home visit.',
+            redFlags: '',
+            escalationNote: 'Remind family to book the influenza vaccine at the next pediatric visit.',
+            completedAt: '2025-12-20T10:15:00.000Z',
+            status: 'Completed',
+          },
+          6: {
+            answers: {
+              headSteadyControlled: 'Yes',
+              rollsBackToStomach: 'No',
+              vaccinesUpdated: 'Yes',
+            },
+            questionNotes: {
+              rollsBackToStomach: 'Parent reports baby is trying but not yet rolling consistently.',
+            },
+            remarks: {
+              doctorRemarks: 'Suggested tummy-time guidance and repeat check in two weeks.',
+              contactWorries: 'Volunteer wants closer observation on motor milestone progress.',
+            },
+            summary: 'Draft saved with partial 6-month responses; rolling milestone still delayed.',
+            keyObservations: 'Head control is good and vaccines are current.',
+            redFlags: 'Rolls from back to stomach is not yet observed.',
+            escalationNote: 'Keep this milestone in volunteer follow-up until motor movement improves.',
+            status: 'In Progress',
+          },
+        },
+      },
+      {
+        caseId: 'case-demo-10',
+        milestones: {
+          3: {
+            followupDate: '2025-01-06',
+            answers: {
+              smilesAtMother: 'Yes',
+              turnsHeadAtLoudSound: 'Yes',
+              eyesFollowMovement: 'Yes',
+              vaccinesUpdated: 'Yes',
+              influenzaVaccineYear1: 'Yes',
+              growthIncreasing: 'Yes',
+            },
+            summary: '3-month follow-up completed with all expected responses observed.',
+            completedAt: '2025-01-06T09:30:00.000Z',
+            status: 'Completed',
+          },
+          6: {
+            followupDate: '2025-04-08',
+            answers: {
+              headSteadyControlled: 'Yes',
+              rollsBackToStomach: 'Yes',
+              transfersObjectHandToHand: 'Yes',
+              vaccinesUpdated: 'Yes',
+              growthIncreasing: 'Yes',
+            },
+            summary: '6-month follow-up completed. Motor control and growth remain on track.',
+            completedAt: '2025-04-08T11:00:00.000Z',
+            status: 'Completed',
+          },
+          9: {
+            followupDate: '2025-07-14',
+            answers: {
+              sitsAndStandsWithSupport: 'Yes',
+              picksObjectsWithThumbFinger: 'Yes',
+              throwsObjects: 'Yes',
+              vaccinesUpdated: 'Yes',
+              growthIncreasing: 'Yes',
+            },
+            summary: '9-month follow-up completed with age-appropriate support standing and grasping.',
+            completedAt: '2025-07-14T14:10:00.000Z',
+            status: 'Completed',
+          },
+          12: {
+            followupDate: '2025-10-09',
+            answers: {
+              babblesAndResponds: 'Yes',
+              walksWithHelp: 'Yes',
+              vaccinesUpdated: 'Yes',
+              growthIncreasing: 'Yes',
+              eyesightHearingChecked: 'Yes',
+            },
+            remarks: {
+              doctorRemarks: 'One-year review completed. Hearing and eyesight checks were normal.',
+            },
+            summary: '12-month questionnaire completed and documented after the annual pediatric review.',
+            keyObservations: 'Walking with help and responsive babbling were reported by the caregiver.',
+            completedAt: '2025-10-09T15:20:00.000Z',
+            status: 'Completed',
+          },
+        },
+      },
+    ] as const;
+
+    for (const scenario of seededScenarios) {
+      const anchorDate = this.clinicalData[scenario.caseId]?.dischargeDate || this.clinicalData[scenario.caseId]?.admissionDate;
+      if (!anchorDate) continue;
+
+      this.ensureMilestoneSchedule(scenario.caseId, anchorDate);
+      for (const [milestoneKey, milestoneSeed] of Object.entries(scenario.milestones)) {
+        const milestoneMonths = Number(milestoneKey) as FollowupMilestone['milestoneMonths'];
+        const existingValues = this.getMilestoneMetricValues(scenario.caseId, milestoneMonths);
+        if (existingValues.length > 0) {
+          this.syncFollowupMilestone(scenario.caseId, milestoneMonths);
+          continue;
+        }
+
+        for (const [metricKey, answer] of Object.entries(milestoneSeed.answers || {})) {
+          this.upsertMilestoneMetricValue({
+            caseId: scenario.caseId,
+            milestoneMonths,
+            metricKey,
+            valueText: answer,
+            capturedBy: actor,
+          });
+        }
+
+        for (const [metricKey, note] of Object.entries(milestoneSeed.questionNotes || {})) {
+          this.upsertMilestoneMetricValue({
+            caseId: scenario.caseId,
+            milestoneMonths,
+            metricKey: `${metricKey}Note`,
+            valueText: note,
+            capturedBy: actor,
+          });
+        }
+
+        for (const [metricKey, note] of Object.entries(milestoneSeed.remarks || {})) {
+          this.upsertMilestoneMetricValue({
+            caseId: scenario.caseId,
+            milestoneMonths,
+            metricKey,
+            valueText: note,
+            capturedBy: actor,
+          });
+        }
+
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.questionnaireStatus,
+          valueText: milestoneSeed.status,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.followupDate,
+          valueText: milestoneSeed.followupDate,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.summary,
+          valueText: milestoneSeed.summary,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.keyObservations,
+          valueText: milestoneSeed.keyObservations,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.redFlags,
+          valueText: milestoneSeed.redFlags,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.escalationNote,
+          valueText: milestoneSeed.escalationNote,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.completedAt,
+          valueText: milestoneSeed.completedAt,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.completedBy,
+          valueText: milestoneSeed.status === 'Completed' ? actor : undefined,
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.updatedAt,
+          valueText: milestoneSeed.completedAt || new Date().toISOString(),
+          capturedBy: actor,
+        });
+        this.upsertMilestoneMetricValue({
+          caseId: scenario.caseId,
+          milestoneMonths,
+          metricKey: FOLLOWUP_META_KEYS.updatedBy,
+          valueText: actor,
+          capturedBy: actor,
+        });
+
+        this.syncFollowupMilestone(scenario.caseId, milestoneMonths);
+      }
+    }
+
+    Object.keys(this.milestones).forEach((caseId) => {
+      this.milestones[caseId].forEach((milestone) => this.syncFollowupMilestone(caseId, milestone.milestoneMonths));
+    });
+
+    this.saveMetricValues();
+    this.saveMilestones();
   }
 
   private generateData(): MockData {
@@ -1570,26 +1897,16 @@ export class MockProvider implements DataProvider {
   }
 
   async listFollowupMilestones(caseId: string): Promise<FollowupMilestone[]> {
+    const milestones = this.milestones[caseId] || [];
+    milestones.forEach((milestone) => this.syncFollowupMilestone(caseId, milestone.milestoneMonths));
+    this.saveMilestones();
     return this.milestones[caseId] || [];
   }
 
   async ensureFollowupMilestones(caseId: string, anchorDate: string): Promise<FollowupMilestone[]> {
-    if (!this.milestones[caseId]) {
-      const MILESTONE_MONTHS = [3, 6, 9, 12, 18, 24] as const;
-      const baseDate = new Date(anchorDate);
-
-      this.milestones[caseId] = MILESTONE_MONTHS.map(months => ({
-        milestoneId: `milestone-${caseId}-${months}`,
-        caseId,
-        milestoneMonths: months,
-        dueDate: new Date(baseDate.getTime() + months * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        status: 'Upcoming' as const,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-
-      this.saveMilestones();
-    }
+    this.ensureMilestoneSchedule(caseId, anchorDate);
+    this.milestones[caseId].forEach((milestone) => this.syncFollowupMilestone(caseId, milestone.milestoneMonths));
+    this.saveMilestones();
     return this.milestones[caseId];
   }
 
@@ -1617,31 +1934,43 @@ export class MockProvider implements DataProvider {
   }
 
   async saveFollowupMetricValues(caseId: string, milestoneMonths: number, values: Omit<FollowupMetricValue, 'valueId'>[]): Promise<void> {
-    for (const val of values) {
-      const key = `${caseId}-${milestoneMonths}-${val.metricKey}`;
-      this.metricValues[key] = {
-        valueId: key,
-        ...val,
-        capturedAt: new Date().toISOString(),
-      };
-    }
+    values.forEach((value) => this.upsertMilestoneMetricValue(value));
+    this.syncFollowupMilestone(caseId, milestoneMonths as FollowupMilestone['milestoneMonths']);
     this.saveMetricValues();
+    this.saveMilestones();
   }
 
   async getFollowupMetricValues(caseId: string, milestoneMonths: number): Promise<FollowupMetricValue[]> {
-    const prefix = `${caseId}-${milestoneMonths}`;
-    return Object.values(this.metricValues).filter(v => v.caseId === caseId && v.milestoneMonths === milestoneMonths);
+    return this.getMilestoneMetricValues(caseId, milestoneMonths);
   }
 
   async setFollowupDate(caseId: string, milestoneMonths: number, followupDate: string, notes?: string): Promise<void> {
-    const milestone = this.milestones[caseId]?.find(m => m.milestoneMonths === milestoneMonths);
-    if (milestone) {
-      milestone.followupDate = followupDate;
-      milestone.status = 'Completed';
-      if (notes) milestone.notes = notes;
-      milestone.updatedAt = new Date().toISOString();
-      this.saveMilestones();
+    this.upsertMilestoneMetricValue({
+      caseId,
+      milestoneMonths,
+      metricKey: FOLLOWUP_META_KEYS.followupDate,
+      valueText: followupDate.split('T')[0],
+      capturedBy: getAuthState().activeUser?.fullName || getAuthState().activeUser?.userId,
+    });
+    this.upsertMilestoneMetricValue({
+      caseId,
+      milestoneMonths,
+      metricKey: FOLLOWUP_META_KEYS.questionnaireStatus,
+      valueText: 'Completed',
+      capturedBy: getAuthState().activeUser?.fullName || getAuthState().activeUser?.userId,
+    });
+    if (notes) {
+      this.upsertMilestoneMetricValue({
+        caseId,
+        milestoneMonths,
+        metricKey: FOLLOWUP_META_KEYS.summary,
+        valueText: notes,
+        capturedBy: getAuthState().activeUser?.fullName || getAuthState().activeUser?.userId,
+      });
     }
+    this.syncFollowupMilestone(caseId, milestoneMonths as FollowupMilestone['milestoneMonths']);
+    this.saveMetricValues();
+    this.saveMilestones();
   }
 
   async listVolunteers(): Promise<User[]> {
