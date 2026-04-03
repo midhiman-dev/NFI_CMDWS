@@ -9,6 +9,8 @@ import type {
 } from '../types';
 import type { IncomeThresholdEvaluation } from './incomeEligibility';
 import { getDonorMappingDisplay } from './settlement';
+import type { VarianceGovernanceEvaluation } from './varianceGovernance';
+import { evaluateVarianceGovernance } from './varianceGovernance';
 
 type ReadinessStatus = 'available' | 'missing' | 'partial' | 'context';
 type RecommendationTone = 'success' | 'warning' | 'neutral';
@@ -75,6 +77,7 @@ export interface FinancialReviewContext {
   readiness: FinancialArtifactReadiness;
   sponsorIntelligence: SponsorIntelligence;
   reviewerNotes: string[];
+  varianceGovernance: VarianceGovernanceEvaluation;
 }
 
 function getDocStatus(doc?: DocumentWithTemplate): string {
@@ -477,6 +480,12 @@ export function getFinancialReviewContext(input: {
       evaluation: input.evaluation,
       readiness,
       workflowExt: input.workflowExt,
+    }),
+    varianceGovernance: evaluateVarianceGovernance({
+      settlement: input.settlement,
+      financialData: input.financialData,
+      workflowExt: input.workflowExt,
+      fundApplication: input.fundApplication,
     }),
   };
 }

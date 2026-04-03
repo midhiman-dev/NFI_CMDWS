@@ -1999,6 +1999,10 @@ export class DbProvider implements DataProvider {
             ...patch.funding?.sponsorQuantification,
           },
         },
+        varianceGovernance: {
+          ...existingWorkflow.varianceGovernance,
+          ...patch.varianceGovernance,
+        },
       };
 
       const updated = {

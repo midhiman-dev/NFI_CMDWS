@@ -3,12 +3,21 @@ import { Save, CheckCircle, AlertCircle, Upload } from 'lucide-react';
 import { NfiButton } from '../design-system/NfiButton';
 import { NfiField } from '../design-system/NfiField';
 import { NfiCard } from '../design-system/NfiCard';
+import { NfiBadge } from '../design-system/NfiBadge';
 import { useToast } from '../design-system/Toast';
 import { useAppContext } from '../../App';
 import { getAuthState } from '../../utils/auth';
-import { caseService } from '../../services/caseService';
 import { PAYMENT_STATUS_OPTIONS, getDefaultPaymentStatus, getDonorMappingDisplay } from '../../utils/settlement';
-import type { SettlementRecord, Case, CaseStatus } from '../../types';
+import { logAuditEvent } from '../../utils/auditTrail';
+import {
+  buildVarianceGovernanceSnapshot,
+  evaluateVarianceGovernance,
+  formatVarianceCurrency,
+  formatVariancePercent,
+  getVarianceDirectionLabel,
+  getVarianceStatusTone,
+} from '../../utils/varianceGovernance';
+import type { SettlementRecord, Case, CaseStatus, VarianceDirectorDecision, WorkflowExtensions } from '../../types';
 
 interface Props {
   caseId: string;
@@ -23,6 +32,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const user = authState.activeUser;
 
   const [settlement, setSettlement] = useState<SettlementRecord | null>(null);
+  const [workflowExt, setWorkflowExt] = useState<WorkflowExtensions | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -39,14 +49,19 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const [reductionAmount, setReductionAmount] = useState<number | undefined>();
   const [reductionNotes, setReductionNotes] = useState('');
 
-  const [directorDecision, setDirectorDecision] = useState<'Approved' | 'Returned' | ''>('');
+  const [directorDecision, setDirectorDecision] = useState<VarianceDirectorDecision | ''>('');
+  const [revisedSanctionAmount, setRevisedSanctionAmount] = useState<number | undefined>();
   const [directorComments, setDirectorComments] = useState('');
 
   const load = async () => {
     setLoading(true);
     try {
-      const result = await provider.getSettlement(caseId);
+      const [result, workflowExtResult] = await Promise.all([
+        provider.getSettlement(caseId),
+        provider.getWorkflowExt(caseId).catch(() => null),
+      ]);
       setSettlement(result);
+      setWorkflowExt(workflowExtResult);
       if (result) {
         setReferenceAmount(result.referenceAmount);
         setFinalBillAmount(result.finalBillAmount);
@@ -68,6 +83,11 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         setReductionAmount(undefined);
         setReductionNotes('');
       }
+
+      const varianceReview = workflowExtResult?.varianceGovernance;
+      setDirectorDecision(varianceReview?.directorDecision || '');
+      setRevisedSanctionAmount(varianceReview?.revisedSanctionAmount ?? undefined);
+      setDirectorComments(varianceReview?.directorRemarks || '');
     } catch {
       // safe fallback
     }
@@ -80,17 +100,19 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const canDirectorReview = ['admin', 'leadership'].includes(user?.roles[0] || '');
   const canCloseCaseWithSettlement = ['admin', 'leadership'].includes(user?.roles[0] || '');
 
-  const computeVariance = (final?: number, reference?: number): { pct: number | null; flag: boolean } => {
-    if (!reference || reference === 0 || final === undefined) {
-      return { pct: null, flag: false };
-    }
-    const pct = Math.abs((final - reference) / reference) * 100;
-    return { pct: Math.round(pct * 10) / 10, flag: pct > 10 };
-  };
-
-  const variance = computeVariance(finalBillAmount, referenceAmount);
-  const requiresDirectorReview = variance.flag;
-  const directorReviewSubmitted = settlement?.directorReview?.decision;
+  const varianceGovernance = evaluateVarianceGovernance({
+    settlement: {
+      ...settlement,
+      referenceAmount,
+      finalBillAmount,
+    },
+    workflowExt,
+    baselineAmount: referenceAmount,
+    finalBillAmount,
+  });
+  const varianceReview = workflowExt?.varianceGovernance;
+  const requiresDirectorReview = varianceGovernance.directorReviewRequired;
+  const directorReviewSubmitted = varianceGovernance.status === 'director_review_completed';
   const totalPaidAmount = (nfiPaidAmount ?? 0) + (otherPaidAmount ?? 0);
   const balanceAmount = finalBillAmount !== undefined ? Math.max(finalBillAmount - totalPaidAmount, 0) : undefined;
   const donorMapping = getDonorMappingDisplay(caseData, settlement);
@@ -103,6 +125,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
 
     setSaving(true);
     try {
+      const nextVarianceSnapshot = buildVarianceGovernanceSnapshot(varianceGovernance, varianceReview);
       const data: Partial<SettlementRecord> = {
         referenceAmount,
         finalBillAmount,
@@ -113,34 +136,43 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         paymentDate: paymentDate || undefined,
         reductionAmount,
         reductionNotes: reductionNotes.trim() || undefined,
+        variancePct: varianceGovernance.variancePercent ?? undefined,
+        varianceFlag: varianceGovernance.status === 'director_review_required' || varianceGovernance.status === 'director_review_completed',
       };
 
-      if (variance.pct !== null) {
-        data.variancePct = variance.pct;
-        data.varianceFlag = variance.flag;
+      await provider.saveSettlement(caseId, data);
+      await provider.saveWorkflowExt(caseId, { varianceGovernance: nextVarianceSnapshot });
+
+      await logAuditEvent({
+        caseId,
+        action: 'Settlement saved',
+        notes: `Settlement saved: Reference ${fmtCurrency(referenceAmount)}, Final Bill ${fmtCurrency(finalBillAmount)}, Payment ${paymentStatus}, Variance ${formatVariancePercent(varianceGovernance.variancePercent)}.`,
+      }).catch(() => {});
+      await logAuditEvent({
+        caseId,
+        action: 'Variance governance evaluated',
+        notes: `${varianceGovernance.governanceBadge}. ${varianceGovernance.governanceMessage}`,
+      }).catch(() => {});
+
+      if (varianceGovernance.status === 'director_review_required') {
+        await logAuditEvent({
+          caseId,
+          action: 'Variance exceeds tolerance',
+          notes: `Variance ${varianceGovernance.variancePercent}% exceeds the ${varianceGovernance.tolerancePercent}% tolerance.`,
+        }).catch(() => {});
+        await logAuditEvent({
+          caseId,
+          action: 'Director review required',
+          notes: varianceGovernance.gatingReason,
+        }).catch(() => {});
       }
 
-      await provider.saveSettlement(caseId, data);
-
-      const auditNotes = `Settlement saved: Reference Rs ${referenceAmount || 'N/A'}, Final Bill Rs ${finalBillAmount || 'N/A'}, Payment ${paymentStatus}, Variance ${variance.pct !== null ? variance.pct + '%' : 'N/A'}`;
-      await caseService.addAuditEvent({
-        caseId,
-        userId: user?.userId || 'unknown',
-        userRole: user?.roles[0] || '',
-        action: 'Settlement saved',
-        notes: auditNotes,
-        timestamp: new Date().toISOString(),
-      });
-
-      if (variance.flag && !directorReviewSubmitted) {
-        await caseService.addAuditEvent({
+      if (varianceGovernance.status === 'director_review_completed') {
+        await logAuditEvent({
           caseId,
-          userId: user?.userId || 'unknown',
-          userRole: user?.roles[0] || '',
-          action: 'Variance flagged (>10%)',
-          notes: `Variance ${variance.pct}% exceeds 10% threshold`,
-          timestamp: new Date().toISOString(),
-        });
+          action: 'Variance cleared / governance satisfied',
+          notes: varianceGovernance.governanceMessage,
+        }).catch(() => {});
       }
 
       showToast('Settlement saved successfully', 'success');
@@ -158,33 +190,58 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
       return;
     }
 
+    if (!requiresDirectorReview && !directorReviewSubmitted) {
+      showToast('Director review is not required for the current variance state', 'error');
+      return;
+    }
+
     if (!directorDecision) {
       showToast('Please select a decision', 'error');
       return;
     }
 
-    if (directorDecision === 'Returned' && !directorComments.trim()) {
-      showToast('Comments are required when returning settlement', 'error');
+    if (directorDecision === 'revise_sanction' && !revisedSanctionAmount) {
+      showToast('Revised sanction amount is required for revise sanction', 'error');
       return;
     }
 
     setSubmittingReview(true);
     try {
-      await provider.submitDirectorReview(caseId, directorDecision as 'Approved' | 'Returned', directorComments, user?.fullName || 'Unknown');
-
-      const auditNotes = `Director ${directorDecision} settlement. ${directorComments ? 'Comments: ' + directorComments : ''}`;
-      await caseService.addAuditEvent({
-        caseId,
-        userId: user?.userId || 'unknown',
-        userRole: user?.roles[0] || '',
-        action: `Director ${directorDecision} settlement`,
-        notes: auditNotes,
-        timestamp: new Date().toISOString(),
+      const reviewedAt = new Date().toISOString();
+      await provider.saveWorkflowExt(caseId, {
+        varianceGovernance: {
+          ...buildVarianceGovernanceSnapshot(varianceGovernance, varianceReview),
+          directorDecision,
+          revisedSanctionAmount: directorDecision === 'revise_sanction' ? revisedSanctionAmount ?? null : null,
+          directorRemarks: directorComments.trim() || undefined,
+          reviewedBy: user?.fullName || 'Unknown',
+          reviewedAt,
+        },
       });
 
-      showToast(`Settlement ${directorDecision === 'Approved' ? 'approved' : 'returned'} by director`, 'success');
+      await logAuditEvent({
+        caseId,
+        action: 'Director review saved',
+        notes: `Decision: ${directorDecision}.${directorComments.trim() ? ` Remarks: ${directorComments.trim()}` : ''}`,
+      }).catch(() => {});
+      await logAuditEvent({
+        caseId,
+        action: 'Variance cleared / governance satisfied',
+        notes: 'Director variance review has been completed.',
+      }).catch(() => {});
+
+      if (directorDecision === 'revise_sanction') {
+        await logAuditEvent({
+          caseId,
+          action: 'Director revised sanction amount',
+          notes: `Revised sanction amount recorded as ${fmtCurrency(revisedSanctionAmount)}.`,
+        }).catch(() => {});
+      }
+
+      showToast('Director review saved', 'success');
       await load();
       setDirectorDecision('');
+      setRevisedSanctionAmount(undefined);
       setDirectorComments('');
     } catch {
       showToast('Failed to submit director review', 'error');
@@ -197,7 +254,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
   const isApproved = caseData?.caseStatus === 'Approved';
 
   const settlementComplete = finalBillAmount && nfiPaidAmount !== undefined && otherPaidAmount !== undefined;
-  const directorApproved = !requiresDirectorReview || (requiresDirectorReview && directorReviewSubmitted === 'Approved');
+  const directorApproved = varianceGovernance.status !== 'director_review_required';
   const canCloseCaseNow = settlementComplete && directorApproved && !isClosed;
   const paymentStatusTone = paymentStatus === 'Paid'
     ? 'bg-emerald-100 text-emerald-800'
@@ -211,6 +268,16 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
       return;
     }
 
+    if (varianceGovernance.status === 'director_review_required') {
+      await logAuditEvent({
+        caseId,
+        action: 'Final action blocked due to pending director variance review',
+        notes: varianceGovernance.gatingReason,
+      }).catch(() => {});
+      showToast(varianceGovernance.gatingReason || 'Director variance review is required before closure', 'error');
+      return;
+    }
+
     if (!canCloseCaseNow) {
       showToast('Settlement requirements not met', 'error');
       return;
@@ -220,14 +287,11 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
     try {
       await provider.closeCaseWithSettlement(caseId, user?.fullName || 'Unknown');
 
-      await caseService.addAuditEvent({
+      await logAuditEvent({
         caseId,
-        userId: user?.userId || 'unknown',
-        userRole: user?.roles[0] || '',
         action: 'Case closed',
         notes: 'Case closed via settlement workflow',
-        timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       showToast('Case closed successfully', 'success');
       onStatusChange?.('Closed');
@@ -375,21 +439,6 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
             />
           </NfiField>
 
-          <div className="rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-[var(--nfi-text)]">Variance</span>
-              <span className="text-lg font-semibold">
-                {variance.pct !== null ? `${variance.pct}%` : 'N/A'}
-              </span>
-            </div>
-            {variance.flag && (
-              <div className="mt-2 flex items-start gap-2 rounded border border-amber-300 bg-amber-100 p-2">
-                <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
-                <span className="text-sm text-amber-700">Director review required (variance &gt;10%)</span>
-              </div>
-            )}
-          </div>
-
           {canEditSettlement && !isClosed && (
             <NfiButton onClick={handleSaveSettlement} disabled={saving} className="w-full">
               <Save size={16} className="mr-2" /> {saving ? 'Saving...' : 'Save Settlement'}
@@ -412,85 +461,120 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
         </div>
       </NfiCard>
 
-      {requiresDirectorReview && (
-        <NfiCard className="border-amber-200 bg-amber-50 p-6">
-          <h3 className="mb-4 text-lg font-semibold text-amber-900">Director Review Required</h3>
-
-          <div className="mb-4 space-y-4 rounded border border-amber-200 bg-white p-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-[var(--nfi-text-secondary)]">Reference Amount</span>
-                <p className="font-semibold text-[var(--nfi-text)]">{fmtCurrency(referenceAmount)}</p>
-              </div>
-              <div>
-                <span className="text-[var(--nfi-text-secondary)]">Final Bill Amount</span>
-                <p className="font-semibold text-[var(--nfi-text)]">{fmtCurrency(finalBillAmount)}</p>
-              </div>
-              <div>
-                <span className="text-[var(--nfi-text-secondary)]">Variance</span>
-                <p className="font-semibold text-amber-600">{variance.pct}%</p>
-              </div>
-            </div>
+      <NfiCard className="p-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-[var(--nfi-text)]">Variance Governance</h3>
+            <p className="text-sm text-[var(--nfi-text-secondary)]">
+              Governance visibility for final bill versus estimate/reference baseline.
+            </p>
           </div>
+          <NfiBadge tone={getVarianceStatusTone(varianceGovernance.status)}>
+            {varianceGovernance.governanceBadge}
+          </NfiBadge>
+        </div>
 
-          {directorReviewSubmitted ? (
-            <div className="rounded border border-green-300 bg-white p-4">
-              <div className="mb-3">
-                <span className="inline-block rounded bg-green-600 px-3 py-1 text-sm font-medium text-white">
-                  {settlement?.directorReview?.decision}
-                </span>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <SettlementSummaryCard label="Estimate / Reference" value={fmtCurrency(varianceGovernance.baselineAmount ?? undefined)} />
+          <SettlementSummaryCard label="Final Bill" value={fmtCurrency(varianceGovernance.finalBillAmount ?? undefined)} />
+          <SettlementSummaryCard label="Variance Amount" value={formatVarianceCurrency(varianceGovernance.varianceAmount)} />
+          <SettlementSummaryCard label="Variance %" value={formatVariancePercent(varianceGovernance.variancePercent)} />
+          <SettlementSummaryCard label="Tolerance Rule" value={`${varianceGovernance.tolerancePercent}%`} />
+        </div>
+
+        <div className="mt-4 rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4 text-sm text-[var(--nfi-text)] space-y-2">
+          <p><span className="font-medium">Direction:</span> {getVarianceDirectionLabel(varianceGovernance.varianceDirection)}</p>
+          <p><span className="font-medium">Status:</span> {varianceGovernance.governanceMessage}</p>
+        </div>
+
+        {varianceGovernance.status === 'director_review_required' && (
+          <div className="mt-4 flex items-start gap-2 rounded border border-amber-300 bg-amber-100 p-3">
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
+            <span className="text-sm text-amber-800">
+              Variance exceeds 10%. Director review is required before final settlement approval/closure.
+            </span>
+          </div>
+        )}
+
+        {(requiresDirectorReview || directorReviewSubmitted) && (
+          <div className="mt-5 space-y-4 rounded border border-[var(--nfi-border)] bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="font-semibold text-[var(--nfi-text)]">Director Review</h4>
+                <p className="text-sm text-[var(--nfi-text-secondary)]">
+                  Admin acts as the Director placeholder in this prototype.
+                </p>
               </div>
-              {settlement?.directorReview?.comments && (
-                <div className="mb-2">
-                  <span className="text-sm text-[var(--nfi-text-secondary)]">Comments</span>
-                  <p className="text-[var(--nfi-text)]">{settlement.directorReview.comments}</p>
-                </div>
-              )}
-              <div className="text-xs text-[var(--nfi-text-secondary)]">
-                By {settlement?.directorReview?.by} on {new Date(settlement?.directorReview?.at || '').toLocaleDateString()}
-              </div>
-              {canDirectorReview && (
-                <NfiButton variant="secondary" size="sm" onClick={() => setDirectorDecision('')} className="mt-3">
-                  Change Decision
-                </NfiButton>
+              {varianceReview?.reviewedAt && (
+                <NfiBadge tone="success">Review completed</NfiBadge>
               )}
             </div>
-          ) : (
-            <div className="space-y-4">
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <NfiField label="Director Decision" required>
                 <select
                   className="nfi-input"
                   value={directorDecision}
-                  onChange={e => setDirectorDecision(e.target.value as 'Approved' | 'Returned' | '')}
+                  onChange={e => setDirectorDecision(e.target.value as VarianceDirectorDecision | '')}
                   disabled={!canDirectorReview}
                 >
                   <option value="">Select decision...</option>
-                  <option value="Approved">Approve</option>
-                  <option value="Returned">Return</option>
+                  <option value="keep_current_sanction">Keep current sanction</option>
+                  <option value="revise_sanction">Revise sanction</option>
+                  <option value="return_for_clarification">Return for clarification</option>
                 </select>
               </NfiField>
 
-              {directorDecision === 'Returned' && (
-                <NfiField label="Director Comments" required>
-                  <textarea
-                    className="nfi-input min-h-[100px]"
-                    value={directorComments}
-                    onChange={e => setDirectorComments(e.target.value)}
+              {directorDecision === 'revise_sanction' ? (
+                <NfiField label="Revised Sanction Amount" required>
+                  <input
+                    type="number"
+                    className="nfi-input"
+                    value={revisedSanctionAmount ?? ''}
+                    onChange={e => setRevisedSanctionAmount(e.target.value ? +e.target.value : undefined)}
                     disabled={!canDirectorReview}
-                    placeholder="Provide reason for returning settlement..."
                   />
                 </NfiField>
-              )}
-
-              {canDirectorReview && (
-                <NfiButton onClick={handleSubmitDirectorReview} disabled={submittingReview || !directorDecision} className="w-full">
-                  <Save size={16} className="mr-2" /> {submittingReview ? 'Submitting...' : 'Submit Decision'}
-                </NfiButton>
+              ) : (
+                <div className="rounded border border-dashed border-[var(--nfi-border)] px-4 py-3 text-sm text-[var(--nfi-text-secondary)]">
+                  Revised sanction amount is only needed when the Director chooses to revise sanction.
+                </div>
               )}
             </div>
-          )}
-        </NfiCard>
-      )}
+
+            <NfiField label="Director Remarks">
+              <textarea
+                className="nfi-input min-h-[120px]"
+                value={directorComments}
+                onChange={e => setDirectorComments(e.target.value)}
+                disabled={!canDirectorReview}
+                placeholder="Capture the governance reasoning or clarification note"
+              />
+            </NfiField>
+
+            {(varianceReview?.reviewedBy || varianceReview?.reviewedAt) && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 text-sm">
+                <div className="rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-3">
+                  <span className="text-[var(--nfi-text-secondary)]">Reviewed By</span>
+                  <p className="font-medium text-[var(--nfi-text)]">{varianceReview?.reviewedBy || 'N/A'}</p>
+                </div>
+                <div className="rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-3">
+                  <span className="text-[var(--nfi-text-secondary)]">Reviewed At</span>
+                  <p className="font-medium text-[var(--nfi-text)]">
+                    {varianceReview?.reviewedAt ? new Date(varianceReview.reviewedAt).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {canDirectorReview && (
+              <NfiButton onClick={handleSubmitDirectorReview} disabled={submittingReview || !directorDecision} className="w-full">
+                <Save size={16} className="mr-2" /> {submittingReview ? 'Saving...' : 'Save Director Review'}
+              </NfiButton>
+            )}
+          </div>
+        )}
+      </NfiCard>
 
       <NfiCard className="p-6">
         <h3 className="mb-4 text-lg font-semibold text-[var(--nfi-text)]">Case Closure</h3>
@@ -514,7 +598,7 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
               <AlertCircle size={18} className="text-amber-500" />
             )}
             <span className={directorApproved ? 'font-medium text-green-600' : 'font-medium text-amber-600'}>
-              {requiresDirectorReview ? 'Director approval' : 'No director review required'}
+              {requiresDirectorReview ? 'Director review completed' : 'No director review required'}
             </span>
           </div>
 
@@ -526,7 +610,19 @@ export function SettlementTab({ caseId, caseData, onStatusChange }: Props) {
           </div>
         </div>
 
-        {canCloseCaseNow && !isClosed && (
+        {varianceGovernance.status === 'director_review_required' && (
+          <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            {varianceGovernance.gatingReason}
+          </div>
+        )}
+
+        {!settlementComplete && !isClosed && (
+          <div className="rounded border border-[var(--nfi-border)] bg-[var(--nfi-bg-secondary)] p-4 text-sm text-[var(--nfi-text-secondary)]">
+            Complete final bill and payment figures before closure.
+          </div>
+        )}
+
+        {!isClosed && settlementComplete && (
           <>
             {!showClosureConfirm ? (
               <NfiButton onClick={() => setShowClosureConfirm(true)} className="w-full bg-green-600 hover:bg-green-700">

@@ -42,10 +42,11 @@ import { getFollowupQuestionnaire, sortMilestonesBySourceOrder } from '../utils/
 import { getAuditActorDisplayName, getAuditEvents, getFollowupAuditLabel, getRoleLabel, logAuditEvent } from '../utils/auditTrail';
 import { buildPanelAssignmentsPayload, buildPanelAssignmentState, getReviewerAssignmentSummary, PANEL_ASSIGNMENT_META, PANEL_ASSIGNMENT_ORDER, remapCommitteeLabel } from '../utils/panelAssignments';
 import { IncomeEligibilityPanel } from '../components/case-tabs/IncomeEligibilityPanel';
-import { FinancialArtifactReadinessCard, FinancialReviewArtifactCard, SponsorIntelligenceCard } from '../components/case-tabs/FinancialReviewArtifact';
+import { FinancialArtifactReadinessCard, FinancialReviewArtifactCard, SponsorIntelligenceCard, VarianceGovernanceCard } from '../components/case-tabs/FinancialReviewArtifact';
 import { evaluateIncomeThreshold } from '../utils/incomeEligibility';
 import { getFinancialReviewContext } from '../utils/financialReview';
 import { buildPanelSummary, getOverallDecisionTone, getOverallPanelDecision, getPanelDecisionOptions, getPanelStatus, isPanelComplete } from '../utils/panelReview';
+import { buildVarianceGovernanceSnapshot } from '../utils/varianceGovernance';
 
 const HIDE_LEGACY_CASE_DATA_TABS = true;
 const HIDDEN_TABS = ['beneficiary', 'family', 'clinical', 'financial'];
@@ -1992,6 +1993,16 @@ function ApprovalTab({ caseId }: { caseId: string }) {
   const handleSubmit = async () => {
     if (!canEdit) return;
 
+    if (panelFinalizationBlocked) {
+      await logAuditEvent({
+        caseId,
+        action: 'Final action blocked due to pending director variance review',
+        notes: varianceGovernance.gatingReason,
+      }).catch(() => {});
+      showToast(varianceGovernance.gatingReason || 'Director variance review is required before final approval', 'error');
+      return;
+    }
+
     if (formData.outcome !== 'Pending' && computedPanelDecision.completedPanels < computedPanelDecision.totalPanels) {
       showToast('All three panel reviews must be completed before recording the final internal decision', 'error');
       return;
@@ -2049,6 +2060,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
         }).catch(() => {});
 
         await provider.saveWorkflowExt(caseId, {
+          varianceGovernance: varianceGovernanceSnapshot,
           funding: {
             ...workflowExt?.funding,
             program: fundingData.program || undefined,
@@ -2159,6 +2171,14 @@ function ApprovalTab({ caseId }: { caseId: string }) {
       }),
     [caseData, familyData, financialData, workflowExt, settlement, documents, fundApplication, incomeEvaluation]
   );
+  const varianceGovernance = financialReviewContext.varianceGovernance;
+  const varianceDirectorReview = workflowExt?.varianceGovernance;
+  const panelFinalizationBlocked =
+    formData.outcome === 'Approved' && varianceGovernance.status === 'director_review_required';
+  const varianceGovernanceSnapshot = buildVarianceGovernanceSnapshot(
+    varianceGovernance,
+    varianceDirectorReview
+  );
 
   const handlePanelReviewChange = (
     panelType: PanelAssignmentType,
@@ -2207,6 +2227,7 @@ function ApprovalTab({ caseId }: { caseId: string }) {
     const workflowPatch: Partial<WorkflowExtensions> = {
       panelReviews: nextPanelReviews,
       panelDecision: nextPanelDecision,
+      varianceGovernance: varianceGovernanceSnapshot,
     };
 
     if (panelType === 'financial') {
@@ -2318,6 +2339,33 @@ function ApprovalTab({ caseId }: { caseId: string }) {
             caseId,
             action: 'Funding recommendation saved',
             notes: nextFunding.recommendationNote,
+          }).catch(() => {});
+        }
+
+        await logAuditEvent({
+          caseId,
+          action: 'Variance governance evaluated',
+          notes: `${varianceGovernance.governanceBadge}. ${varianceGovernance.governanceMessage}`,
+        }).catch(() => {});
+
+        if (varianceGovernance.status === 'director_review_required') {
+          await logAuditEvent({
+            caseId,
+            action: 'Variance exceeds tolerance',
+            notes: `Variance ${varianceGovernance.variancePercent}% exceeds the ${varianceGovernance.tolerancePercent}% tolerance.`,
+          }).catch(() => {});
+          await logAuditEvent({
+            caseId,
+            action: 'Director review required',
+            notes: varianceGovernance.gatingReason,
+          }).catch(() => {});
+        }
+
+        if (varianceGovernance.status === 'director_review_completed') {
+          await logAuditEvent({
+            caseId,
+            action: 'Variance cleared / governance satisfied',
+            notes: varianceGovernance.governanceMessage,
           }).catch(() => {});
         }
       }
@@ -2671,6 +2719,17 @@ function ApprovalTab({ caseId }: { caseId: string }) {
             />
             <FinancialReviewArtifactCard context={financialReviewContext} />
           </div>
+
+          <VarianceGovernanceCard context={financialReviewContext} />
+
+          {varianceGovernance.status === 'director_review_required' && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+              <p className="font-semibold">Director review required before final approval</p>
+              <p className="mt-1">
+                {varianceGovernance.gatingReason}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
             <FinancialArtifactReadinessCard context={financialReviewContext} />
@@ -3146,6 +3205,12 @@ function ApprovalTab({ caseId }: { caseId: string }) {
                     placeholder="Provide detailed reason for rejection..."
                   />
                 </NfiField>
+              </div>
+            )}
+
+            {panelFinalizationBlocked && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {varianceGovernance.gatingReason}
               </div>
             )}
 

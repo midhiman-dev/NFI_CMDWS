@@ -2,6 +2,12 @@ import { AlertCircle, CheckCircle2, CircleDollarSign, FileWarning } from 'lucide
 import { NfiBadge } from '../design-system/NfiBadge';
 import type { FinancialReviewContext } from '../../utils/financialReview';
 import { toCurrency } from '../../utils/fundingConfig';
+import {
+  formatVarianceCurrency,
+  formatVariancePercent,
+  getVarianceDirectionLabel,
+  getVarianceStatusTone,
+} from '../../utils/varianceGovernance';
 
 function getCueTone(status: string): 'success' | 'warning' | 'neutral' {
   if (status === 'available') return 'success';
@@ -135,6 +141,51 @@ export function SponsorIntelligenceCard({ context }: { context: FinancialReviewC
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function VarianceGovernanceCard({ context }: { context: FinancialReviewContext }) {
+  const { varianceGovernance } = context;
+
+  return (
+    <div className="rounded-lg border border-[var(--nfi-border)] bg-white p-4 space-y-4 min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[var(--nfi-text)]">Variance Governance</p>
+          <p className="text-xs text-[var(--nfi-text-secondary)] break-words">
+            Finance governance visibility for final bill versus estimate/reference baseline.
+          </p>
+        </div>
+        <NfiBadge tone={getVarianceStatusTone(varianceGovernance.status)}>
+          {varianceGovernance.governanceBadge}
+        </NfiBadge>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+        <ArtifactItem label="Baseline amount" value={toCurrency(varianceGovernance.baselineAmount ?? undefined)} />
+        <ArtifactItem label="Final bill amount" value={toCurrency(varianceGovernance.finalBillAmount ?? undefined)} />
+        <ArtifactItem label="Variance amount" value={formatVarianceCurrency(varianceGovernance.varianceAmount)} />
+        <ArtifactItem label="Variance %" value={formatVariancePercent(varianceGovernance.variancePercent)} />
+        <ArtifactItem
+          label="Director review"
+          value={
+            varianceGovernance.status === 'director_review_completed'
+              ? 'Completed'
+              : varianceGovernance.directorReviewRequired
+              ? 'Required'
+              : varianceGovernance.status === 'pending_data'
+              ? 'Pending'
+              : 'Not required'
+          }
+        />
+      </div>
+
+      <div className="rounded-lg border border-[var(--nfi-border)] bg-[var(--nfi-bg-light)] px-3 py-3 text-sm text-[var(--nfi-text)] space-y-1">
+        <p><span className="font-medium">Direction:</span> {getVarianceDirectionLabel(varianceGovernance.varianceDirection)}</p>
+        <p><span className="font-medium">Tolerance rule:</span> {varianceGovernance.tolerancePercent}%</p>
+        <p><span className="font-medium">Governance note:</span> {varianceGovernance.governanceMessage}</p>
       </div>
     </div>
   );

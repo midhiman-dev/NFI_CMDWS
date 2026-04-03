@@ -257,6 +257,35 @@ export interface WorkflowFunding {
   sponsorQuantification?: WorkflowSponsorQuantification;
 }
 
+export type VarianceDirection = 'increase' | 'decrease' | 'no_change' | 'pending';
+
+export type VarianceGovernanceStatus =
+  | 'pending_data'
+  | 'within_tolerance'
+  | 'director_review_required'
+  | 'director_review_completed';
+
+export type VarianceDirectorDecision =
+  | 'keep_current_sanction'
+  | 'revise_sanction'
+  | 'return_for_clarification';
+
+export interface WorkflowVarianceGovernance {
+  tolerancePercent?: number;
+  baselineAmount?: number | null;
+  finalBillAmount?: number | null;
+  varianceAmount?: number | null;
+  variancePercent?: number | null;
+  varianceDirection?: VarianceDirection;
+  status?: VarianceGovernanceStatus;
+  directorReviewRequired?: boolean;
+  directorDecision?: VarianceDirectorDecision;
+  revisedSanctionAmount?: number | null;
+  directorRemarks?: string;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+}
+
 export type PanelAssignmentType = 'clinical' | 'social' | 'financial';
 
 export interface WorkflowPanelAssignment {
@@ -297,6 +326,7 @@ export interface WorkflowExtensions {
   interview?: WorkflowInterview;
   appeal?: WorkflowAppeal;
   funding?: WorkflowFunding;
+  varianceGovernance?: WorkflowVarianceGovernance;
   panelAssignments?: Partial<Record<PanelAssignmentType, WorkflowPanelAssignment>>;
   panelReviews?: Partial<Record<PanelAssignmentType, WorkflowPanelReview>>;
   panelDecision?: WorkflowPanelDecisionSummary;

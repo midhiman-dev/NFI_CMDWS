@@ -1,5 +1,5 @@
 import type { DataProvider, CaseWithDetails, CreateCasePayload, DocumentWithTemplate, VerificationRecord, CommitteeReviewRecord, ChecklistReadiness, InstallmentSummary, BeniProgramOpsData, HospitalProcessMapWithDetails } from './DataProvider';
-import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions, WorkflowPanelReview } from '../../types';
+import type { Hospital, User, ChildProfile, FamilyProfile, ClinicalCaseDetails, FinancialCaseDetails, DocumentMetadata, DocumentRequirementTemplate, DocumentStatus, CaseStatus, CommitteeOutcome, FundingInstallment, MonitoringVisit, FollowupMilestone, FollowupMetricDef, FollowupMetricValue, ProcessType, HospitalProcessMap, ReportTemplate, ReportRun, ReportRunStatus, KpiCatalog, DatasetRegistry, TemplateRegistry, TemplateBinding, IntakeFundApplication, IntakeInterimSummary, IntakeCompleteness, CaseSubmitReadiness, SettlementRecord, DocVersion, DoctorReview, SubmitGatingInfo, WorkflowExtensions, WorkflowPanelReview, WorkflowVarianceGovernance } from '../../types';
 import { resolveDocTypeAlias } from '../../utils/docTypeMapping';
 import { getBuiltInDocumentTemplates } from '../../utils/documentTemplateCatalog';
 import { mockStore } from '../../store/mockStore';
@@ -11,6 +11,7 @@ import { formatBabyDisplayName } from '../../utils/casePresentation';
 import { generatePrototypeCaseReference, resolvePrototypeIdentifiers } from '../../utils/caseIdentifiers';
 import { FOLLOWUP_REMARK_FIELDS, getFollowupQuestionnaire } from '../../utils/followupQuestionnaires';
 import { getDemoIntakeSeed } from '../demoIntakeSeeds';
+import { buildVarianceGovernanceSnapshot, evaluateVarianceGovernance } from '../../utils/varianceGovernance';
 import {
   FUND_APPLICATION_FIELDS,
   INTERIM_SUMMARY_FIELDS,
@@ -23,7 +24,7 @@ import { PANEL_ASSIGNMENT_META } from '../../utils/panelAssignments';
 
 const STORAGE_KEY = 'nfi_demo_data_v1';
 const DEMO_DATA_VERSION_KEY = 'nfi_demo_data_version';
-const DEMO_DATA_VERSION = 'v3_5_h4';
+const DEMO_DATA_VERSION = 'v3_5_h5';
 const DOCUMENTS_STORAGE_KEY = 'nfi_demo_documents_v1';
 const VERIFICATIONS_STORAGE_KEY = 'nfi_demo_verifications_v1';
 const COMMITTEE_REVIEWS_STORAGE_KEY = 'nfi_demo_committee_reviews_v1';
@@ -450,8 +451,24 @@ export class MockProvider implements DataProvider {
       const stored = localStorage.getItem(SETTLEMENTS_STORAGE_KEY);
       const settlements: Record<string, SettlementRecord> = stored ? JSON.parse(stored) : {};
       let changed = false;
+      let workflowChanged = false;
 
       const seedMap: Record<string, SettlementRecord> = {
+        'case-demo-7': {
+          referenceAmount: 100000,
+          finalBillAmount: 107000,
+          nfiPaidAmount: 25000,
+          otherPaidAmount: 10000,
+          paymentStatus: 'Partially Paid',
+          updatedAt: new Date().toISOString(),
+        },
+        'case-demo-8': {
+          referenceAmount: 95000,
+          nfiPaidAmount: 0,
+          otherPaidAmount: 0,
+          paymentStatus: 'Unpaid',
+          updatedAt: new Date().toISOString(),
+        },
         'case-demo-9': {
           referenceAmount: 90000,
           finalBillAmount: 124000,
@@ -470,6 +487,33 @@ export class MockProvider implements DataProvider {
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           updatedAt: new Date().toISOString(),
         },
+        'case-demo-11': {
+          referenceAmount: 80000,
+          finalBillAmount: 116000,
+          nfiPaidAmount: 0,
+          otherPaidAmount: 0,
+          paymentStatus: 'Unpaid',
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      const reviewMap: Record<string, WorkflowVarianceGovernance | undefined> = {
+        'case-demo-7': undefined,
+        'case-demo-8': undefined,
+        'case-demo-9': undefined,
+        'case-demo-10': {
+          directorDecision: 'keep_current_sanction',
+          directorRemarks: 'Variance accepted; current sanction remains unchanged.',
+          reviewedBy: 'Admin User',
+          reviewedAt: new Date().toISOString(),
+        },
+        'case-demo-11': {
+          directorDecision: 'revise_sanction',
+          revisedSanctionAmount: 98000,
+          directorRemarks: 'Variance approved with revised sanction ceiling.',
+          reviewedBy: 'Admin User',
+          reviewedAt: new Date().toISOString(),
+        },
       };
 
       Object.entries(seedMap).forEach(([caseId, seed]) => {
@@ -477,10 +521,41 @@ export class MockProvider implements DataProvider {
           settlements[caseId] = seed;
           changed = true;
         }
+
+        const caseIndex = this.data.cases.findIndex((caseItem) => caseItem.caseId === caseId);
+        if (caseIndex >= 0) {
+          const existingWorkflow = this.data.cases[caseIndex].workflowExt || {};
+          const reviewState = reviewMap[caseId];
+          const evaluated = evaluateVarianceGovernance({
+            settlement: settlements[caseId] || seed,
+            workflowExt: {
+              ...existingWorkflow,
+              varianceGovernance: reviewState,
+            },
+          });
+          this.data.cases[caseIndex] = {
+            ...this.data.cases[caseIndex],
+            workflowExt: {
+              ...existingWorkflow,
+              varianceGovernance: {
+                ...buildVarianceGovernanceSnapshot(evaluated, reviewState),
+                directorDecision: reviewState?.directorDecision,
+                revisedSanctionAmount: reviewState?.revisedSanctionAmount ?? null,
+                directorRemarks: reviewState?.directorRemarks,
+                reviewedBy: reviewState?.reviewedBy ?? null,
+                reviewedAt: reviewState?.reviewedAt ?? null,
+              },
+            },
+          };
+          workflowChanged = true;
+        }
       });
 
       if (changed) {
         localStorage.setItem(SETTLEMENTS_STORAGE_KEY, JSON.stringify(settlements));
+      }
+      if (workflowChanged) {
+        this.saveData();
       }
     } catch {
       // safe demo fallback
@@ -2495,6 +2570,10 @@ export class MockProvider implements DataProvider {
           ...existingWorkflow.funding?.sponsorQuantification,
           ...patch.funding?.sponsorQuantification,
         },
+      },
+      varianceGovernance: {
+        ...existingWorkflow.varianceGovernance,
+        ...patch.varianceGovernance,
       },
     };
 
